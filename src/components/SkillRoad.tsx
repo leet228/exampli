@@ -7,11 +7,12 @@ export default function SkillRoad({
     <div className="relative overflow-x-hidden">
       {/* центральная вертикальная линия */}
       <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-white/10" />
+
       <ul className="space-y-10">
         {items.map((it, idx) => {
           const left = idx % 2 === 0;
           return (
-            <li key={it.id} className="relative">
+            <li key={it.id}>
               <div className={`flex ${left ? 'justify-start' : 'justify-end'}`}>
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
@@ -31,13 +32,6 @@ export default function SkillRoad({
                     </div>
                   </div>
                 </motion.div>
-              </div>
-
-              {/* звезда строго по центру, внутри своего элемента => нет оверфлоу */}
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                              w-10 h-10 rounded-full bg-[#ef72d6] text-white grid place-items-center
-                              shadow-soft border-4 border-[color:var(--bg)]">
-                ★
               </div>
             </li>
           );

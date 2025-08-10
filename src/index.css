@@ -25,7 +25,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 
 /* безопасные зоны, чтобы ничего не уезжало под шапку/подвал Telegram */
 
-:root { --hud-top: calc(env(safe-area-inset-top) + 64px); }
+:root { --hud-top: calc(env(safe-area-inset-top) + 96px); }
 
 /* фиксируем HUD и даём место контенту */
 .hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
@@ -37,9 +37,6 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .sheet-panel { position: fixed; left: 0; right: 0; bottom: 0; border-top-left-radius: 24px; border-top-right-radius: 24px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 -20px 60px rgba(0,0,0,0.35); }
 .sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
 
-/* Прогресс-бар (энергия) */
-.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
 
 /* верхняя шторка (выпадает из HUD) */
 .drop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 50; }
