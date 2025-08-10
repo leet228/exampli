@@ -149,7 +149,10 @@ export default function HUD() {
         anchor={anchorRef}
         title="Энергия"
       >
-        <EnergySheetBody value={energy} />
+        <EnergySheetBody
+          value={energy}
+          onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }}
+        />
       </TopSheet>
     </div>
   );
@@ -241,27 +244,20 @@ function StreakSheetBody() {
   );
 }
 
-function EnergySheetBody({ value }: { value: number }) {
+function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenSubscription: () => void }) {
   const percent = Math.max(0, Math.min(100, Math.round((value / 25) * 100)));
-
   return (
     <>
-      <div className="progress">
-        <div style={{ width: `${percent}%` }} />
-      </div>
+      <div className="progress"><div style={{ width: `${percent}%` }} /></div>
       <div className="mt-2 text-sm text-muted">{value}/25</div>
 
       <div className="grid gap-3 mt-5">
-        <button type="button" className="card text-left">
+        <button type="button" className="card text-left" onClick={onOpenSubscription}>
           <div className="font-semibold">Безлимит (демо)</div>
-          <div className="text-sm text-muted">Скоро</div>
+          <div className="text-sm text-muted">Нажми, чтобы открыть «Абонемент»</div>
         </button>
-        <button
-          type="button"
-          className="btn w-full"
-          onClick={() => alert('Пополнить — скоро')}
-        >
-          + Пополнить
+        <button type="button" className="btn w-full" onClick={onOpenSubscription}>
+          + Пополнить / Оформить
         </button>
       </div>
     </>
