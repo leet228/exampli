@@ -6,8 +6,12 @@ export function applyTelegramTheme() {
 
   const p = tg.themeParams || {};
   const root = document.documentElement;
-  if (p.bg_color) root.style.setProperty('--bg', `#${p.bg_color}`);
-  if (p.text_color) root.style.setProperty('--text', `#${p.text_color}`);
+
+  // Оставляем нашу тёмную тему как базу.
+  // НЕ меняем --bg и --text, чтобы текст не был чёрным на тёмном фоне.
+  // Из Telegram берём только акцент и вторичный фон (в тёмной схеме).
   if (p.button_color) root.style.setProperty('--accent', `#${p.button_color}`);
-  if (p.secondary_bg_color) root.style.setProperty('--card', `#${p.secondary_bg_color}`);
+  if (p.secondary_bg_color && tg.colorScheme === 'dark') {
+    root.style.setProperty('--card', `#${p.secondary_bg_color}`);
+  }
 }
