@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* базовые цвета (тёмная с синим) */
+  --bg: #0b1220;      /* почти чёрный */
+  --card: #101826;    /* карточки */
+  --text: #e5edff;    /* текст */
+  --muted: #9bb0d3;   /* вторичный */
+  --accent: #3b82f6;  /* основной синий */
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--bg); color: var(--text); }
+
+/* кнопки */
+.btn {
+  @apply rounded-2xl px-5 py-4 font-semibold shadow-soft active:scale-[0.98] transition;
+  background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95));
+}
+.btn-outline {
+  @apply rounded-2xl px-5 py-4 font-semibold border border-white/10 backdrop-blur;
+  background: rgba(255,255,255,0.04);
+}
+.card {
+  @apply rounded-3xl p-5 bg-[color:var(--card)] border border-white/5;
+}
