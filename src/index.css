@@ -17,7 +17,7 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .btn  { @apply rounded-3xl px-5 py-4 font-semibold active:scale-[0.98] transition; background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95)); }
 .btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur; background: rgba(255,255,255,0.04); }
 .badge { @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5; }
-.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/3 backdrop-blur; }
+.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/5 backdrop-blur; }
 
 /* анимации */
 .fade-in { animation: fadeIn 400ms ease-out; }
