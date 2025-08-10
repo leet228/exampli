@@ -30,3 +30,16 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 88px); /* высота нижнего меню + запас */
 }
+
+/* Безопасные отступы под Telegram UI */
+.safe-top { padding-top: max(env(safe-area-inset-top), 56px); } /* потолок пониже, чем раньше */
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); } /* высота нижней навигации */
+
+/* Базовый стиль нижней шторки */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+.sheet-panel { position: fixed; left: 0; right: 0; bottom: 0; border-top-left-radius: 24px; border-top-right-radius: 24px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 -20px 60px rgba(0,0,0,0.35); }
+.sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
+
+/* Прогресс-бар (энергия) */
+.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }

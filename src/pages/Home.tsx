@@ -1,67 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import SkillRoad from '../components/SkillRoad';
 
-export default function Home() {
+export default function Home(){
   const [tgUser, setTgUser] = useState<any>(null);
-  const [lessons, setLessons] = useState<any[]>([]);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [items, setItems] = useState<{ id: string; title: string; subtitle?: string }[]>([]);
 
   useEffect(() => {
-    const tg = (window as any)?.Telegram?.WebApp;
-    setTgUser(tg?.initDataUnsafe?.user || null);
+    const tg = (window as any)?.Telegram?.WebApp; setTgUser(tg?.initDataUnsafe?.user || null);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!id) return;
-      const { data: user } = await supabase.from('users').select('*').eq('tg_id', String(id)).single();
-      if (!user) return;
-      const { data: subs } = await supabase
-        .from('user_subjects')
-        .select('subject_id')
-        .eq('user_id', user.id);
-      const ids = (subs || []).map((r: any) => r.subject_id);
-      if (ids.length === 0) { setNeedsOnboarding(true); setLessons([]); return; }
-      const { data } = await supabase
-        .from('lessons')
-        .select('*, subject:subject_id(title, level)')
-        .in('subject_id', ids)
-        .order('order_index');
-      setLessons(data || []);
-    })();
-  }, []);
+  useEffect(() => { (async () => {
+    const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (!id) return;
+    // берём первые 8 уроков из выбранных предметов
+    const { data: rel } = await supabase.from('user_subjects').select('subject_id');
+    const ids = (rel||[]).map((r:any)=>r.subject_id);
+    if (ids.length === 0) { setItems([]); return; }
+    const { data } = await supabase
+      .from('lessons')
+      .select('id, title, subject:subject_id(title, level)')
+      .in('subject_id', ids)
+      .order('order_index')
+      .limit(8);
+    const mapped = (data||[]).map((l:any)=>({ id: l.id, title: l.title, subtitle: l.subject?.title }));
+    setItems(mapped);
+  })(); }, []);
 
-  const name = useMemo(() => tgUser?.first_name || tgUser?.username || 'друг', [tgUser]);
+  const name = useMemo(()=> tgUser?.first_name || tgUser?.username || 'друг', [tgUser]);
 
   return (
     <>
-      <div className="card">
+      <div className="card mb-4">
         <div className="text-xl font-semibold mb-0.5">Привет, {name} 👋</div>
-        <div className="text-sm text-muted">Выбирай урок и поехали!</div>
+        <div className="text-sm text-muted">Выбирай урок на дороге ниже.</div>
       </div>
-
-      {needsOnboarding && (
-        <div className="card mt-4">
-          <div className="mb-2 font-semibold">Похоже, предметы не выбраны</div>
-          <button className="btn" onClick={() => location.assign('/onboarding')}>Выбрать курс</button>
-        </div>
-      )}
-
-      {!needsOnboarding && (
-        <div className="mt-4 grid gap-3">
-          {lessons.map((l) => (
-            <div key={l.id} className="skill">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{l.title}</div>
-                  <div className="text-xs text-muted">{l.subject?.title}</div>
-                </div>
-                <button className="btn px-4 py-2" onClick={() => alert('Старт урока (заглушка).')}>Учиться</button>
-              </div>
-            </div>
-          ))}
-        </div>
+      {items.length === 0 ? (
+        <div className="card">Курсы не выбраны. Нажми на бейдж с курсом сверху, чтобы выбрать.</div>
+      ) : (
+        <SkillRoad items={items} />
       )}
     </>
   );
