@@ -10,6 +10,7 @@ export default function CourseSheet({ open, onClose, onPicked }: { open: boolean
 
   const pick = async (s: any) => {
     await setUserSubjects([s.code]);
+    window.dispatchEvent(new CustomEvent('exampli:courseChanged'));
     onPicked(s.title);
     onClose();
   };
