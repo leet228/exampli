@@ -3,26 +3,22 @@
 @tailwind utilities;
 
 :root {
-  /* базовые цвета (тёмная с синим) */
-  --bg: #0b1220;      /* почти чёрный */
-  --card: #101826;    /* карточки */
-  --text: #e5edff;    /* текст */
-  --muted: #9bb0d3;   /* вторичный */
-  --accent: #3b82f6;  /* основной синий */
+  --bg: #0b1220;
+  --card: #0f1726;
+  --text: #e5edff;
+  --muted: #9bb0d3;
+  --accent: #3b82f6;
 }
 
 html, body, #root { height: 100%; }
-body { background: var(--bg); color: var(--text); }
+body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
 
-/* кнопки */
-.btn {
-  @apply rounded-2xl px-5 py-4 font-semibold shadow-soft active:scale-[0.98] transition;
-  background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95));
-}
-.btn-outline {
-  @apply rounded-2xl px-5 py-4 font-semibold border border-white/10 backdrop-blur;
-  background: rgba(255,255,255,0.04);
-}
-.card {
-  @apply rounded-3xl p-5 bg-[color:var(--card)] border border-white/5;
-}
+.card { @apply rounded-4xl p-5 bg-[color:var(--card)] border border-white/5 shadow-soft; }
+.btn  { @apply rounded-3xl px-5 py-4 font-semibold active:scale-[0.98] transition; background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95)); }
+.btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur; background: rgba(255,255,255,0.04); }
+.badge { @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5; }
+.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/3 backdrop-blur; }
+
+/* анимации */
+.fade-in { animation: fadeIn 400ms ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }

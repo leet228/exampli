@@ -1,7 +1,5 @@
 export {};
 
 declare global {
-  interface Window {
-    Telegram: any;
-  }
+  interface Window { Telegram: any }
 }

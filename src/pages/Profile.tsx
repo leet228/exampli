@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import TopBar from '../components/TopBar';
+import BottomNav from '../components/BottomNav';
 
 export default function Profile() {
   const [profile, setProfile] = useState<any>(null);
@@ -7,7 +9,7 @@ export default function Profile() {
 
   useEffect(() => {
     (async () => {
-      const tgId = window?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!tgId) return;
       const { data: userRow } = await supabase.from('users').select('*').eq('tg_id', String(tgId)).single();
       setProfile(userRow);
@@ -22,32 +24,42 @@ export default function Profile() {
   }, []);
 
   return (
-    <div className="min-h-screen p-5">
-      <h1 className="text-2xl font-bold mb-4">Профиль</h1>
+    <div className="min-h-screen pb-24 px-5 pt-5 max-w-xl mx-auto">
+      <TopBar />
       {!profile ? (
-        <div>Нет данных профиля… Открой через Telegram.</div>
+        <div className="card">Нет данных профиля… Открой через Telegram.</div>
       ) : (
         <div className="space-y-4">
           <div className="card">
-            <div className="text-lg font-semibold">@{profile.username || 'anon'}</div>
-            <div className="text-sm text-[color:var(--muted)]">{profile.first_name} {profile.last_name || ''}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-lg font-semibold">@{profile.username || 'anon'}</div>
+                <div className="text-sm text-muted">{profile.first_name} {profile.last_name || ''}</div>
+              </div>
+              <div className="text-4xl">🦉</div>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="badge">🔥 Стрик: {profile.streak ?? 0}</span>
+              <span className="badge">⭐ XP: {profile.xp ?? 0}</span>
+            </div>
           </div>
           <div className="card">
             <div className="font-semibold mb-2">Мои курсы</div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {enrolls.length === 0 && (
-                <div className="text-sm text-[color:var(--muted)]">Пока нет. Зайди в «Начать курс».</div>
+                <div className="text-sm text-muted">Пока нет. Зайди в «Курсы».</div>
               )}
               {enrolls.map((e) => (
                 <div key={e.course_id} className="flex items-center justify-between">
                   <div>{e.course?.title}</div>
-                  <div className="text-sm text-[color:var(--muted)]">XP: {e.xp} · 🔥 {e.streak}</div>
+                  <div className="text-sm text-muted">XP: {e.xp} · 🔥 {e.streak}</div>
                 </div>
               ))}
             </div>
           </div>
         </div>
       )}
+      <BottomNav />
     </div>
   );
 }
