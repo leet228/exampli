@@ -25,9 +25,9 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 
 /* безопасные зоны, чтобы ничего не уезжало под шапку/подвал Telegram */
 /* было: 56px */
-.safe-top { padding-top: calc(env(safe-area-inset-top) + 84px); }
+.safe-top { padding-top: calc(env(safe-area-inset-top) + 96px); }
 /* низ оставляем */
-.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 96px); }
 
 /* Базовый стиль нижней шторки */
 .sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
