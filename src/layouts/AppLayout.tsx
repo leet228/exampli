@@ -8,7 +8,7 @@ export default function AppLayout(){
   const { pathname } = useLocation();
   const showBottom = NAV_ROUTES.has(pathname);
   return (
-    <div className="min-h-screen safe-top safe-bottom">
+    <div className="min-h-screen safe-top safe-bottom main-scroll">
       <HUD />
       <div className="max-w-xl mx-auto p-5">
         <Outlet />

@@ -68,7 +68,7 @@ export default function HUD() {
   }, [loadUserSnapshot]);
 
   return (
-    <div className="hud-stick bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
+    <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
       <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-2">
         <div className="flex items-center justify-between">
           {/* Курс */}

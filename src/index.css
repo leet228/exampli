@@ -24,9 +24,12 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
 
 /* безопасные зоны, чтобы ничего не уезжало под шапку/подвал Telegram */
-/* было: 56px */
-.safe-top { padding-top: calc(env(safe-area-inset-top) + 96px); }
-/* низ оставляем */
+
+:root { --hud-top: calc(env(safe-area-inset-top) + 64px); }
+
+/* фиксируем HUD и даём место контенту */
+.hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
+.safe-top { padding-top: calc(var(--hud-top) + 96px); } /* 52px ~ высота HUD */
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 96px); }
 
 /* Базовый стиль нижней шторки */
@@ -38,16 +41,21 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 .progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
 
+/* верхняя шторка (выпадает из HUD) */
 .drop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 50; }
-.drop-panel { position: absolute; left: 0; right: 0; margin: 0 auto; max-width: 640px;
+.drop-panel {
+  position: fixed; left: 0; right: 0; margin: 0 auto; max-width: 640px;
   background: var(--card); border: 1px solid rgba(255,255,255,.08);
   border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
   box-shadow: 0 18px 60px rgba(0,0,0,.35); z-index: 51; overflow: hidden;
 }
 
+/* скроллим только по вертикали */
 html, body, #root { overflow-x: hidden; }
 .main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
 
-:root { --hud-top: calc(env(safe-area-inset-top) + 10px); }
-
 .hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
+
+/* прогресс для энергии */
+.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
