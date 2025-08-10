@@ -22,3 +22,11 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
 /* анимации */
 .fade-in { animation: fadeIn 400ms ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+
+/* безопасные зоны, чтобы ничего не уезжало под шапку/подвал Telegram */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 88px); /* высота нижнего меню + запас */
+}
