@@ -50,15 +50,12 @@ export default function Home() {
 
   return (
     <div className="overflow-x-hidden">
-      {/* плавающая кнопка выбора темы */}
+      {/* плавающая кнопка тем (приклеена к HUD) */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
-      {/* панель тем */}
       <TopicsPanel open={openTopics} onClose={() => setOpenTopics(false)} />
 
-      <div className="card mb-4 mt-12">
-        <div className="text-xl font-semibold mb-0.5">Привет, {name} 👋</div>
-        <div className="text-sm text-muted">Выбирай урок на дороге ниже.</div>
-      </div>
+      {/* небольшой отступ, чтобы дорога не заходила под кнопку */}
+      <div style={{ height: 56 }} />
 
       {loading ? (
         <div className="card">Загружаем уроки…</div>

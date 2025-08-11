@@ -2,43 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ====== Тема ====== */
 :root {
   --bg: #0b1220;
   --card: #0f1726;
   --text: #e5edff;
   --muted: #9bb0d3;
   --accent: #3b82f6;
+
+  /* геометрия HUD */
+  --hud-top: calc(env(safe-area-inset-top) + 96px); /* отступ от верха Telegram */
+  --hud-h: 96px;                                    /* ВЫСОТА HUD — как просил */
 }
 
 html, body, #root { height: 100%; }
-body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+}
 
-.card { @apply rounded-4xl p-5 bg-[color:var(--card)] border border-white/5 shadow-soft; }
+/* ====== Компоненты ====== */
+.card { @apply rounded-4xl p-5 bg-[color:var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0,0,0,0.25)]; }
 .btn  { @apply rounded-3xl px-5 py-4 font-semibold active:scale-[0.98] transition; background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95)); }
 .btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur; background: rgba(255,255,255,0.04); }
 .badge { @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5; }
 .skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/5 backdrop-blur; }
 
-/* анимации */
+/* ====== Анимации ====== */
 .fade-in { animation: fadeIn 400ms ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
 
-/* безопасные зоны, чтобы ничего не уезжало под шапку/подвал Telegram */
-
-:root { --hud-top: calc(env(safe-area-inset-top) + 96px); }
-
-/* фиксируем HUD и даём место контенту */
+/* ====== Безопасные зоны / HUD ====== */
 .hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
-.safe-top { padding-top: calc(var(--hud-top) + 96px); } /* 52px ~ высота HUD */
-.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 96px); }
+.hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
 
-/* Базовый стиль нижней шторки */
+/* даём месту контенту (ниже фикс-HUD и плавающей кнопки тем) */
+.safe-top    { padding-top: calc(var(--hud-top) + var(--hud-h) + 12px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
+
+/* ====== Скролл только по вертикали ====== */
+html, body, #root { overflow-x: hidden; }
+.main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
+
+/* ====== Плавающая кнопка выбора темы ====== */
+/* позицию считаем от HUD — гарантированно ниже и кликабельна */
+.topics-pin {
+  position: fixed;
+  top: calc(var(--hud-top) + var(--hud-h) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 39; /* ниже HUD (40), но выше контента */
+}
+
+/* ====== Нижняя шторка (если понадобится) ====== */
 .sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
-.sheet-panel { position: fixed; left: 0; right: 0; bottom: 0; border-top-left-radius: 24px; border-top-right-radius: 24px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 -20px 60px rgba(0,0,0,0.35); }
+.sheet-panel {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  border-top-left-radius: 24px; border-top-right-radius: 24px;
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.35);
+}
 .sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
 
-
-/* верхняя шторка (выпадает из HUD) */
+/* ====== Верхняя шторка (выпадает из HUD) ====== */
 .drop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 50; }
 .drop-panel {
   position: fixed; left: 0; right: 0; margin: 0 auto; max-width: 640px;
@@ -47,45 +75,23 @@ body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, sy
   box-shadow: 0 18px 60px rgba(0,0,0,.35); z-index: 51; overflow: hidden;
 }
 
-/* скроллим только по вертикали */
-html, body, #root { overflow-x: hidden; }
-.main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
-
-.hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
-
-/* прогресс для энергии */
-.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
-
-
-/* ниже/выше мы уже ставили, напоминаю */
-:root { --hud-top: calc(env(safe-area-inset-top) + 96px); } /* можно 84, если хочешь ещё ниже */
-.hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
-.hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
-
-.safe-top { padding-top: calc(var(--hud-top) + 52px); }
-.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
-
-html, body, #root { overflow-x: hidden; }
-.main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
-
-/* плавающая кнопка выбора темы (приклеена под HUD) */
-.topics-pin {
-  position: fixed;
-  top: calc(var(--hud-top) + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 35;
-}
-
-/* левый сайд-панель */
+/* ====== Левый сайд-панель (Темы) ====== */
 .side-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 48; }
 .side-panel {
   position: fixed; top: 0; bottom: 0; left: 0; width: 100%;
-  max-width: 560px; /* комфортно на телефоне */
+  max-width: 560px;
   background: var(--bg);
   z-index: 49; overflow: hidden; display: flex; flex-direction: column;
   border-right: 1px solid rgba(255,255,255,.08);
 }
-.side-panel-header { padding: calc(env(safe-area-inset-top) + 10px) 16px 10px 16px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.25); backdrop-filter: blur(6px); }
+.side-panel-header {
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
+}
 .side-panel-body { padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px; overflow: auto; }
+
+/* ====== Прогресс (энергия) ====== */
+.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
