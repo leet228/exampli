@@ -49,23 +49,38 @@ export default function HUD() {
   }, []);
 
   useEffect(() => {
-    loadUserSnapshot();
+  let alive = true;
 
-    // если курс поменяли в другом месте — обновим HUD
-    const onCourseChanged = () => loadUserSnapshot();
-    window.addEventListener('exampli:courseChanged', onCourseChanged);
+  const refresh = async () => {
+    if (!alive) return;
+    await loadUserSnapshot(); // твой useCallback
+  };
 
-    // вернулись в приложение — освежим данные
-    const onVisible = () => {
-      if (!document.hidden) loadUserSnapshot();
-    };
-    document.addEventListener('visibilitychange', onVisible);
+  // первичная загрузка
+  refresh();
 
-    return () => {
-      window.removeEventListener('exampli:courseChanged', onCourseChanged);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [loadUserSnapshot]);
+  // смена курса из шторки/панели
+  const onCourseChanged = (evt: Event) => {
+    const e = evt as CustomEvent<{ title?: string; code?: string }>;
+    if (e.detail?.title) setCourseTitle(e.detail.title); // сразу обновим бейдж
+    refresh();
+  };
+
+  // вернулся в приложение — освежим
+  const onVisible = () => {
+    if (!document.hidden) refresh();
+  };
+
+  window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+  document.addEventListener('visibilitychange', onVisible);
+
+  return () => {
+    alive = false;
+    window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
+}, [loadUserSnapshot]);
+
 
   return (
     <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">

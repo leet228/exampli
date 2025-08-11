@@ -56,3 +56,36 @@ html, body, #root { overflow-x: hidden; }
 /* прогресс для энергии */
 .progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
+
+
+/* ниже/выше мы уже ставили, напоминаю */
+:root { --hud-top: calc(env(safe-area-inset-top) + 96px); } /* можно 84, если хочешь ещё ниже */
+.hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
+.hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
+
+.safe-top { padding-top: calc(var(--hud-top) + 52px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
+
+html, body, #root { overflow-x: hidden; }
+.main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
+
+/* плавающая кнопка выбора темы (приклеена под HUD) */
+.topics-pin {
+  position: fixed;
+  top: calc(var(--hud-top) + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+}
+
+/* левый сайд-панель */
+.side-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 48; }
+.side-panel {
+  position: fixed; top: 0; bottom: 0; left: 0; width: 100%;
+  max-width: 560px; /* комфортно на телефоне */
+  background: var(--bg);
+  z-index: 49; overflow: hidden; display: flex; flex-direction: column;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+.side-panel-header { padding: calc(env(safe-area-inset-top) + 10px) 16px 10px 16px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.25); backdrop-filter: blur(6px); }
+.side-panel-body { padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px; overflow: auto; }
