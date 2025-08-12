@@ -127,15 +127,27 @@ body::before{
 }
 
 
-@keyframes drift {
-  0%   { transform: translateY(0) rotate(0deg);   opacity:.12; }
-  50%  { transform: translateY(-12px) rotate(3deg); opacity:.20; }
-  100% { transform: translateY(0) rotate(0deg);   opacity:.12; }
+/* полноэкранный слой под дорогу (но над фоном) */
+.decor-layer{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2; /* ниже HUD(40) и баннера(39), но виден сквозь bg-white/5 */
 }
-.decor {
-  position: fixed; pointer-events: none; z-index: 1;  /* ниже кнопок, выше фона */
-  color: rgba(255,255,255,.12);
-  animation: drift 6s ease-in-out infinite;
-  filter: blur(0.2px);
+
+/* отдельный «символ» */
+.decor-item{
+  position: absolute;
+  color: rgba(255,255,255,.14);
+  will-change: transform, opacity;
+  animation: drift 7s ease-in-out infinite;
+  filter: blur(.2px);
 }
+
+@keyframes drift{
+  0%   { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.12; }
+  50%  { transform: translate3d(0, -12px, 0) rotate(3deg);   opacity:.22; }
+  100% { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.12; }
+}
+
 .decor small { opacity:.8; }

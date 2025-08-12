@@ -1,42 +1,82 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState } from 'react';
 
 type Theme = 'math' | 'russian' | 'default';
 
-const MATH = ['π','√','∞','∑','∫','≈','≤','≥','≠','×','÷','+','−','=','1','2','3','x²','sin','cos','tg'];
-const RUS  = ['ё','й','ъ','ь','—','…','?','!',';','Ъ','Ы','Э','§','¶','А','Я'];
+const MATH = ['π','√','∞','∑','∫','≈','≤','≥','≠','×','÷','+','−','=','1','2','3','x²','sin','cos','tg','log'];
+const RUS  = ['Ё','Й','Ъ','Ь','—','…','?','!',';','Ъ','Ы','Э','§','¶','А','Я','Ф','И','О','Е'];
 
-export default function FloatingDecor({ theme='default' as Theme }) {
+function seedRand(seed: string) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    // xorshift-ish
+    h ^= h << 13; h >>>= 0;
+    h ^= h >> 17; h >>>= 0;
+    h ^= h << 5;  h >>>= 0;
+    return (h >>> 0) / 0xffffffff;
+  };
+}
+
+export default function FloatingDecor({ theme }: { theme: Theme }) {
+  const [vw, setVw] = useState(0);
   const [vh, setVh] = useState(0);
-  useEffect(()=>{ const h = () => setVh(window.innerHeight); h(); window.addEventListener('resize', h); return ()=>window.removeEventListener('resize',h);},[]);
 
+  useEffect(() => {
+    const recalc = () => {
+      setVw(window.innerWidth);
+      setVh(window.innerHeight);
+    };
+    recalc();
+    window.addEventListener('resize', recalc);
+    window.addEventListener('orientationchange', recalc);
+    return () => {
+      window.removeEventListener('resize', recalc);
+      window.removeEventListener('orientationchange', recalc);
+    };
+  }, []);
+
+  // Стабильное распределение по ВСЕМУ экрану (а не только по центру)
   const items = useMemo(() => {
-    const src = theme === 'math' ? MATH : theme === 'russian' ? RUS : MATH;
-    // 12 элементов, случайные позиции, но стабильные для сессии
-    const rnd = (i:number) => Math.sin(i * 999) * 0.5 + 0.5;
-    return Array.from({length:12}).map((_,i)=>({
-      t: src[i % src.length],
-      left: 8 + rnd(i) * 84,           // 8%..92%
-      top:  20 + ((i*7)%60),           // 20vh..80vh
-      dur: 5 + (i%6),                  // 5..10s
-      delay: (i%4)*.4                  // чуть вразнобой
-    }));
+    const pool = theme === 'math' ? MATH : theme === 'russian' ? RUS : MATH;
+    const rnd = seedRand(`exampli:${theme}`);
+    const count = 28; // можно 24–36
+
+    return Array.from({ length: count }).map((_, i) => {
+      const t = pool[i % pool.length];
+      const left = Math.round(rnd() * 100);   // 0..100 vw
+      const top  = Math.round(rnd() * 100);   // 0..100 vh
+      const scale = 0.9 + rnd() * 0.8;        // 0.9..1.7
+      const dur   = 6 + Math.round(rnd() * 6); // 6..12s
+      const delay = (rnd() * 1.2).toFixed(2);
+      return { t, left, top, scale, dur, delay };
+    });
   }, [theme]);
 
-  return (
-    <>
-      {items.map((it, i)=>(
-        <div key={i}
-          className="decor"
+  // размер шрифта (адаптируется к экрану, но не огромный)
+  const baseSize = Math.max(14, Math.min(18, Math.floor(Math.min(vw, vh) / 24)));
+
+  return createPortal(
+    <div className="decor-layer" aria-hidden>
+      {items.map((it, idx) => (
+        <div
+          key={idx}
+          className="decor-item"
           style={{
-            left: `${it.left}vw`,
-            top:  `${it.top}vh`,
-            fontSize: `${Math.max(16, (vh/36))}px`,
+            left: `calc(${it.left}vw - 0.5em)`,
+            top:  `calc(${it.top}vh - 0.5em)`,
+            fontSize: `${baseSize * it.scale}px`,
             animationDuration: `${it.dur}s`,
             animationDelay: `${it.delay}s`,
-          }}>
-          <small>{it.t}</small>
+          }}
+        >
+          {it.t}
         </div>
       ))}
-    </>
+    </div>,
+    document.body
   );
 }
