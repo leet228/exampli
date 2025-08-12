@@ -135,19 +135,20 @@ body::before{
   z-index: 2; /* ниже HUD(40) и баннера(39), но виден сквозь bg-white/5 */
 }
 
-/* отдельный «символ» */
+/* ярче + лёгкое свечение, но без перегруза GPU */
 .decor-item{
   position: absolute;
-  color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.28);        /* было .14 → стало .28 */
+  text-shadow: 0 0 10px rgba(255,255,255,.10);
   will-change: transform, opacity;
   animation: drift 7s ease-in-out infinite;
-  filter: blur(.2px);
+  filter: blur(.15px);
 }
 
 @keyframes drift{
-  0%   { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.12; }
-  50%  { transform: translate3d(0, -12px, 0) rotate(3deg);   opacity:.22; }
-  100% { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.12; }
+  0%   { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; } /* было .12 */
+  50%  { transform: translate3d(0, -12px, 0) rotate(3deg);   opacity:.36; } /* было .22 */
+  100% { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; }
 }
 
 .decor small { opacity:.8; }
