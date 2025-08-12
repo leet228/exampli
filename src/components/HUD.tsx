@@ -113,7 +113,13 @@ export default function HUD() {
               className="badge"
               aria-label="Стрик"
             >
-              🔥 {streak}
+              <img
+                src="/stickers/fire.svg"
+                alt=""
+                aria-hidden
+                className="w-4 h-4"
+              />
+              {streak}
             </button>
             <button
               type="button"
@@ -125,7 +131,13 @@ export default function HUD() {
               className="badge"
               aria-label="Энергия"
             >
-              ⚡ {energy}
+              <img
+                src="/stickers/lightning.svg"
+                alt=""
+                aria-hidden
+                className="w-4 h-4"
+              />
+              {energy}
             </button>
           </div>
         </div>
