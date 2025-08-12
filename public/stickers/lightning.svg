@@ -1,10 +1,16 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg xmlns="http://www.w3.org/2000/svg" version="1.0" width="256.000000pt" height="256.000000pt" viewBox="0 0 256.000000 256.000000" preserveAspectRatio="xMidYMid meet">
-<metadata>
-Created by potrace 1.16, written by Peter Selinger 2001-2019
-<meta name="Producer" content="Online-Convert"/></metadata>
-<g transform="translate(0.000000,256.000000) scale(0.100000,-0.100000)" fill="#000000" stroke="none">
-<path d="M115 1923 c-45 -23 -86 -64 -101 -100 -11 -26 -14 -131 -14 -542 0 -336 4 -519 11 -538 14 -38 56 -81 101 -104 36 -18 70 -19 845 -19 504 0 814 4 823 10 13 9 13 10 0 10 -13 0 -13 1 0 10 13 9 13 10 0 10 -13 0 -13 1 0 10 13 9 13 10 0 10 -13 0 -13 2 0 9 8 6 18 7 22 5 4 -3 8 0 8 5 0 8 -195 11 -635 11 l-635 0 0 570 0 570 643 1 c353 1 629 4 613 6 -22 4 -26 7 -15 14 12 7 12 9 -1 9 -13 0 -13 1 0 10 13 9 13 10 0 10 -13 0 -13 1 0 10 13 9 13 10 0 10 -13 0 -13 1 0 10 10 6 -274 10 -810 9 -732 0 -828 -2 -855 -16z"/>
-</g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6b5cff"/>
+      <stop offset="100%" stop-color="#00c8ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Body outline -->
+  <rect x="32" y="112" width="416" height="288" rx="48" ry="48" fill="none" stroke="url(#g1)" stroke-width="32"/>
+  <!-- Terminal -->
+  <rect x="448" y="192" width="32" height="128" rx="12" ry="12" fill="url(#g1)"/>
+  <!-- Inner container (for reference/contrast) -->
+  <rect x="64" y="136" width="352" height="240" rx="32" fill="#00000000" />
+  <!-- Charge (≈60%) -->
+  <rect x="64" y="136" width="212" height="240" rx="28" fill="url(#g1)" opacity="0.85"/>
 </svg>

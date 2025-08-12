@@ -1,9 +1,25 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg xmlns="http://www.w3.org/2000/svg" version="1.0" width="512.000000pt" height="512.000000pt" viewBox="0 0 512.000000 512.000000" preserveAspectRatio="xMidYMid meet">
-<metadata>
-Created by potrace 1.16, written by Peter Selinger 2001-2019
-<meta name="Producer" content="Online-Convert"/></metadata>
-<g transform="translate(0.000000,512.000000) scale(0.100000,-0.100000)" fill="#000000" stroke="none">
-</g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="dbase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#66e6ff"/>
+      <stop offset="100%" stop-color="#00b7ff"/>
+    </linearGradient>
+    <linearGradient id="dlight" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a7f5ff"/>
+      <stop offset="100%" stop-color="#43d9ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Base diamond shape -->
+  <polygon points="96,192 176,96 336,96 416,192 256,416" fill="url(#dbase)"/>
+  <!-- Facets -->
+  <polygon points="176,96 256,192 336,96" fill="url(#dlight)" opacity="0.9"/>
+  <polygon points="96,192 256,192 176,96" fill="#7fe8ff" opacity="0.7"/>
+  <polygon points="336,96 256,192 416,192" fill="#2fd0ff" opacity="0.8"/>
+  <polygon points="96,192 256,416 256,192" fill="#5fe4ff" opacity="0.8"/>
+  <polygon points="416,192 256,416 256,192" fill="#10c5ff" opacity="0.8"/>
+  <!-- Sparkles -->
+  <g opacity="0.9">
+    <path d="M392 116 l12 20 20 12 -20 12 -12 20 -12 -20 -20 -12 20 -12z" fill="#e7ffff"/>
+    <path d="M352 76 l8 12 12 8 -12 8 -8 12 -8 -12 -12 -8 12 -8z" fill="#e7ffff"/>
+  </g>
 </svg>
