@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 
+
 const Item = ({ to, label, icon }: { to: string; label: string; icon: string }) => (
   <NavLink
     to={to}
@@ -18,7 +19,7 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 pb-[max(env(safe-area-inset-bottom),12px)]">
       <div className="mx-auto max-w-xl px-4">
         <div className="border border-white/10 rounded-3xl bg-[color:var(--card)]/90 backdrop-blur shadow-soft flex items-center justify-around py-2">
-          <Item to="/"             label=""      icon="🏠" />
+          <Item to="/"             label=""      icon="/stickers/home.svg" />
           <Item to="/rating"       label=""    icon="🏆" />
           <Item to="/subscription" label=""  icon="💎" />
           <Item to="/profile"      label=""    icon="👤" />
