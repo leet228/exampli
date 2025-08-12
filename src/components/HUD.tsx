@@ -97,7 +97,7 @@ export default function HUD() {
             className="badge"
             aria-label="Выбрать курс"
           >
-            <span className="text-lg">🧩</span>
+            <span className="text-lg"></span>
             <span className="truncate max-w-[180px]">{courseTitle}</span>
           </button>
 
