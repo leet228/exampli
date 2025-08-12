@@ -152,3 +152,9 @@ body::before{
 }
 
 .decor small { opacity:.8; }
+
+@keyframes blink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  92% { transform: scaleY(0.2); }
+  96% { transform: scaleY(1); }
+}
