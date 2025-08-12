@@ -42,7 +42,7 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     <motion.button type="button" className="topics-hero" style={{ top }}
       onClick={onOpen} whileHover={{scale:1.02}} whileTap={{scale:0.98}}>
       <span className="mr-1 text-xl">‹</span>
-      <span className="mr-1">🧩</span>
+      <span className="mr-1"></span>
       <span className="font-semibold">{title}</span>
       <span className="ml-1 opacity-80">▾</span>
     </motion.button>
