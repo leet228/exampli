@@ -2,14 +2,39 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { PropsWithChildren, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function SidePanel({
-  open, onClose, title, children
-}: PropsWithChildren<{ open: boolean; onClose: () => void; title?: string }>) {
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  useTelegramBack?: boolean; // НОВОЕ
+  hideLocalClose?: boolean;  // НОВОЕ
+};
+
+export default function SidePanel({ open, onClose, title, useTelegramBack, hideLocalClose, children }: PropsWithChildren<Props>) {
   useEffect(() => {
+    const tg = (window as any)?.Telegram?.WebApp;
     if (!open) return;
-    const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+
+    // показываем системную "Назад" и перехватываем клик
+    if (useTelegramBack && tg?.BackButton) {
+      tg.BackButton.show();
+      const handler = () => onClose(); // не закрываем мини-апп, а просто закрываем панель
+      tg.onEvent?.('backButtonClicked', handler);
+
+      return () => {
+        tg.offEvent?.('backButtonClicked', handler);
+        tg.BackButton.hide();
+        document.body.style.overflow = '';
+      };
+    }
+
+    return () => { document.body.style.overflow = ''; };
+  }, [open, onClose, useTelegramBack]);
+
+  // сообщим кнопке-баннеру, что надо перемерить позицию (чтобы не прыгала)
+  useEffect(() => {
+    window.dispatchEvent(new Event('exampli:overlayToggled'));
   }, [open]);
 
   return createPortal(
@@ -23,9 +48,11 @@ export default function SidePanel({
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           >
             <div className="side-panel-header flex items-center justify-between">
-              <button className="badge" onClick={onClose}>✕ Close</button>
+              {hideLocalClose ? <div className="opacity-0">•</div> : (
+                <button className="badge" onClick={onClose}>✕ Close</button>
+              )}
               <div className="text-base font-semibold">{title}</div>
-              <div className="opacity-0">•</div>{/* баланс */}
+              <div className="opacity-0">•</div>
             </div>
             <div className="side-panel-body">{children}</div>
           </motion.aside>

@@ -41,7 +41,7 @@ export default function TopicsPanel({
   };
 
   return (
-    <SidePanel open={open} onClose={onClose} title="Темы">
+    <SidePanel open={open} onClose={onClose} title="Темы" useTelegramBack hideLocalClose>
       <div className="grid gap-3">
         {subjects.map((s) => {
           const isOpen = openedId === s.id;
