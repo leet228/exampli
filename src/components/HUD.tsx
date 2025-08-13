@@ -1,25 +1,25 @@
+// src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
-import { setUserSubjects } from '../lib/userState';
 import TopicsPanel from './panels/TopicsPanel';
-import AddCourseSheet from './panels/AddCourseSheet';
+import { setUserSubjects } from '../lib/userState';
 
-type Subject = { id: string; code: string; title: string; level: string };
+type Subject = { id: number; code: string; title: string; level: string };
 
 export default function HUD() {
-  const anchorRef = useRef<HTMLDivElement>(null); // якорь для верхних шторок
+  const anchorRef = useRef<HTMLDivElement>(null);
   const [courseTitle, setCourseTitle] = useState('Курс');
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25); // 0..25 (hearts * 5)
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false); // нижняя шторка «Добавить курс»
 
   const loadUserSnapshot = useCallback(async () => {
     const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!tgId) return;
 
-    // базовые поля пользователя
+    // 1) базовые поля пользователя
     const { data: user } = await supabase
       .from('users')
       .select('id, streak, hearts')
@@ -31,7 +31,7 @@ export default function HUD() {
       setEnergy(((user.hearts ?? 5) as number) * 5);
     }
 
-    // текущий выбранный курс (берём первый в user_subjects для ЭТОГО пользователя)
+    // 2) текущий выбранный курс: сначала subject_id, затем заголовок
     if (user?.id) {
       const { data: rel } = await supabase
         .from('user_subjects')
@@ -39,7 +39,7 @@ export default function HUD() {
         .eq('user_id', user.id)
         .limit(1);
 
-      const subjectId = rel?.[0]?.subject_id;
+      const subjectId = rel?.[0]?.subject_id as number | undefined;
       if (subjectId) {
         const { data: subj } = await supabase
           .from('subjects')
@@ -52,44 +52,42 @@ export default function HUD() {
   }, []);
 
   useEffect(() => {
-  let alive = true;
+    let alive = true;
+    const refresh = async () => {
+      if (!alive) return;
+      await loadUserSnapshot();
+    };
 
-  const refresh = async () => {
-    if (!alive) return;
-    await loadUserSnapshot(); // твой useCallback
-  };
-
-  // первичная загрузка
-  refresh();
-
-  // смена курса из шторки/панели
-  const onCourseChanged = (evt: Event) => {
-    const e = evt as CustomEvent<{ title?: string; code?: string }>;
-    if (e.detail?.title) setCourseTitle(e.detail.title); // сразу обновим бейдж
+    // первичная загрузка
     refresh();
-  };
 
-  // вернулся в приложение — освежим
-  const onVisible = () => {
-    if (!document.hidden) refresh();
-  };
+    // смена курса из шторки/панели
+    const onCourseChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ title?: string; code?: string }>;
+      if (e.detail?.title) setCourseTitle(e.detail.title);
+      refresh();
+    };
 
-  window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
-  document.addEventListener('visibilitychange', onVisible);
+    // вернулся в приложение — освежим
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
 
-  return () => {
-    alive = false;
-    window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
-    document.removeEventListener('visibilitychange', onVisible);
-  };
-}, [loadUserSnapshot]);
+    window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    document.addEventListener('visibilitychange', onVisible);
 
+    return () => {
+      alive = false;
+      window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadUserSnapshot]);
 
   return (
     <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
       <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-2">
         <div className="flex items-center justify-between">
-          {/* Курс */}
+          {/* Бейдж курса */}
           <button
             type="button"
             onClick={(e) => {
@@ -116,12 +114,7 @@ export default function HUD() {
               className="badge"
               aria-label="Стрик"
             >
-              <img
-                src="/stickers/fire.svg"
-                alt=""
-                aria-hidden
-                className="w-4 h-4"
-              />
+              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-4 h-4" />
               {streak}
             </button>
             <button
@@ -134,39 +127,35 @@ export default function HUD() {
               className="badge"
               aria-label="Энергия"
             >
-              <img
-                src="/stickers/lightning.svg"
-                alt=""
-                aria-hidden
-                className="w-4 h-4"
-              />
+              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-4 h-4" />
               {energy}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ВЫПАДАЮЩИЕ ВНИЗ ШТОРКИ ИЗ HUD */}
-      <TopSheet open={open==='course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
+      {/* ШТОРКА: выбор курса (верхняя) */}
+      <TopSheet
+        open={open === 'course'}
+        onClose={() => setOpen(null)}
+        anchor={anchorRef}
+        title="Курс"
+      >
         <TopicsPanel
-          onPicked={(s) => {
+          onPicked={async (s: Subject) => {
+            // активируем существующий курс
+            await setUserSubjects([s.code]);
             setCourseTitle(s.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            window.dispatchEvent(
+              new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }),
+            );
             setOpen(null);
           }}
           onAddClick={() => setAddOpen(true)}
         />
       </TopSheet>
 
-      <AddCourseSheet
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onAdded={(s) => {
-          setCourseTitle(s.title);
-          // Верхняя шторка может быть закрыта; дорога обновится по нашему событию.
-        }}
-      />
-
+      {/* ШТОРКА: стрик (верхняя) */}
       <TopSheet
         open={open === 'streak'}
         onClose={() => setOpen(null)}
@@ -176,6 +165,7 @@ export default function HUD() {
         <StreakSheetBody />
       </TopSheet>
 
+      {/* ШТОРКА: энергия (верхняя) */}
       <TopSheet
         open={open === 'energy'}
         onClose={() => setOpen(null)}
@@ -184,72 +174,70 @@ export default function HUD() {
       >
         <EnergySheetBody
           value={energy}
-          onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }}
+          onOpenSubscription={() => {
+            setOpen(null);
+            location.assign('/subscription');
+          }}
         />
       </TopSheet>
+
+      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» (встроенная) */}
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)}>
+        <AddCourseBody
+          onCancel={() => setAddOpen(false)}
+          onConfirm={async (subject) => {
+            // добавляем пользователю курс и делаем его активным (без пустых catch)
+            const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+            if (!tgId) return;
+
+            const { data: user } = await supabase
+              .from('users')
+              .select('id')
+              .eq('tg_id', String(tgId))
+              .single();
+
+            if (user?.id) {
+              // idempotent: upsert по уникальному ключу (user_id, subject_id)
+              const { error } = await supabase
+                .from('user_subjects')
+                .upsert(
+                  { user_id: user.id, subject_id: subject.id },
+                  { onConflict: 'user_id,subject_id' },
+                );
+              if (error) {
+                console.error('upsert user_subjects failed', error);
+                return;
+              }
+
+              await setUserSubjects([subject.code]);
+              setCourseTitle(subject.title);
+              window.dispatchEvent(
+                new CustomEvent('exampli:courseChanged', {
+                  detail: { title: subject.title, code: subject.code },
+                }),
+              );
+            }
+
+            setAddOpen(false);
+            setOpen(null);
+          }}
+        />
+      </BottomSheet>
     </div>
   );
 }
 
-/* ===== ТЕЛА ШТОРОК (в одном файле для удобства) ===== */
-
-function CourseSheetBody({
-  onPicked,
-}: {
-  onPicked: (subject: Subject) => void;
-}) {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id, code, title, level')
-        .order('title');
-      setSubjects((data as Subject[]) || []);
-    })();
-  }, []);
-
-  return (
-    <div className="grid gap-3">
-      {subjects.map((s) => (
-        <button
-          key={s.id}
-          type="button"
-          onClick={() => onPicked(s)}
-          className="flex items-center justify-between p-4 rounded-3xl bg-white/5 border border-white/10"
-        >
-          <div>
-            <div className="font-semibold">{s.title}</div>
-            <div className="text-xs text-muted">{s.level}</div>
-          </div>
-          <div className="text-2xl">📘</div>
-        </button>
-      ))}
-      <button
-        type="button"
-        className="btn w-full"
-        onClick={() => alert('Добавить курс — скоро')}
-      >
-        + Добавить курс
-      </button>
-    </div>
-  );
-}
+/* ===================== ВНУТРЕННИЕ КОМПОНЕНТЫ ===================== */
 
 function StreakSheetBody() {
-  const [streak, setStreak] = useState(0);
+  const [value, setValue] = useState(0);
 
   useEffect(() => {
     (async () => {
       const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!id) return;
-      const { data: u } = await supabase
-        .from('users')
-        .select('streak')
-        .eq('tg_id', String(id))
-        .single();
-      setStreak(u?.streak ?? 0);
+      const { data } = await supabase.from('users').select('streak').eq('tg_id', String(id)).single();
+      setValue(data?.streak ?? 0);
     })();
   }, []);
 
@@ -257,16 +245,20 @@ function StreakSheetBody() {
 
   return (
     <>
-      <div className="card">
-        <div className="text-3xl font-bold">🔥 {streak}</div>
-        <div className="text-sm text-muted">дней подряд</div>
+      <div className="card flex items-center gap-3">
+        <img src="/stickers/fire.svg" alt="" aria-hidden className="w-6 h-6" />
+        <div>
+          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-sm text-muted -mt-0.5">дней подряд</div>
+        </div>
       </div>
+
       <div className="grid grid-cols-7 gap-2 mt-4">
         {days.map((d) => (
           <div
             key={d}
             className={`h-9 rounded-xl flex items-center justify-center text-sm border ${
-              d <= streak ? 'bg-white/10 border-white/10' : 'border-white/5'
+              d <= value ? 'bg-white/10 border-white/10' : 'border-white/5'
             }`}
           >
             {d}
@@ -277,11 +269,19 @@ function StreakSheetBody() {
   );
 }
 
-function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenSubscription: () => void }) {
+function EnergySheetBody({
+  value,
+  onOpenSubscription,
+}: {
+  value: number;
+  onOpenSubscription: () => void;
+}) {
   const percent = Math.max(0, Math.min(100, Math.round((value / 25) * 100)));
   return (
     <>
-      <div className="progress"><div style={{ width: `${percent}%` }} /></div>
+      <div className="progress">
+        <div style={{ width: `${percent}%` }} />
+      </div>
       <div className="mt-2 text-sm text-muted">{value}/25</div>
 
       <div className="grid gap-3 mt-5">
@@ -294,5 +294,112 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
         </button>
       </div>
     </>
+  );
+}
+
+/* ---------- Простой BottomSheet (без зависимостей) ---------- */
+function BottomSheet({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose} />
+      <div
+        className="sheet-panel px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2"
+        style={{ transform: 'translateY(0)', transition: 'transform 240ms ease' }}
+      >
+        <div className="sheet-handle" />
+        {children}
+      </div>
+    </>
+  );
+}
+
+/* ---------- Тело «Добавить курс» ---------- */
+function AddCourseBody({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: (subject: Subject) => void;
+}) {
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selected, setSelected] = useState<Subject | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('subjects')
+        .select('id, code, title, level')
+        .order('level', { ascending: true })
+        .order('title', { ascending: true });
+      setSubjects((data as Subject[]) || []);
+    })();
+  }, []);
+
+  const groups = subjects.reduce<Record<string, Subject[]>>((acc, s) => {
+    (acc[s.level] ||= []).push(s);
+    return acc;
+  }, {});
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="text-center text-sm text-muted mb-3">Выбери курс и нажми «Добавить»</div>
+
+      {Object.entries(groups).map(([level, list]) => (
+        <div key={level} className="mb-3">
+          <div className="px-1 pb-2 text-xs uppercase tracking-wide text-muted">{level}</div>
+          <div className="grid gap-2">
+            {list.map((s) => {
+              const active = selected?.id === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelected(s)}
+                  className={`flex items-center justify-between rounded-3xl px-4 py-3 border transition ${
+                    active ? 'border-[color:var(--accent)] bg-white/10' : 'border-white/10 bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">📘</div>
+                    <div className="text-left">
+                      <div className="font-semibold">{s.title}</div>
+                      <div className="text-xs text-muted">{s.level}</div>
+                    </div>
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full border ${
+                      active ? 'bg-[color:var(--accent)] border-[color:var(--accent)]' : 'border-white/20'
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <div className="mt-4 grid grid-cols-2 gap-8">
+        <button type="button" onClick={onCancel} className="btn-outline">
+          Отмена
+        </button>
+        <button
+          type="button"
+          disabled={!selected}
+          onClick={() => selected && onConfirm(selected)}
+          className={`btn ${!selected ? 'opacity-60 pointer-events-none' : ''}`}
+        >
+          Добавить
+        </button>
+      </div>
+    </div>
   );
 }
