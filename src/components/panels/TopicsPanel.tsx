@@ -1,23 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { setUserSubjects } from '../../lib/userState';
-import { motion } from 'framer-motion';
 
-type Subject = { id: number; code: string; title: string; level: 'ЕГЭ' | 'ОГЭ' | string };
+type Subject = { id: number; code: string; title: string; level: string };
 
-export default function TopicsPanel({
-  onPicked,
-  onAddClick,
-}: {
-  onPicked: (s: Subject) => void;
-  onAddClick: () => void;
-}) {
+type Props = {
+  // Режим панели (как у тебя в Home.tsx)
+  open?: boolean;
+  onClose?: () => void;
+
+  // Режим «контент для шторки» (как в HUD.tsx)
+  onPicked?: (s: Subject) => void;
+  onAddClick?: () => void;
+};
+
+export default function TopicsPanel(props: Props) {
+  const { open, onClose, onPicked, onAddClick } = props;
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [currentCode, setCurrentCode] = useState<string | null>(null);
+  const [activeCode, setActiveCode] = useState<string | null>(null);
 
   useEffect(() => {
+    // грузим только когда:
+    //  - либо мы в режиме панели и она открыта,
+    //  - либо мы в режиме контента (open не передан вообще).
+    if (open === false) return;
+
     (async () => {
-      // активные предметы пользователя
       const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!tgId) return;
 
@@ -27,60 +35,85 @@ export default function TopicsPanel({
         .eq('tg_id', String(tgId))
         .single();
 
+      if (!user?.id) { setSubjects([]); return; }
+
+      // 1) берём subject_id пользователя
       const { data: rel } = await supabase
         .from('user_subjects')
-        .select('subject:subjects(id,code,title,level)')
-        .eq('user_id', user?.id);
+        .select('subject_id')
+        .eq('user_id', user.id);
 
-      const list = (rel || []).map((r: any) => r.subject) as Subject[];
-      setSubjects(list);
+      const ids = (rel || []).map(r => r.subject_id as number);
+      if (!ids.length) { setSubjects([]); return; }
 
-      // текущий выбранный курс берём из первого/последнего — на твой вкус
-      setCurrentCode(list[0]?.code ?? null);
+      // 2) подтянем сами subjects
+      const { data } = await supabase
+        .from('subjects')
+        .select('id, code, title, level')
+        .in('id', ids)
+        .order('title');
+
+      setSubjects((data as Subject[]) || []);
+      setActiveCode(((data as Subject[] | null)?.[0]?.code) || null);
     })();
-  }, []);
+  }, [open]);
 
-  const grid = useMemo(() => subjects, [subjects]);
+  // отдельный контент — «сеточка» курсов + «+»
+  const Grid = useMemo(() => (
+    <div className="grid grid-cols-3 gap-3">
+      {subjects.map((s) => {
+        const active = s.code === activeCode;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => {
+              setActiveCode(s.code);
+              onPicked?.(s);
+            }}
+            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition
+              ${active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}
+            `}
+          >
+            <div className="text-2xl mb-1">📘</div>
+            <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
+            <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
+          </button>
+        );
+      })}
 
-  return (
-    <div className="pb-1">
-      <div className="grid grid-cols-3 gap-3">
-        {grid.map((s) => {
-          const active = s.code === currentCode;
-          return (
-            <motion.button
-              key={s.id}
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={async () => {
-                setCurrentCode(s.code);
-                await setUserSubjects([s.code]); // выбираем курс
-                onPicked(s);
-              }}
-              className={`aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2
-                ${active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}
-              `}
-            >
-              <div className="text-2xl mb-1">📘</div>
-              <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
-              <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
-            </motion.button>
-          );
-        })}
-
-        {/* Плитка "+" */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={onAddClick}
-          className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
-        >
-          <div className="flex flex-col items-center">
-            <div className="text-2xl">＋</div>
-            <div className="text-[10px] text-muted mt-1">Добавить</div>
-          </div>
-        </motion.button>
-      </div>
+      {/* Плитка «+ Добавить» */}
+      <button
+        type="button"
+        onClick={() => onAddClick?.()}
+        className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+      >
+        <div className="flex flex-col items-center">
+          <div className="text-2xl">＋</div>
+          <div className="text-[10px] text-muted mt-1">Добавить</div>
+        </div>
+      </button>
     </div>
-  );
+  ), [subjects, activeCode, onPicked, onAddClick]);
+
+  // Если пропсы open/onClose переданы — рендерим ПАНЕЛЬ (как в Home.tsx).
+  if (typeof open === 'boolean') {
+    if (!open) return null;
+    return (
+      <>
+        <div className="side-backdrop" onClick={onClose} />
+        <aside className="side-panel">
+          <div className="side-panel-header flex items-center justify-center">
+            <div className="text-lg font-semibold">Темы</div>
+          </div>
+          <div className="side-panel-body">
+            {Grid}
+          </div>
+        </aside>
+      </>
+    );
+  }
+
+  // Иначе — просто возвращаем контент (как в HUD TopSheet)
+  return <div className="pb-1">{Grid}</div>;
 }
