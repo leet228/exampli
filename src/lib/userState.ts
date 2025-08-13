@@ -76,6 +76,27 @@ export async function canStartLesson(): Promise<boolean> {
   return (u?.hearts ?? 0) > 0;
 }
 
+export async function addUserSubject(subjectCode: string) {
+  const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (!id) return;
+
+  // user
+  const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(id)).single();
+  if (!user?.id) return;
+
+  // subject
+  const { data: subj } = await supabase.from('subjects').select('id,code,title').eq('code', subjectCode).single();
+  if (!subj?.id) return;
+
+  // insert (idempotent)
+  await supabase
+    .from('user_subjects')
+    .upsert([{ user_id: user.id, subject_id: subj.id }], { onConflict: 'user_id,subject_id', ignoreDuplicates: true });
+
+  // оповестим UI
+  window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: subj.title, code: subj.code } }));
+}
+
 export async function finishLesson({ correct }: { correct: boolean }) {
   const u = await getStats();
   if (!u) return;

@@ -1,41 +1,61 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { PropsWithChildren, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function BottomSheet({
-  open, onClose, title, children
-}: PropsWithChildren<{ open: boolean; onClose: () => void; title?: string }>) {
-  // блокируем скролл фона, пока открыта шторка
+type BottomSheetProps = {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+};
+
+export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (!tg) return;
 
-  return createPortal(
+    if (open) {
+      tg.BackButton?.show();
+      const handler = () => onClose();
+      tg.BackButton?.onClick(handler);
+      return () => {
+        tg.BackButton?.hide();
+        tg.BackButton?.offClick?.(handler);
+      };
+    }
+  }, [open, onClose]);
+
+  return (
     <AnimatePresence>
       {open && (
         <>
           <motion.div
             className="sheet-backdrop"
-            style={{ zIndex: 50 }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           />
           <motion.div
             className="sheet-panel"
-            style={{ zIndex: 50, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+            role="dialog"
+            aria-modal="true"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
           >
-            <div className="sheet-handle" />
-            {title && <div className="px-5 pb-2 text-lg font-semibold">{title}</div>}
-            <div className="px-5 pb-6">{children}</div>
+            {title ? (
+              <div className="px-5 pt-3 pb-2 border-b border-white/10">
+                <div className="sheet-handle" />
+                <div className="text-center font-semibold">{title}</div>
+              </div>
+            ) : (
+              <div className="sheet-handle" />
+            )}
+            <div className="p-4">{children}</div>
           </motion.div>
         </>
       )}
-    </AnimatePresence>,
-    document.body
+    </AnimatePresence>
   );
 }

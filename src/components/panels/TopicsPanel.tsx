@@ -1,96 +1,86 @@
-import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import SidePanel from './SidePanel';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { setUserSubjects } from '../../lib/userState';
+import { motion } from 'framer-motion';
 
-type Subject = { id: number; code: string; title: string; level: string };
+type Subject = { id: number; code: string; title: string; level: 'ЕГЭ' | 'ОГЭ' | string };
 
 export default function TopicsPanel({
-  open, onClose
-}: { open: boolean; onClose: () => void }) {
+  onPicked,
+  onAddClick,
+}: {
+  onPicked: (s: Subject) => void;
+  onAddClick: () => void;
+}) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [openedId, setOpenedId] = useState<number | null>(null);
-  const [lessons, setLessons] = useState<Record<number, any[]>>({}); // subject_id -> lessons[]
+  const [currentCode, setCurrentCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
     (async () => {
-      const { data } = await supabase.from('subjects').select('*').order('title');
-      setSubjects((data as any[]) || []);
+      // активные предметы пользователя
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      if (!tgId) return;
+
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('tg_id', String(tgId))
+        .single();
+
+      const { data: rel } = await supabase
+        .from('user_subjects')
+        .select('subject:subjects(id,code,title,level)')
+        .eq('user_id', user?.id);
+
+      const list = (rel || []).map((r: any) => r.subject) as Subject[];
+      setSubjects(list);
+
+      // текущий выбранный курс берём из первого/последнего — на твой вкус
+      setCurrentCode(list[0]?.code ?? null);
     })();
-  }, [open]);
+  }, []);
 
-  const toggleSubject = async (s: Subject) => {
-    setOpenedId(prev => (prev === s.id ? null : s.id));
-    if (!lessons[s.id]) {
-      const { data } = await supabase
-        .from('lessons')
-        .select('id, title, order_index')
-        .eq('subject_id', s.id)
-        .order('order_index');
-      setLessons(prev => ({ ...prev, [s.id]: data || [] }));
-    }
-  };
-
-  const pickSection = async (s: Subject, section: any) => {
-    await setUserSubjects([s.code]);
-    // Обновим подписи и дорогу
-    window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: `${s.title}` } }));
-    onClose();
-  };
+  const grid = useMemo(() => subjects, [subjects]);
 
   return (
-    <SidePanel open={open} onClose={onClose} title="Темы" useTelegramBack hideLocalClose>
-      <div className="grid gap-3">
-        {subjects.map((s) => {
-          const isOpen = openedId === s.id;
+    <div className="pb-1">
+      <div className="grid grid-cols-3 gap-3">
+        {grid.map((s) => {
+          const active = s.code === currentCode;
           return (
-            <div key={s.id} className="rounded-3xl border border-white/10 overflow-hidden bg-white/5">
-              <button
-                className="w-full flex items-center justify-between px-4 py-3"
-                onClick={() => toggleSubject(s)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📗</div>
-                  <div className="text-left">
-                    <div className="font-semibold">{s.title}</div>
-                    <div className="text-xs text-muted">{s.level}</div>
-                  </div>
-                </div>
-                <div className={`transition ${isOpen ? 'rotate-90' : ''}`}>›</div>
-              </button>
-
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="border-t border-white/10"
-                  >
-                    <div className="p-2 grid gap-2">
-                      {(lessons[s.id] || []).map((l: any) => (
-                        <button
-                          key={l.id}
-                          className="w-full text-left rounded-2xl px-4 py-3 bg-[color:var(--card)] hover:bg-white/10 transition"
-                          onClick={() => pickSection(s, l)}
-                        >
-                          {l.title}
-                        </button>
-                      ))}
-                      {(lessons[s.id] || []).length === 0 && (
-                        <div className="text-xs text-muted px-4 py-3">Пока нет разделов…</div>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <motion.button
+              key={s.id}
+              type="button"
+              whileTap={{ scale: 0.98 }}
+              onClick={async () => {
+                setCurrentCode(s.code);
+                await setUserSubjects([s.code]); // выбираем курс
+                onPicked(s);
+              }}
+              className={`aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2
+                ${active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}
+              `}
+            >
+              <div className="text-2xl mb-1">📘</div>
+              <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
+              <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
+            </motion.button>
           );
         })}
+
+        {/* Плитка "+" */}
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.98 }}
+          onClick={onAddClick}
+          className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+        >
+          <div className="flex flex-col items-center">
+            <div className="text-2xl">＋</div>
+            <div className="text-[10px] text-muted mt-1">Добавить</div>
+          </div>
+        </motion.button>
       </div>
-    </SidePanel>
+    </div>
   );
 }
