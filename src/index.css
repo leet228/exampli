@@ -63,6 +63,8 @@ html, body, #root { overflow-x: hidden; }
   background: var(--card);
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 -20px 60px rgba(0,0,0,0.35);
+  max-height: 85vh;         /* важно */
+  overflow-y: auto; 
 }
 .sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
 
