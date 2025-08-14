@@ -13,6 +13,9 @@
   /* геометрия HUD */
   --hud-top: calc(env(safe-area-inset-top) + 96px); /* отступ от верха Telegram */
   --hud-h: 96px;                                    /* ВЫСОТА HUD — как просил */
+  --z-hud: 40;
+  --z-top-sheet: 70;
+  --z-bottom-sheet: 80;
 }
 
 html, body, #root { height: 100%; }
@@ -57,33 +60,51 @@ html, body, #root { overflow-x: hidden; }
 
 /* ====== Нижняя шторка (если понадобится) ====== */
 /* Нижняя шторка */
-.sheet-backdrop {
+.sheet-backdrop{
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,.5);
   backdrop-filter: blur(2px);
-  z-index: 58;                 /* ← добавили */
+  z-index: var(--z-bottom-sheet);
 }
-.sheet-panel {
-  position: fixed; left: 0; right: 0; bottom: 0;
+.sheet-panel{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: calc(var(--z-bottom-sheet) + 1);
   border-top-left-radius: 24px; border-top-right-radius: 24px;
   background: var(--card);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 -20px 60px rgba(0,0,0,0.35);
-  max-height: 85vh;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 -20px 60px rgba(0,0,0,.35);
+  /* почти фуллскрин, с учётом iOS динамического вьюпорта */
+  max-height: min(92dvh, 92vh);
   overflow-y: auto;
-  z-index: 59;                 /* ← добавили */
-  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(env(safe-area-inset-bottom), 12px);
 }
-.sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
+.sheet-handle{
+  width: 44px; height: 5px; border-radius: 999px;
+  background: rgba(255,255,255,.16);
+  margin: 10px auto;
+}
 
 /* ====== Верхняя шторка (выпадает из HUD) ====== */
-.drop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 50; }
-.drop-panel {
-  position: fixed; left: 0; right: 0; margin: 0 auto; max-width: 640px;
-  background: var(--card); border: 1px solid rgba(255,255,255,.08);
-  border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
-  box-shadow: 0 18px 60px rgba(0,0,0,.35); z-index: 51; overflow: hidden;
+.drop-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(2px);
+  z-index: var(--z-top-sheet);
+}
+.drop-panel{
+  position: fixed;        /* ← важно: fixed */
+  left: 12px;
+  right: 12px;
+  z-index: calc(var(--z-top-sheet) + 1);
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  overflow: hidden;
 }
 
 /* ====== Левый сайд-панель (Темы) ====== */

@@ -76,10 +76,9 @@ export default function HUD() {
   }, [loadUserSnapshot]);
 
   // открыть полноэкранную панель «Добавить курс» после закрытия TopSheet
-  const openAddCourse = () => {
+  const onAddFromTopSheet = () => {
     setOpen(null);
-    // даём TopSheet скрыться визуально и только потом монтируем панель
-    setTimeout(() => setAddOpen(true), 160);
+    requestAnimationFrame(() => setAddOpen(true));
   };
 
   return (
@@ -128,7 +127,7 @@ export default function HUD() {
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
             setOpen(null);
           }}
-          onAddClick={openAddCourse}
+          onAddClick={onAddFromTopSheet}
         />
       </TopSheet>
 

@@ -26,12 +26,17 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     }
   }, [open, onClose]);
 
-  // Блокируем скролл фона, пока открыта шторка
+  // Лочим скролл документа, чтобы фон не «ездил» под шторкой
   useEffect(() => {
     if (!open) return;
-    const prev = document.documentElement.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
     document.documentElement.style.overflow = 'hidden';
-    return () => { document.documentElement.style.overflow = prev; };
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
   }, [open]);
 
   const node = (
@@ -69,6 +74,6 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     </AnimatePresence>
   );
 
-  // Монтируем поверх всего в <body>, чтобы не влияли родительские слои/overflow/transform
+  // В портал в <body>, чтобы не влияли родительские overflow/transform/z-index
   return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }
