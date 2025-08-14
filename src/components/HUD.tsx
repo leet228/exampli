@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
 import TopicsPanel from './panels/TopicsPanel';
+import AddCourseSheet from './panels/AddCourseSheet';
 import { setUserSubjects } from '../lib/userState';
 
 type Subject = { id: number; code: string; title: string; level: string };
@@ -13,9 +14,11 @@ export default function HUD() {
   const [courseTitle, setCourseTitle] = useState('Курс');
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
+
+  // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
 
-  // полноэкранная панель «Добавить курс»
+  // нижняя шторка «Добавить курс»
   const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
@@ -34,7 +37,6 @@ export default function HUD() {
     }
 
     if (user?.id) {
-      // берём любой выбранный курс пользователя (через связь, чтобы сразу получить title)
       const { data: rel } = await supabase
         .from('user_subjects')
         .select('subject_id, subjects(title)')
@@ -52,17 +54,14 @@ export default function HUD() {
     let alive = true;
     const refresh = async () => { if (alive) await loadUserSnapshot(); };
 
-    // первичная загрузка
     refresh();
 
-    // смена курса — обновляем бейдж и дорогу
     const onCourseChanged = (evt: Event) => {
       const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
       refresh();
     };
 
-    // возвращение в приложение
     const onVisible = () => { if (!document.hidden) refresh(); };
 
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
@@ -75,11 +74,16 @@ export default function HUD() {
     };
   }, [loadUserSnapshot]);
 
-  // открыть полноэкранную панель «Добавить курс» после закрытия TopSheet
-  const onAddFromTopSheet = () => {
+  // последовательно: закрыть TopSheet → на следующий кадр открыть AddCourseSheet
+  const openAddCourse = () => {
     setOpen(null);
     requestAnimationFrame(() => setAddOpen(true));
   };
+
+  // подпинываем плавающие элементы (баннер) пересчитать позицию
+  useEffect(() => {
+    window.dispatchEvent(new Event('exampli:overlayToggled'));
+  }, [addOpen, open]);
 
   return (
     <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
@@ -118,7 +122,7 @@ export default function HUD() {
         </div>
       </div>
 
-      {/* ШТОРКА КУРСОВ (выпадает вниз из HUD) */}
+      {/* ВЕРХНЯЯ ШТОРКА: выбор/управление курсами */}
       <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
         <TopicsPanel
           onPicked={async (s: Subject) => {
@@ -127,49 +131,31 @@ export default function HUD() {
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
             setOpen(null);
           }}
-          onAddClick={onAddFromTopSheet}
+          onAddClick={openAddCourse} // из верхней шторки открываем нижнюю «Добавить курс»
         />
       </TopSheet>
 
-      {/* ПАНЕЛЬ «ДОБАВИТЬ КУРС» (полноэкранная) */}
-      <AddCoursePanel
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onConfirm={async (subject) => {
-          const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-          if (!tgId) return;
-
-          const { data: user } = await supabase
-            .from('users')
-            .select('id')
-            .eq('tg_id', String(tgId))
-            .single();
-
-          if (user?.id) {
-            try {
-              await supabase.from('user_subjects').insert({ user_id: user.id, subject_id: subject.id });
-            } catch {
-              // дубликат — ок
-            }
-            await setUserSubjects([subject.code]); // делаем активным
-            setCourseTitle(subject.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
-              detail: { title: subject.title, code: subject.code },
-            }));
-          }
-          setAddOpen(false);
-        }}
-      />
-
-      {/* Стрик */}
+      {/* ВЕРХНЯЯ ШТОРКА: стрик */}
       <TopSheet open={open === 'streak'} onClose={() => setOpen(null)} anchor={anchorRef} title="Стрик">
         <StreakSheetBody />
       </TopSheet>
 
-      {/* Энергия */}
+      {/* ВЕРХНЯЯ ШТОРКА: энергия */}
       <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
+
+      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» — перекрывает HUD и экран полностью */}
+      <AddCourseSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdded={(s) => {
+          // s: { id, code, title, level } — приходит из AddCourseSheet
+          setCourseTitle(s.title);
+          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+          setAddOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -223,115 +209,5 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
         <button type="button" className="btn w-full" onClick={onOpenSubscription}>+ Пополнить / Оформить</button>
       </div>
     </>
-  );
-}
-
-/* ---------- Полноэкранная панель добавления курса ---------- */
-function AddCoursePanel({
-  open,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: (subject: Subject) => void;
-}) {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selected, setSelected] = useState<Subject | null>(null);
-
-  // Telegram BackButton
-  useEffect(() => {
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (!tg) return;
-
-    const handler = () => onClose();
-
-    if (open) {
-      tg.BackButton?.show?.();
-      tg.BackButton?.onClick?.(handler);
-    }
-
-    return () => {
-      try { tg.BackButton?.offClick?.(handler); } catch {}
-      tg.BackButton?.hide?.();
-    };
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    (async () => {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id,code,title,level')
-        .order('level')
-        .order('title');
-      setSubjects((data as Subject[]) || []);
-      setSelected(null);
-    })();
-  }, [open]);
-
-  if (!open) return null; // ← НИЧЕГО не рендерим, пока панель закрыта
-
-  const groups = subjects.reduce<Record<string, Subject[]>>((acc, s) => {
-    (acc[s.level] ||= []).push(s);
-    return acc;
-  }, {});
-
-  return (
-    <div className="fixed inset-0 z-[60]">
-      {/* фон */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      {/* панель */}
-      <div className="absolute inset-0 max-w-xl mx-auto bg-[color:var(--bg)] border-x border-white/10 flex flex-col">
-        {/* шапка */}
-        <div className="px-4 pt-[calc(env(safe-area-inset-top)+8px)] pb-3 border-b border-white/10 text-center">
-          <div className="text-lg font-semibold">Курсы</div>
-        </div>
-
-        {/* список */}
-        <div className="flex-1 overflow-auto px-3 py-3">
-          {Object.entries(groups).map(([level, list]) => (
-            <div key={level} className="mb-3">
-              <div className="px-1 pb-2 text-xs uppercase tracking-wide text-muted">{level}</div>
-              <div className="grid gap-2">
-                {list.map((s) => {
-                  const active = selected?.id === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSelected(s)}
-                      className={`flex items-center justify-between rounded-3xl px-4 py-3 border transition
-                                  ${active ? 'border-[color:var(--accent)] bg-white/10' : 'border-white/10 bg-white/5'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="text-2xl">📘</div>
-                        <div className="text-left">
-                          <div className="font-semibold">{s.title}</div>
-                          <div className="text-xs text-muted">{s.level}</div>
-                        </div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border ${active ? 'bg-[color:var(--accent)] border-[color:var(--accent)]' : 'border-white/20'}`} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* кнопка снизу */}
-        <div className="p-4 pb-[max(env(safe-area-inset-bottom),16px)] border-t border-white/10 bg-[color:var(--card)]/80 backdrop-blur">
-          <button
-            type="button"
-            disabled={!selected}
-            onClick={() => selected && onConfirm(selected)}
-            className={`btn w-full ${!selected ? 'opacity-60 pointer-events-none' : ''}`}
-          >
-            Добавить
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

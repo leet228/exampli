@@ -14,28 +14,29 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
     if (!tg) return;
-
     if (open) {
-      tg.BackButton?.show();
+      tg.BackButton?.show?.();
       const handler = () => onClose();
-      tg.BackButton?.onClick(handler);
+      tg.BackButton?.onClick?.(handler);
       return () => {
-        tg.BackButton?.hide();
-        tg.BackButton?.offClick?.(handler);
+        try { tg.BackButton?.offClick?.(handler); } catch {}
+        tg.BackButton?.hide?.();
       };
     }
   }, [open, onClose]);
 
-  // Лочим скролл документа, чтобы фон не «ездил» под шторкой
+  // Лочим фон, чтобы не прокручивался за шторкой
   useEffect(() => {
     if (!open) return;
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    window.dispatchEvent(new Event('exampli:overlayToggled'));
     return () => {
       document.documentElement.style.overflow = prevHtml;
       document.body.style.overflow = prevBody;
+      window.dispatchEvent(new Event('exampli:overlayToggled'));
     };
   }, [open]);
 
@@ -74,6 +75,6 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     </AnimatePresence>
   );
 
-  // В портал в <body>, чтобы не влияли родительские overflow/transform/z-index
+  // КРИТИЧНО: рендерим в body, чтобы шторка не «прилипала» к родителям
   return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }
