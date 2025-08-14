@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 type BottomSheetProps = {
   open: boolean;
@@ -9,6 +10,7 @@ type BottomSheetProps = {
 };
 
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+  // Telegram BackButton
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
     if (!tg) return;
@@ -24,7 +26,15 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     }
   }, [open, onClose]);
 
-  return (
+  // Блокируем скролл фона, пока открыта шторка
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    return () => { document.documentElement.style.overflow = prev; };
+  }, [open]);
+
+  const node = (
     <AnimatePresence>
       {open && (
         <>
@@ -58,4 +68,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
       )}
     </AnimatePresence>
   );
+
+  // Монтируем поверх всего в <body>, чтобы не влияли родительские слои/overflow/transform
+  return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }

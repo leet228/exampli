@@ -62,7 +62,7 @@ html, body, #root { overflow-x: hidden; }
   inset: 0;
   background: rgba(0,0,0,0.5);
   backdrop-filter: blur(2px);
-  z-index: 58;              /* ← добавили */
+  z-index: 58;                 /* ← добавили */
 }
 .sheet-panel {
   position: fixed; left: 0; right: 0; bottom: 0;
@@ -72,7 +72,8 @@ html, body, #root { overflow-x: hidden; }
   box-shadow: 0 -20px 60px rgba(0,0,0,0.35);
   max-height: 85vh;
   overflow-y: auto;
-  z-index: 59;              /* ← добавили (выше HUD:40 и баннера:39) */
+  z-index: 59;                 /* ← добавили */
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
 }
 .sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
 
