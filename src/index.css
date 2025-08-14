@@ -56,15 +56,23 @@ html, body, #root { overflow-x: hidden; }
 }
 
 /* ====== Нижняя шторка (если понадобится) ====== */
-.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+/* Нижняя шторка */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  z-index: 58;              /* ← добавили */
+}
 .sheet-panel {
   position: fixed; left: 0; right: 0; bottom: 0;
   border-top-left-radius: 24px; border-top-right-radius: 24px;
   background: var(--card);
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 -20px 60px rgba(0,0,0,0.35);
-  max-height: 85vh;         /* важно */
-  overflow-y: auto; 
+  max-height: 85vh;
+  overflow-y: auto;
+  z-index: 59;              /* ← добавили (выше HUD:40 и баннера:39) */
 }
 .sheet-handle { width: 44px; height: 5px; background: rgba(255,255,255,0.16); border-radius: 9999px; margin: 10px auto; }
 
