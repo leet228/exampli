@@ -1,6 +1,7 @@
 // src/components/panels/TopicsPanel.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -9,6 +10,8 @@ type Props =
   | { open: boolean; onClose: () => void; onPicked?: (s: Subject) => void; onAddClick?: () => void }
   // Режим ВСТАВКИ в TopSheet (HUD.tsx): просто отдаём контент без контейнера
   | { open?: undefined; onClose?: undefined; onPicked?: (s: Subject) => void; onAddClick?: () => void };
+
+const ACTIVE_KEY = 'exampli:activeSubjectCode';
 
 export default function TopicsPanel(props: Props) {
   const { open, onClose, onPicked, onAddClick } = props as {
@@ -22,48 +25,82 @@ export default function TopicsPanel(props: Props) {
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Загружаем курсы пользователя
+  // --- helpers ---
+  const readActiveFromStorage = useCallback(() => {
+    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+  }, []);
+  const writeActiveToStorage = useCallback((code: string) => {
+    try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
+  }, []);
+
+  // Загрузка курсов пользователя
+  const loadUserSubjects = useCallback(async () => {
+    setLoading(true);
+    try {
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      if (!tgId) { setSubjects([]); return; }
+
+      const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+      if (!user?.id) { setSubjects([]); return; }
+
+      // вытягиваем все курсы пользователя
+      const { data: rel } = await supabase
+        .from('user_subjects')
+        .select('subject_id')
+        .eq('user_id', user.id);
+
+      const ids = (rel || []).map(r => r.subject_id as number);
+      if (!ids.length) { setSubjects([]); return; }
+
+      const { data } = await supabase
+        .from('subjects')
+        .select('id, code, title, level')
+        .in('id', ids)
+        .order('title');
+
+      const list = (data as Subject[]) || [];
+      setSubjects(list);
+
+      // восстановить активный код
+      const stored = readActiveFromStorage();
+      const initial = (stored && list.find(s => s.code === stored)?.code) || list[0]?.code || null;
+      if (initial) setActiveCode(initial);
+    } finally {
+      setLoading(false);
+    }
+  }, [readActiveFromStorage]);
+
+  // Когда компонент в режиме левой панели — грузим только когда она открыта
+  // Когда это контент для TopSheet — грузим сразу
   useEffect(() => {
-    // В режиме панели не грузим, пока она закрыта
-    if (typeof open === 'boolean' && !open) return;
+    if (typeof open === 'boolean') {
+      if (open) void loadUserSubjects();
+    } else {
+      void loadUserSubjects();
+    }
+  }, [open, loadUserSubjects]);
 
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-        if (!tgId) { if (alive) { setSubjects([]); } return; }
-
-        const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-        if (!user?.id) { if (alive) setSubjects([]); return; }
-
-        const { data: rel } = await supabase
-          .from('user_subjects')
-          .select('subject_id')
-          .eq('user_id', user.id);
-
-        const ids = (rel || []).map(r => r.subject_id as number);
-        if (!ids.length) { if (alive) setSubjects([]); return; }
-
-        const { data } = await supabase
-          .from('subjects')
-          .select('id, code, title, level')
-          .in('id', ids)
-          .order('title');
-
-        if (alive) {
-          const list = (data as Subject[]) || [];
-          setSubjects(list);
-          setActiveCode(list[0]?.code ?? null);
-        }
-      } finally {
-        if (alive) setLoading(false);
+  // Слушаем внешние события, чтобы обновиться:
+  // - после добавления нового курса (subjectsChanged — если решишь диспатчить)
+  // - после переключения/выбора курса (courseChanged — для подсветки)
+  useEffect(() => {
+    const onSubjectsChanged = () => loadUserSubjects();
+    const onCourseChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ title?: string; code?: string }>;
+      if (e.detail?.code) {
+        setActiveCode(e.detail.code);
+        writeActiveToStorage(e.detail.code);
       }
-    })();
+    };
+    window.addEventListener('exampli:subjectsChanged', onSubjectsChanged);
+    window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    return () => {
+      window.removeEventListener('exampli:subjectsChanged', onSubjectsChanged);
+      window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    };
+  }, [loadUserSubjects, writeActiveToStorage]);
 
-    return () => { alive = false; };
-  }, [open]);
-
+  // --- UI блоки ---
   const grid = useMemo(() => {
     if (loading) {
       return (
@@ -88,28 +125,55 @@ export default function TopicsPanel(props: Props) {
         {subjects.map((s) => {
           const active = s.code === activeCode;
           return (
-            <button
+            <motion.button
               key={s.id}
               type="button"
+              layout
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                 setActiveCode(s.code);
+                writeActiveToStorage(s.code);
                 if (typeof onPicked === 'function') onPicked(s);
+                // шлём единое событие, чтобы «дорога» и профиль обновились
+                window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
+                  detail: { title: s.title, code: s.code },
+                }));
               }}
               className={[
-                'aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
+                'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
                 active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
               ].join(' ')}
             >
-              <div className="text-2xl mb-1">📘</div>
-              <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
-              <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
-            </button>
+              {/* свечащийся маркер активного */}
+              <AnimatePresence>
+                {active && (
+                  <motion.span
+                    layoutId="subject-active-glow"
+                    className="absolute inset-0 rounded-2xl"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    style={{
+                      boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset',
+                    }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div className="relative z-10">
+                <div className="text-2xl mb-1">📘</div>
+                <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
+                <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
+              </div>
+            </motion.button>
           );
         })}
 
         {/* Плитка «+ Добавить» */}
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.98 }}
           onClick={() => {
             if (typeof onAddClick === 'function') onAddClick();
             else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
@@ -120,10 +184,10 @@ export default function TopicsPanel(props: Props) {
             <div className="text-2xl">＋</div>
             <div className="text-[10px] text-muted mt-1">Добавить</div>
           </div>
-        </button>
+        </motion.button>
       </div>
     );
-  }, [subjects, activeCode, loading, onPicked, onAddClick]);
+  }, [subjects, activeCode, loading, onPicked, onAddClick, writeActiveToStorage]);
 
   // Режим «панели слева»
   if (typeof open === 'boolean') {

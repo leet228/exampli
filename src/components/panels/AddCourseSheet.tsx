@@ -47,6 +47,9 @@ export default function AddCourseSheet({
     await addUserSubject(picked.code);
     onAdded(picked);
     onClose();
+    window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
+    detail: { title: picked.title, code: picked.code },
+  }));
   };
 
   return (
