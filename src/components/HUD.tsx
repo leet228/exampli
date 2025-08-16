@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
 import TopicsPanel from './panels/TopicsPanel';
-import AddCourseSheet from './panels/AddCourseSheet';
+import AddCourseSheet from './panels/AddCourseSheet'; // <-- был ./panels/AddCourseSheet
 import { setUserSubjects } from '../lib/userState';
 
 type Subject = { id: number; code: string; title: string; level: string };
@@ -18,7 +18,7 @@ export default function HUD() {
   // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
 
-  // нижняя шторка «Добавить курс»
+  // полноэкранная нижняя панель «Добавить курс»
   const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
@@ -145,7 +145,7 @@ export default function HUD() {
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
-      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» — перекрывает HUD и экран полностью */}
+      {/* ПОЛНОЭКРАННАЯ ПАНЕЛЬ: «Добавить курс» */}
       <AddCourseSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}

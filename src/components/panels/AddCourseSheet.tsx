@@ -12,43 +12,39 @@ export default function AddCourseSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onAdded: (s: Subject) => void; // чтобы обновить шапку/дорогу
+  onAdded: (s: Subject) => void;
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
 
-  // --- Telegram BackButton интеграция ---
+  // не рендерим вообще, если закрыто — не будет «торчать»
+  if (!open) return null;
+
+  // Telegram BackButton
   const handleTgBack = useCallback(() => {
     onClose();
   }, [onClose]);
 
   useEffect(() => {
-    // Безопасный доступ к Telegram WebApp API
     const tg = (window as any)?.Telegram?.WebApp;
     const back = tg?.BackButton;
+    if (!back) return;
 
-    if (open && back) {
-      try {
-        // навешиваем обработчик один раз на открытие
-        back.onClick(handleTgBack);
-        back.show();
-      } catch {}
-    }
+    try {
+      back.onClick(handleTgBack);
+      back.show();
+    } catch {}
 
-    // на закрытие/анмаунт — снимаем обработчик и скрываем
     return () => {
-      if (back) {
-        try {
-          back.offClick(handleTgBack);
-          back.hide();
-        } catch {}
-      }
+      try {
+        back.offClick(handleTgBack);
+        back.hide();
+      } catch {}
     };
-  }, [open, handleTgBack]);
+  }, [handleTgBack]);
 
-  // --- загрузка предметов как и раньше ---
+  // загрузка предметов при открытии
   useEffect(() => {
-    if (!open) return;
     (async () => {
       const { data } = await supabase
         .from('subjects')
@@ -58,14 +54,13 @@ export default function AddCourseSheet({
       setAll((data as Subject[]) || []);
       setPickedId(null);
     })();
-  }, [open]);
+  }, []);
 
   const grouped = useMemo(() => {
     const by: Record<string, Subject[]> = {};
     for (const s of all) {
       const key = (s.level || 'Другое').toUpperCase();
-      by[key] = by[key] || [];
-      by[key].push(s);
+      (by[key] ||= []).push(s);
     }
     return by;
   }, [all]);
@@ -84,66 +79,31 @@ export default function AddCourseSheet({
     );
   };
 
-  // ------------------------------------------------------------
-  // ПАНЕЛЬ (full-height) вместо "шторки":
-  // ------------------------------------------------------------
   return (
     <>
       {/* Подложка */}
       <div
-        className={`fixed inset-0 z-[60] bg-black/40 transition-opacity ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className="fixed inset-0 z-[60] bg-black/40"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Слайдящаяся панель снизу — НА ВЕСЬ ЭКРАН */}
+      {/* Полноэкранная панель снизу */}
       <section
-        className={`fixed inset-x-0 bottom-0 top-0 z-[61] flex flex-col
-        transform transition-transform duration-300 will-change-transform
-        ${open ? 'translate-y-0' : 'translate-y-full'}
-        bg-[color:var(--bg,#0b0b0c)]`}
+        className="fixed inset-x-0 bottom-0 top-0 z-[61] flex flex-col bg-[color:var(--bg,#0b0b0c)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-course-title"
       >
-        {/* Хедер панели */}
-        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[color:var(--bg,#0b0b0c)]">
-          {/* Локальная back-кнопка (на случай запуска вне Telegram) */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Назад"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
+        {/* Хедер без локальных кнопок — управляемся только Telegram Back */}
+        <div className="sticky top-0 z-10 px-4 py-3 border-b border-white/10 bg-[color:var(--bg,#0b0b0c)]">
           <h2 id="add-course-title" className="text-base font-semibold">
             Курсы
           </h2>
-
-          <div className="ml-auto" />
-
-          {/* Кнопка закрытия */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
         </div>
 
-        {/* Контент панели */}
+        {/* Контент */}
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-4">
-          {/* группы: ЕГЭ / ОГЭ */}
           <div className="space-y-5">
             {Object.entries(grouped).map(([level, items]) => (
               <div key={level}>
@@ -177,7 +137,7 @@ export default function AddCourseSheet({
           </div>
         </div>
 
-        {/* Футер с CTA закреплён у низа */}
+        {/* Футер CTA */}
         <div className="pointer-events-none sticky bottom-0 z-10 mt-auto w-full bg-gradient-to-t from-[color:var(--bg,#0b0b0c)] via-[color:var(--bg,#0b0b0c)]/95 to-transparent">
           <div className="pointer-events-auto px-4 pb-[env(safe-area-inset-bottom)] pt-3">
             <button
