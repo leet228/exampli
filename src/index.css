@@ -82,8 +82,8 @@ html, body, #root { overflow-x: hidden; }
   padding-bottom: max(env(safe-area-inset-bottom), 12px);
 }
 .sheet-panel.full {
-  top: 0;
-  height: 100%;
+  top: var(--hud-top); /* ← вместо 0 */
+  height: calc(100% - var(--hud-top));
   border-radius: 0;
   border: none;
   box-shadow: none;

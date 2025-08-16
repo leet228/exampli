@@ -55,11 +55,12 @@ export default function FullScreenSheet({ open, onClose, title, children }: Full
             className="sheet-panel full"
             role="dialog"
             aria-modal="true"
+            style={{ top: 'var(--hud-top)' }} // опускаем на высоту HUD/telegram
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-          >
+            >
             {title && (
               <div className="px-5 pt-3 pb-2 border-b border-white/10 text-center font-semibold">
                 {title}
