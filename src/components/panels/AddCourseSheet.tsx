@@ -14,11 +14,11 @@ export default function AddCourseSheet({
   onClose: () => void;
   onAdded: (s: Subject) => void;
 }) {
+  // ВАЖНО: ранний возврат до любых хуков — чтобы порядок хуков не менялся между рендерами
+  if (!open) return null;
+
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
-
-  // не рендерим вообще, если закрыто — не будет «торчать»
-  if (!open) return null;
 
   // Telegram BackButton
   const handleTgBack = useCallback(() => {
@@ -43,7 +43,7 @@ export default function AddCourseSheet({
     };
   }, [handleTgBack]);
 
-  // загрузка предметов при открытии
+  // загрузка предметов при открытии панели
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -81,28 +81,22 @@ export default function AddCourseSheet({
 
   return (
     <>
-      {/* Подложка */}
-      <div
-        className="fixed inset-0 z-[60] bg-black/40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      {/* Подложка (без onClick — закрываем только Telegram BackButton) */}
+      <div className="fixed inset-0 z-[60] bg-black/40" aria-hidden="true" />
 
-      {/* Полноэкранная панель снизу */}
+      {/* Полноэкранная панель */}
       <section
         className="fixed inset-x-0 bottom-0 top-0 z-[61] flex flex-col bg-[color:var(--bg,#0b0b0c)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-course-title"
       >
-        {/* Хедер без локальных кнопок — управляемся только Telegram Back */}
         <div className="sticky top-0 z-10 px-4 py-3 border-b border-white/10 bg-[color:var(--bg,#0b0b0c)]">
           <h2 id="add-course-title" className="text-base font-semibold">
             Курсы
           </h2>
         </div>
 
-        {/* Контент */}
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-4">
           <div className="space-y-5">
             {Object.entries(grouped).map(([level, items]) => (
@@ -137,7 +131,6 @@ export default function AddCourseSheet({
           </div>
         </div>
 
-        {/* Футер CTA */}
         <div className="pointer-events-none sticky bottom-0 z-10 mt-auto w-full bg-gradient-to-t from-[color:var(--bg,#0b0b0c)] via-[color:var(--bg,#0b0b0c)]/95 to-transparent">
           <div className="pointer-events-auto px-4 pb-[env(safe-area-inset-bottom)] pt-3">
             <button
