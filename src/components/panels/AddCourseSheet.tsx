@@ -1,4 +1,3 @@
-// src/components/sheets/AddCourseSheet.tsx
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { addUserSubject } from '../../lib/userState';
@@ -14,7 +13,7 @@ export default function AddCourseSheet({
   onClose: () => void;
   onAdded: (s: Subject) => void;
 }) {
-  // ВАЖНО: ранний возврат до любых хуков — чтобы порядок хуков не менялся между рендерами
+  // РАННИЙ ВОЗВРАТ — до хуков, чтобы не словить ошибку #310
   if (!open) return null;
 
   const [all, setAll] = useState<Subject[]>([]);
@@ -43,7 +42,7 @@ export default function AddCourseSheet({
     };
   }, [handleTgBack]);
 
-  // загрузка предметов при открытии панели
+  // загрузка предметов при открытии
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -81,22 +80,27 @@ export default function AddCourseSheet({
 
   return (
     <>
-      {/* Подложка (без onClick — закрываем только Telegram BackButton) */}
-      <div className="fixed inset-0 z-[60] bg-black/40" aria-hidden="true" />
+      {/* Непрозрачный фон */}
+      <div className="fixed inset-0 z-[60] bg-black" aria-hidden="true" />
 
-      {/* Полноэкранная панель */}
+      {/* Полноэкранная панель (чёрная, как левая) */}
       <section
-        className="fixed inset-x-0 bottom-0 top-0 z-[61] flex flex-col bg-[color:var(--bg,#0b0b0c)]"
+        className="fixed inset-0 z-[61] flex flex-col bg-[color:var(--bg,#000)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-course-title"
       >
-        <div className="sticky top-0 z-10 px-4 py-3 border-b border-white/10 bg-[color:var(--bg,#0b0b0c)]">
+        {/* Хедер с безопасной зоной под Telegram UI */}
+        <div
+          className="border-b border-white/10 bg-[color:var(--bg,#000)]"
+          style={{ padding: `calc(env(safe-area-inset-top) + 64px) 16px 12px 16px` }}
+        >
           <h2 id="add-course-title" className="text-base font-semibold">
             Курсы
           </h2>
         </div>
 
+        {/* Контент */}
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-4">
           <div className="space-y-5">
             {Object.entries(grouped).map(([level, items]) => (
@@ -131,7 +135,8 @@ export default function AddCourseSheet({
           </div>
         </div>
 
-        <div className="pointer-events-none sticky bottom-0 z-10 mt-auto w-full bg-gradient-to-t from-[color:var(--bg,#0b0b0c)] via-[color:var(--bg,#0b0b0c)]/95 to-transparent">
+        {/* CTA у низа */}
+        <div className="pointer-events-none sticky bottom-0 z-10 mt-auto w-full bg-gradient-to-t from-[color:var(--bg,#000)] via-[color:var(--bg,#000)] to-transparent">
           <div className="pointer-events-auto px-4 pb-[env(safe-area-inset-bottom)] pt-3">
             <button
               type="button"
