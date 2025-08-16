@@ -11,8 +11,8 @@
   --accent: #3b82f6;
 
   /* геометрия HUD */
-  --hud-top: calc(env(safe-area-inset-top) + 96px);
-  --hud-h: 96px;
+  --hud-top: calc(env(safe-area-inset-top) + 96px); /* отступ от верха Telegram */
+  --hud-h: 96px;                                    /* ВЫСОТА HUD — как просил */
   --z-hud: 40;
   --z-top-sheet: 70;
   --z-bottom-sheet: 80;
@@ -28,9 +28,9 @@ body {
 /* ====== Компоненты ====== */
 .card { @apply rounded-4xl p-5 bg-[color:var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0,0,0,0.25)]; }
 .btn  { @apply rounded-3xl px-5 py-4 font-semibold active:scale-[0.98] transition; background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95)); }
-.btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10; background: rgba(255,255,255,0.04); }
+.btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur; background: rgba(255,255,255,0.04); }
 .badge { @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5; }
-.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/5; }
+.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/5 backdrop-blur; }
 
 /* ====== Анимации ====== */
 .fade-in { animation: fadeIn 400ms ease-out; }
@@ -40,6 +40,7 @@ body {
 .hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
 .hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
 
+/* даём месту контенту (ниже фикс-HUD и плавающей кнопки тем) */
 .safe-top    { padding-top: calc(var(--hud-top) + var(--hud-h) + 12px); }
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
 
@@ -48,19 +49,22 @@ html, body, #root { overflow-x: hidden; }
 .main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
 
 /* ====== Плавающая кнопка выбора темы ====== */
+/* позицию считаем от HUD — гарантированно ниже и кликабельна */
 .topics-pin {
   position: fixed;
   top: calc(var(--hud-top) + var(--hud-h) + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 39;
+  z-index: 39; /* ниже HUD (40), но выше контента */
 }
 
-/* ====== Нижняя шторка ====== */
+/* ====== Нижняя шторка (если понадобится) ====== */
+/* Нижняя шторка */
 .sheet-backdrop{
   position: fixed;
   inset: 0;
-  background: #000;             /* было rgba(...) + blur → теперь непрозрачный чёрный */
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(2px);
   z-index: var(--z-bottom-sheet);
 }
 .sheet-panel{
@@ -68,9 +72,10 @@ html, body, #root { overflow-x: hidden; }
   left: 0; right: 0; bottom: 0;
   z-index: calc(var(--z-bottom-sheet) + 1);
   border-top-left-radius: 24px; border-top-right-radius: 24px;
-  background: var(--bg);        /* чёрный фон панели */
+  background: var(--card);
   border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 -20px 60px rgba(0,0,0,.35);
+  /* почти фуллскрин, с учётом iOS динамического вьюпорта */
   max-height: min(92dvh, 92vh);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -82,38 +87,41 @@ html, body, #root { overflow-x: hidden; }
   margin: 10px auto;
 }
 
-/* ====== Верхняя шторка ====== */
+/* ====== Верхняя шторка (выпадает из HUD) ====== */
 .drop-backdrop{
   position: fixed;
   inset: 0;
-  background: #000;             /* было rgba(...) + blur → чёрный */
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(2px);
   z-index: var(--z-top-sheet);
 }
 .drop-panel{
-  position: fixed;
+  position: fixed;        /* ← важно: fixed */
   left: 12px;
   right: 12px;
   z-index: calc(var(--z-top-sheet) + 1);
   border-radius: 16px;
-  background: var(--bg);        /* чёрный фон панели */
+  background: var(--card);
   border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 20px 60px rgba(0,0,0,.35);
   overflow: hidden;
 }
 
 /* ====== Левый сайд-панель (Темы) ====== */
-.side-backdrop { position: fixed; inset: 0; background: #000; z-index: 48; }  /* чёрный */
+.side-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 48; }
 .side-panel {
   position: fixed; top: 0; bottom: 0; left: 0; width: 100%;
   max-width: 560px;
-  background: var(--bg);       /* чёрный фон панели */
+  background: var(--bg);
   z-index: 49; overflow: hidden; display: flex; flex-direction: column;
   border-right: 1px solid rgba(255,255,255,.08);
 }
+/* шапка выезжающей слева панели — ниже телеграм-кнопок */
 .side-panel-header {
-  padding: calc(env(safe-area-inset-top) + 64px) 16px 12px 16px;
+  padding: calc(env(safe-area-inset-top) + 64px) 16px 12px 16px; /* было +10 → стало +64 */
   border-bottom: 1px solid rgba(255,255,255,.08);
-  background: var(--bg);       /* непрозрачный хедер */
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
 }
 .side-panel-body { padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px; overflow: auto; }
 
@@ -123,20 +131,20 @@ html, body, #root { overflow-x: hidden; }
 
 .topics-hero { top: calc(var(--hud-top) + var(--hud-h) + 10px); }
 
-/* кнопка-баннер как у Дуо */
+/* ===== кнопка-баннер как у Дуо ===== */
 .topics-hero{
   position:fixed;
   top:calc(var(--hud-top) + var(--hud-h) + 10px);
-  left:0; right:0;
+  left:0; right:0;            /* центрирование по viewport */
   margin-inline:auto;
-  width:max-content;
+  width:max-content;          /* по контенту */
   max-width:calc(100% - 28px);
   z-index:39;
   display:inline-flex; align-items:center; gap:8px;
   border-radius:20px; padding:10px 14px;
   border:1px solid rgba(255,255,255,.10);
   background:linear-gradient(135deg,rgba(236,72,153,.75),rgba(99,102,241,.75));
-  color:#fff; box-shadow:0 10px 28px rgba(0,0,0,.35);
+  color:#fff; box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(4px);
 }
 
 :root { color-scheme: dark; }
@@ -145,31 +153,36 @@ html, body, #root { background-color: var(--bg); }
 body::before{
   content:"";
   position:fixed;
-  inset:-20vmax;
+  inset:-20vmax;            /* перекрыть резиновый bounce */
   background:var(--bg);
   z-index:-1;
 }
+
 
 /* полноэкранный слой под дорогу (но над фоном) */
 .decor-layer{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 2; /* ниже HUD(40) и баннера(39), но виден сквозь bg-white/5 */
 }
+
+/* ярче + лёгкое свечение, но без перегруза GPU */
 .decor-item{
   position: absolute;
-  color: rgba(255,255,255,.28);
+  color: rgba(255,255,255,.28);        /* было .14 → стало .28 */
   text-shadow: 0 0 10px rgba(255,255,255,.10);
   will-change: transform, opacity;
   animation: drift 7s ease-in-out infinite;
   filter: blur(.15px);
 }
+
 @keyframes drift{
-  0%   { transform: translate3d(0, 0, 0) rotate(0deg);   opacity:.22; }
-  50%  { transform: translate3d(0, -12px, 0) rotate(3deg); opacity:.36; }
-  100% { transform: translate3d(0, 0, 0) rotate(0deg);   opacity:.22; }
+  0%   { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; } /* было .12 */
+  50%  { transform: translate3d(0, -12px, 0) rotate(3deg);   opacity:.36; } /* было .22 */
+  100% { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; }
 }
+
 .decor small { opacity:.8; }
 
 @keyframes blink {
