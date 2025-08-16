@@ -81,6 +81,14 @@ html, body, #root { overflow-x: hidden; }
   -webkit-overflow-scrolling: touch;
   padding-bottom: max(env(safe-area-inset-bottom), 12px);
 }
+.sheet-panel.full {
+  top: 0;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
 .sheet-handle{
   width: 44px; height: 5px; border-radius: 999px;
   background: rgba(255,255,255,.16);

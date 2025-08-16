@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { addUserSubject } from '../../lib/userState';
-import BottomSheet from '../sheets/BottomSheet';
+import FullScreenSheet from '../sheets/FullScreenSheet';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -53,7 +53,7 @@ export default function AddCourseSheet({
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Курсы">
+    <FullScreenSheet open={open} onClose={onClose} title="Курсы">
       {/* группы: ЕГЭ / ОГЭ */}
       <div className="space-y-5">
         {Object.entries(grouped).map(([level, items]) => (
@@ -100,6 +100,6 @@ export default function AddCourseSheet({
           {picked ? 'Добавить' : 'Выбери курс'}
         </button>
       </div>
-    </BottomSheet>
+    </FullScreenSheet>
   );
 }
