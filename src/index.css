@@ -99,8 +99,8 @@ html, body, #root { overflow-x: hidden; }
 .drop-backdrop{
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
+  background: rgb(0, 0, 0);
+  backdrop-filter: blur(2px);
   z-index: var(--z-top-sheet);
 }
 .drop-panel{
