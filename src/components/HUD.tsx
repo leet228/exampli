@@ -1,12 +1,9 @@
 // src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
 import TopicsPanel from './panels/TopicsPanel';
 import AddCourseSheet from './panels/AddCourseSheet';
-import { setUserSubjects } from '../lib/userState';
-
-type Subject = { id: number; code: string; title: string; level: string };
+import { apiUser, apiUserCourses, type Course } from '../lib/api';
 
 export default function HUD() {
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -22,31 +19,25 @@ export default function HUD() {
   const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
-    const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (!tgId) return;
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, streak, hearts')
-      .eq('tg_id', String(tgId))
-      .single();
-
-    if (user) {
-      setStreak(user.streak ?? 0);
-      setEnergy(((user.hearts ?? 5) as number) * 5);
+    // 1) юзер: стрик + энергия
+    const u = await apiUser();
+    if (u) {
+      setStreak(typeof u.streak === 'number' ? u.streak : 0);
+      setEnergy(typeof u.energy === 'number' ? Math.max(0, Math.min(25, u.energy)) : 25);
     }
 
-    if (user?.id) {
-      const { data: rel } = await supabase
-        .from('user_subjects')
-        .select('subject_id, subjects(title)')
-        .eq('user_id', user.id)
-        .order('id', { ascending: true })
-        .limit(1);
+    // 2) заголовок курса
+    const list = await apiUserCourses(); // курсы из users.added_courses_id
+    const storedId = (() => {
+      try { const v = localStorage.getItem('exampli:activeCourseId'); return v ? Number(v) : null; } catch { return null; }
+    })();
+    const activeId = storedId ?? u?.current_course_id ?? (list[0]?.id ?? null);
 
-      const rows = (rel as Array<{ subjects?: { title?: string } }> | null) || [];
-      const title = rows[0]?.subjects?.title;
-      if (title) setCourseTitle(title);
+    if (activeId && list.length) {
+      const found = list.find(c => c.id === activeId) || list[0];
+      setCourseTitle(found.title);
+    } else {
+      setCourseTitle('Курс');
     }
   }, []);
 
@@ -57,7 +48,7 @@ export default function HUD() {
     refresh();
 
     const onCourseChanged = (evt: Event) => {
-      const e = evt as CustomEvent<{ title?: string; code?: string }>;
+      const e = evt as CustomEvent<{ id?: number; title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
       refresh();
     };
@@ -94,7 +85,7 @@ export default function HUD() {
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('course'); }}
             className="badge"
-            aria-label="Выбрать курс"
+            aria-label="Выбрать тему"
           >
             <span className="text-lg">🧩</span>
             <span className="truncate max-w-[180px]">{courseTitle}</span>
@@ -122,17 +113,17 @@ export default function HUD() {
         </div>
       </div>
 
-      {/* ВЕРХНЯЯ ШТОРКА: выбор/управление курсами */}
-      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
-        <TopicsPanel
-          onPicked={async (s: Subject) => {
-            await setUserSubjects([s.code]);
-            setCourseTitle(s.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
-            setOpen(null);
-          }}
-          onAddClick={openAddCourse} // из верхней шторки открываем нижнюю «Добавить курс»
-        />
+      {/* ВЕРХНЯЯ ШТОРКА: выбор тем/подтем активного курса */}
+      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Темы">
+        {/* Новый TopicsPanel показывает темы → раскрывающиеся подтемы.
+            Никаких пропсов onPicked/onAddClick не нужно. */}
+        <TopicsPanel open onClose={() => setOpen(null)} />
+        {/* Кнопка добавления курса — ниже, отдельной кнопкой */}
+        <div className="mt-3">
+          <button type="button" className="btn-outline w-full" onClick={openAddCourse}>
+            + Добавить курс
+          </button>
+        </div>
       </TopSheet>
 
       {/* ВЕРХНЯЯ ШТОРКА: стрик */}
@@ -149,10 +140,11 @@ export default function HUD() {
       <AddCourseSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdded={(s) => {
-          // s: { id, code, title, level } — приходит из AddCourseSheet
-          setCourseTitle(s.title);
-          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+        onAdded={(c: Course) => {
+          setCourseTitle(c.title);
+          // сохраним активный курс в LS
+          try { localStorage.setItem('exampli:activeCourseId', String(c.id)); } catch {}
+          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { id: c.id, title: c.title, code: c.code } }));
           setAddOpen(false);
         }}
       />
@@ -162,14 +154,14 @@ export default function HUD() {
 
 /* ================== ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ================== */
 
+import { apiUser as apiUserForSheets } from '../lib/api';
+
 function StreakSheetBody() {
   const [streak, setStreak] = useState(0);
   useEffect(() => {
     (async () => {
-      const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!id) return;
-      const { data: u } = await supabase.from('users').select('streak').eq('tg_id', String(id)).single();
-      setStreak(u?.streak ?? 0);
+      const u = await apiUserForSheets();
+      setStreak(typeof u?.streak === 'number' ? u.streak : 0);
     })();
   }, []);
   const days = Array.from({ length: 30 }, (_, i) => i + 1);

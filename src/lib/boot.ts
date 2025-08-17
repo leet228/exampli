@@ -1,6 +1,12 @@
 // src/lib/boot.ts
-import { supabase } from './supabase';
-import { ensureUser } from './userState';
+
+import {
+  apiUser,
+  apiSyncTg,
+  apiUserCourses,
+  apiLessonsByCourse,
+  type Course,
+} from './api';
 
 export type SubjectRow = {
   id: number;
@@ -12,17 +18,20 @@ export type SubjectRow = {
 export type LessonRow = {
   id: number | string;
   title: string;
+  // оставляем прежнее имя "subject", но заполняем данными курса
   subject?: { title?: string | null; level?: string | null } | null;
 };
 
 export type BootData = {
   user: any | null;
-  stats: { xp: number; streak: number; hearts: number };
-  subjects: SubjectRow[];        // все добавленные курсы пользователя
-  lessons: LessonRow[];          // уроки активного курса
+  stats: { xp: number; streak: number; hearts: number }; // hearts = energy/5
+  subjects: SubjectRow[];   // все добавленные курсы пользователя
+  lessons: LessonRow[];     // уроки активного курса
 };
 
-const ACTIVE_KEY = 'exampli:activeSubjectCode';
+// новый ключ, но поддержим и старый для миграции
+const ACTIVE_ID_KEY = 'exampli:activeCourseId';
+const LEGACY_ACTIVE_CODE_KEY = 'exampli:activeSubjectCode';
 
 function preloadImage(src: string) {
   return new Promise<void>((res) => {
@@ -37,101 +46,94 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const step = (i: number, n: number) => onProgress?.(Math.round((i / n) * 100));
 
   // план шагов:
-  // 1 user, 2 stats, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
+  // 1 user, 2 stats, 3 subjects, 4 choose active, 5 lessons, 6 image, 7 dispatch
   const TOTAL = 7;
   let i = 0;
 
-  // 1) пользователь
-  const user = await ensureUser();
-  step(++i, TOTAL);
-
-  // 2) статы пользователя
-  const { data: statsRow } = await supabase
-    .from('users')
-    .select('xp,streak,hearts')
-    .eq('id', user?.id ?? -1)
-    .single();
-
-  const stats = {
-    xp: statsRow?.xp ?? 0,
-    streak: statsRow?.streak ?? 0,
-    hearts: statsRow?.hearts ?? 5,
-  };
-  step(++i, TOTAL);
-
-  // 3) связи user → subjects
-  const { data: rel } = await supabase
-    .from('user_subjects')
-    .select('subject_id')
-    .eq('user_id', user?.id ?? -1);
-
-  const subjectIds: number[] = Array.isArray(rel)
-    ? rel.map((r: any) => Number(r.subject_id)).filter(Boolean)
-    : [];
-  step(++i, TOTAL);
-
-  // 4) сами предметы пользователя
-  let subjectsArr: SubjectRow[] = [];
-  if (subjectIds.length) {
-    const { data: subj } = await supabase
-      .from('subjects')
-      .select('id,code,title,level')
-      .in('id', subjectIds)
-      .order('title', { ascending: true });
-
-    subjectsArr = (subj ?? []) as SubjectRow[];
+  // 1) пользователь (создаём при необходимости)
+  let user = await apiUser();
+  if (!user) {
+    await apiSyncTg();
+    user = await apiUser();
   }
   step(++i, TOTAL);
 
-  // 5) определяем активный курс (из localStorage или первый по списку)
-  let activeCode: string | null = null;
+  // 2) статы (из users)
+  const xp = user?.xp ?? 0;
+  const streak = user?.streak ?? 0;
+  const energy = typeof user?.energy === 'number' ? user!.energy : 25; // 0..25
+  const hearts = Math.max(0, Math.min(5, Math.round(energy / 5)));     // 0..5
+  const stats = { xp, streak, hearts };
+  step(++i, TOTAL);
+
+  // 3) курсы пользователя → subjects
+  const courses = (await apiUserCourses()) as Course[];
+  const subjectsArr: SubjectRow[] = (courses || []).map((c) => ({
+    id: c.id,
+    code: c.code,
+    title: c.title,
+    // нормализуем в верхний регистр, как было
+    level: (c.level || '') as any,
+  }));
+  step(++i, TOTAL);
+
+  // 4) определяем активный курс (по id), с поддержкой старого ключа code
   let activeId: number | null = null;
   let activeTitle: string | null = null;
+  let activeCode: string | null = null;
 
-  try { activeCode = localStorage.getItem(ACTIVE_KEY); } catch {}
+  // сперва читаем новый ключ
+  try {
+    const v = localStorage.getItem(ACTIVE_ID_KEY);
+    if (v) activeId = Number(v);
+  } catch {}
 
-  if (activeCode) {
-    const found = subjectsArr.find((s) => s.code === activeCode);
-    if (found) {
-      activeId = found.id;
-      activeTitle = found.title;
-    } else {
-      // кода в списке больше нет — сбросим
-      activeCode = null;
+  // если нового нет — попробуем мигрировать со старого ключа (code)
+  if (!activeId) {
+    let legacyCode: string | null = null;
+    try { legacyCode = localStorage.getItem(LEGACY_ACTIVE_CODE_KEY); } catch {}
+    if (legacyCode) {
+      const found = subjectsArr.find((s) => s.code === legacyCode);
+      if (found) activeId = found.id;
     }
   }
 
-  if (!activeCode && subjectsArr.length) {
-    const first = subjectsArr[0];
-    activeCode = first.code;
-    activeId = first.id;
-    activeTitle = first.title;
-    try { localStorage.setItem(ACTIVE_KEY, activeCode); } catch {}
+  // если всё ещё нет — возьмём первый курс из списка
+  if (!activeId && subjectsArr.length) {
+    activeId = subjectsArr[0].id;
+  }
+
+  // установим служебные переменные и LS
+  if (activeId && subjectsArr.length) {
+    const found = subjectsArr.find((s) => s.id === activeId) || subjectsArr[0];
+    activeId   = found.id;
+    activeTitle= found.title;
+    activeCode = found.code;
+    try {
+      localStorage.setItem(ACTIVE_ID_KEY, String(activeId));
+      // удалять старый код не обязательно, но можно:
+      // localStorage.removeItem(LEGACY_ACTIVE_CODE_KEY);
+    } catch {}
   }
   step(++i, TOTAL);
 
-  // 6) уроки ТОЛЬКО активного курса
+  // 5) уроки активного курса
   let lessonsArr: LessonRow[] = [];
   if (activeId) {
-    const { data: lessonsData } = await supabase
-      .from('lessons')
-      .select('id, title')
-      .eq('subject_id', activeId)
-      .order('order_index', { ascending: true })
-      .limit(12);
-
-    lessonsArr = (lessonsData ?? []).map((l: any) => ({
+    const lessons = await apiLessonsByCourse(activeId);
+    lessonsArr = (lessons || []).slice(0, 12).map((l) => ({
       id: l.id,
-      title: l.title,
+      title: l.lesson, // ← поле из новой схемы
       subject: { title: activeTitle, level: null },
-    })) as LessonRow[];
+    }));
   }
   step(++i, TOTAL);
 
-  // 7) прогрев твоего svg (не обязательно)
+  // 6) лёгкий прогрев ассета (опционально)
   await preloadImage('/kursik.svg');
   step(++i, TOTAL);
 
+  // 7) собрать и отдать BootData + события
   const boot: BootData = {
     user: user ?? null,
     stats,
@@ -141,15 +143,20 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
 
   (window as any).__exampliBoot = boot;
 
-  // диспатчим bootData (как раньше)
-  window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
+  // отдадим bootData всему приложению (как раньше)
+  window.dispatchEvent(
+    new CustomEvent('exampli:bootData', { detail: boot } as any)
+  );
 
-  // и сообщаем активный курс всему приложению, если он есть
-  if (activeCode && activeTitle) {
-    window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
-      detail: { title: activeTitle, code: activeCode },
-    } as any));
+  // и сообщим активный курс
+  if (activeTitle && activeCode) {
+    window.dispatchEvent(
+      new CustomEvent('exampli:courseChanged', {
+        detail: { title: activeTitle, code: activeCode },
+      } as any)
+    );
   }
 
+  step(++i, TOTAL);
   return boot;
 }

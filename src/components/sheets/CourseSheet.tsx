@@ -1,17 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../../lib/supabase';
 import BottomSheet from './BottomSheet';
-import { setUserSubjects } from '../../lib/userState';
 import { AnimatePresence, motion } from 'framer-motion';
-
-type Subject = {
-  id: string;
-  title: string;
-  level: 'ОГЭ' | 'ЕГЭ' | string;
-  code: string;
-};
+import {
+  apiCourses,
+  apiAddCourseToUser,
+  apiSetCurrentCourse,
+  type Course,
+} from '../../lib/api';
 
 export default function CourseSheet({
   open,
@@ -22,61 +19,68 @@ export default function CourseSheet({
   onClose: () => void;
   onPicked: (title: string) => void;
 }) {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [expanded, setExpanded] = useState<'ОГЭ' | 'ЕГЭ' | null>(null);
-  const [selected, setSelected] = useState<Subject | null>(null);
-  const tg = (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined);
+  const [selected, setSelected] = useState<Course | null>(null);
 
-  // Загружаем курсы при открытии
+  const tg = (typeof window !== 'undefined'
+    ? (window as any).Telegram?.WebApp
+    : undefined);
+
+  // загрузка курсов из новой БД (таблица courses)
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id,title,level,code')
-        .order('level', { ascending: true })
-        .order('title', { ascending: true });
-
-      setSubjects((data as Subject[]) || []);
+      const data = await apiCourses();
+      setCourses(Array.isArray(data) ? data : []);
+      setSelected(null);
     })();
   }, [open]);
 
   // Telegram BackButton
   useEffect(() => {
     if (!tg) return;
-    if (open) {
-      tg.BackButton.show();
-      const handler = () => onClose();
-      tg.onEvent('backButtonClicked', handler);
-      return () => {
-        tg.offEvent('backButtonClicked', handler);
-        tg.BackButton.hide();
-      };
-    }
+    if (!open) return;
+    tg.BackButton.show();
+    const handler = () => onClose();
+    tg.onEvent('backButtonClicked', handler);
+    return () => {
+      tg.offEvent('backButtonClicked', handler);
+      tg.BackButton.hide();
+    };
   }, [open, onClose, tg]);
 
-  // Группировка по ОГЭ/ЕГЭ
+  // группировка по уровню (ЕГЭ/ОГЭ)
   const grouped = useMemo(() => {
-    const by = (lvl: string) => subjects.filter((s) => (s.level || '').toUpperCase().includes(lvl));
+    const by = (lvl: string) =>
+      courses.filter((c) => (c.level || '').toUpperCase().includes(lvl));
     return {
       ОГЭ: by('ОГЭ'),
       ЕГЭ: by('ЕГЭ'),
     };
-  }, [subjects]);
+  }, [courses]);
 
   async function addSelected() {
     if (!selected) return;
-    // сохраняем выбор пользователя как раньше (массив кодов)
-    await setUserSubjects([selected.code]);
-    window.dispatchEvent(new CustomEvent('exampli:courseChanged'));
+    // добавляем курс пользователю и делаем его текущим
+    await apiAddCourseToUser({ course_id: selected.id });
+    await apiSetCurrentCourse(selected.id);
+    try {
+      localStorage.setItem('exampli:activeCourseId', String(selected.id));
+    } catch {}
+    // уведомим остальной UI
+    window.dispatchEvent(
+      new CustomEvent('exampli:courseChanged', {
+        detail: { id: selected.id, title: selected.title, code: selected.code },
+      })
+    );
     onPicked(selected.title);
-    onClose(); // окно уезжает вниз (анимацию делает BottomSheet)
+    onClose();
   }
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Курсы">
       <div className="space-y-4">
-        {/* Блоки ОГЭ/ЕГЭ */}
         {(['ОГЭ', 'ЕГЭ'] as const).map((cat) => (
           <CategoryBlock
             key={cat}
@@ -84,12 +88,19 @@ export default function CourseSheet({
             items={grouped[cat]}
             expanded={expanded === cat}
             onToggle={() => setExpanded(expanded === cat ? null : cat)}
-            selectedId={selected?.id || null}
-            onSelect={(subj) => setSelected(subj)}
+            selectedId={selected?.id ?? null}
+            onSelect={(c) => setSelected(c)}
           />
         ))}
 
-        {/* Кнопка ДОБАВИТЬ */}
+        {/* если в обеих группах пусто — мягкая заглушка */}
+        {(!grouped.ОГЭ.length && !grouped.ЕГЭ.length) && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+            Курсы ещё не добавлены.
+          </div>
+        )}
+
+        {/* CTA */}
         <button
           onClick={addSelected}
           disabled={!selected}
@@ -100,7 +111,7 @@ export default function CourseSheet({
           ДОБАВИТЬ
         </button>
 
-        {/* “Крестик телеги” — закрывает мини‑апп, если нужно именно так */}
+        {/* “крестик телеги”: закрыть мини-апп при необходимости */}
         <button
           type="button"
           onClick={() => {
@@ -118,6 +129,15 @@ export default function CourseSheet({
 
 /* ===== Вспомогательный компонент ===== */
 
+type CategoryBlockProps = {
+  title: string;
+  items: Course[];
+  expanded: boolean;
+  onToggle: () => void;
+  selectedId: number | null;
+  onSelect: (c: Course) => void;
+};
+
 function CategoryBlock({
   title,
   items,
@@ -125,14 +145,7 @@ function CategoryBlock({
   onToggle,
   selectedId,
   onSelect,
-}: {
-  title: string;
-  items: Subject[];
-  expanded: boolean;
-  onToggle: () => void;
-  selectedId: string | null;
-  onSelect: (s: Subject) => void;
-}) {
+}: CategoryBlockProps) {
   return (
     <div className="rounded-3xl border border-white/10 overflow-hidden">
       <button
@@ -140,13 +153,12 @@ function CategoryBlock({
         className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09] text-white"
       >
         <span className="font-semibold">{title}</span>
-        <motion.span
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ type: 'tween', duration: 0.18 }}
+        <span
+          style={{ transition: 'transform .18s' }}
           className="text-white/60"
         >
-          ▾
-        </motion.span>
+          {expanded ? '▾' : '▸'}
+        </span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -157,23 +169,34 @@ function CategoryBlock({
             exit={{ height: 0, opacity: 0 }}
             className="divide-y divide-white/10"
           >
-            {items.map((s) => {
-              const active = selectedId === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => onSelect(s)}
-                  className={`w-full flex items-center justify-between px-4 py-3 transition
-                    ${active
-                      ? 'bg-blue-500/10 text-white ring-1 ring-blue-500'
-                      : 'text-white/90 hover:bg-white/[0.06]'}
-                  `}
-                >
-                  <div className="font-medium">{s.title}</div>
-                  <div className="text-xl">📘</div>
-                </button>
-              );
-            })}
+            {items.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-white/60">
+                Пока нет курсов в этой категории.
+              </div>
+            ) : (
+              items.map((c) => {
+                const active = selectedId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => onSelect(c)}
+                    className={`w-full flex items-center justify-between px-4 py-3 transition
+                      ${
+                        active
+                          ? 'bg-blue-500/10 text-white ring-1 ring-blue-500'
+                          : 'text-white/90 hover:bg-white/[0.06]'
+                      }
+                    `}
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">{c.title}</div>
+                      <div className="text-[11px] text-white/50">{c.code}</div>
+                    </div>
+                    <div className="text-xl">📘</div>
+                  </button>
+                );
+              })
+            )}
           </motion.div>
         )}
       </AnimatePresence>
