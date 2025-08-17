@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import TopSheet from './sheets/TopSheet';
 import CourseSheet from './sheets/CourseSheet';
+import AddCourseSheet from './panels/AddCourseSheet';
 import { apiUser, apiUserCourses, type Course } from '../lib/api';
 
 export default function HUD() {
@@ -11,8 +12,10 @@ export default function HUD() {
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
 
-  // какая шторка открыта
+  // какая шторка открыта (верхние)
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
+  // нижняя шторка «Добавить курс»
+  const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
     // 1) юзер: стрик + энергия
@@ -23,7 +26,7 @@ export default function HUD() {
     }
 
     // 2) заголовок курса
-    const list = await apiUserCourses();
+    const list = await apiUserCourses(); // курсы из users.added_courses_id
     const storedId = (() => {
       try {
         const v = localStorage.getItem('exampli:activeCourseId');
@@ -73,7 +76,7 @@ export default function HUD() {
   // подпинываем плавающие элементы (баннер) пересчитать позицию
   useEffect(() => {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
-  }, [open]);
+  }, [open, addOpen]);
 
   return (
     <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
@@ -126,15 +129,20 @@ export default function HUD() {
         </div>
       </div>
 
-      {/* КУРС: используем именно CourseSheet (нижняя шторка) */}
-      <CourseSheet
-        open={open === 'course'}
-        onClose={() => setOpen(null)}
-        onPicked={(title: string) => {
-          setCourseTitle(title);
-          setOpen(null);
-        }}
-      />
+      {/* ВЕРХНЯЯ ШТОРКА: курсы (контент — CourseSheet) */}
+      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курсы">
+        <CourseSheet
+          onPicked={(title) => {
+            setCourseTitle(title);
+            setOpen(null);
+          }}
+          onAddClick={() => {
+            // из CourseSheet открыть нижнюю «Добавить курс»
+            setOpen(null);
+            requestAnimationFrame(() => setAddOpen(true));
+          }}
+        />
+      </TopSheet>
 
       {/* ВЕРХНЯЯ ШТОРКА: стрик */}
       <TopSheet open={open === 'streak'} onClose={() => setOpen(null)} anchor={anchorRef} title="Стрик">
@@ -143,8 +151,30 @@ export default function HUD() {
 
       {/* ВЕРХНЯЯ ШТОРКА: энергия */}
       <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
-        <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
+        <EnergySheetBody
+          value={energy}
+          onOpenSubscription={() => {
+            setOpen(null);
+            location.assign('/subscription');
+          }}
+        />
       </TopSheet>
+
+      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» */}
+      <AddCourseSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdded={(c: Course) => {
+          setCourseTitle(c.title);
+          try {
+            localStorage.setItem('exampli:activeCourseId', String(c.id));
+          } catch {}
+          window.dispatchEvent(
+            new CustomEvent('exampli:courseChanged', { detail: { id: c.id, title: c.title, code: c.code } })
+          );
+          setAddOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -152,10 +182,11 @@ export default function HUD() {
 /* ================== ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ================== */
 
 import { apiUser as apiUserForSheets } from '../lib/api';
+import { useEffect as useEffect2, useState as useState2 } from 'react';
 
 function StreakSheetBody() {
-  const [streak, setStreak] = useState(0);
-  useEffect(() => {
+  const [streak, setStreak] = useState2(0);
+  useEffect2(() => {
     (async () => {
       const u = await apiUserForSheets();
       setStreak(typeof u?.streak === 'number' ? u.streak : 0);
