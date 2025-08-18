@@ -1,9 +1,12 @@
 // src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
-import CourseSheet from './sheets/CourseSheet';
+import TopicsPanel from './panels/TopicsPanel';
 import AddCourseSheet from './panels/AddCourseSheet';
-import { apiUser, apiUserCourses, type Course } from '../lib/api';
+import { setUserSubjects } from '../lib/userState';
+
+type Subject = { id: number; code: string; title: string; level: string };
 
 export default function HUD() {
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -12,56 +15,54 @@ export default function HUD() {
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
 
-  // какая шторка открыта (верхние)
+  // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
+
   // нижняя шторка «Добавить курс»
   const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
-    // 1) юзер: стрик + энергия
-    const u = await apiUser();
-    if (u) {
-      setStreak(typeof u.streak === 'number' ? u.streak : 0);
-      setEnergy(typeof u.energy === 'number' ? Math.max(0, Math.min(25, u.energy)) : 25);
+    const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (!tgId) return;
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, streak, hearts')
+      .eq('tg_id', String(tgId))
+      .single();
+
+    if (user) {
+      setStreak(user.streak ?? 0);
+      setEnergy(((user.hearts ?? 5) as number) * 5);
     }
 
-    // 2) заголовок курса
-    const list = await apiUserCourses(); // курсы из users.added_courses_id
-    const storedId = (() => {
-      try {
-        const v = localStorage.getItem('exampli:activeCourseId');
-        return v ? Number(v) : null;
-      } catch {
-        return null;
-      }
-    })();
-    const activeId = storedId ?? u?.current_course_id ?? (list[0]?.id ?? null);
+    if (user?.id) {
+      const { data: rel } = await supabase
+        .from('user_subjects')
+        .select('subject_id, subjects(title)')
+        .eq('user_id', user.id)
+        .order('id', { ascending: true })
+        .limit(1);
 
-    if (activeId && list.length) {
-      const found = list.find((c) => c.id === activeId) || list[0];
-      setCourseTitle(found.title);
-    } else {
-      setCourseTitle('Курс');
+      const rows = (rel as Array<{ subjects?: { title?: string } }> | null) || [];
+      const title = rows[0]?.subjects?.title;
+      if (title) setCourseTitle(title);
     }
   }, []);
 
   useEffect(() => {
     let alive = true;
-    const refresh = async () => {
-      if (alive) await loadUserSnapshot();
-    };
+    const refresh = async () => { if (alive) await loadUserSnapshot(); };
 
     refresh();
 
     const onCourseChanged = (evt: Event) => {
-      const e = evt as CustomEvent<{ id?: number; title?: string; code?: string }>;
+      const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
       refresh();
     };
 
-    const onVisible = () => {
-      if (!document.hidden) refresh();
-    };
+    const onVisible = () => { if (!document.hidden) refresh(); };
 
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
     document.addEventListener('visibilitychange', onVisible);
@@ -73,10 +74,16 @@ export default function HUD() {
     };
   }, [loadUserSnapshot]);
 
+  // последовательно: закрыть TopSheet → на следующий кадр открыть AddCourseSheet
+  const openAddCourse = () => {
+    setOpen(null);
+    requestAnimationFrame(() => setAddOpen(true));
+  };
+
   // подпинываем плавающие элементы (баннер) пересчитать позицию
   useEffect(() => {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
-  }, [open, addOpen]);
+  }, [addOpen, open]);
 
   return (
     <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
@@ -85,11 +92,7 @@ export default function HUD() {
           {/* Курс */}
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen('course');
-            }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('course'); }}
             className="badge"
             aria-label="Выбрать курс"
           >
@@ -101,26 +104,16 @@ export default function HUD() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setOpen('streak');
-              }}
-              className="badge"
-              aria-label="Стрик"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
+              className="badge" aria-label="Стрик"
             >
               <img src="/stickers/fire.svg" alt="" aria-hidden className="w-4 h-4" />
               {streak}
             </button>
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setOpen('energy');
-              }}
-              className="badge"
-              aria-label="Энергия"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('energy'); }}
+              className="badge" aria-label="Энергия"
             >
               <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-4 h-4" />
               {energy}
@@ -129,18 +122,16 @@ export default function HUD() {
         </div>
       </div>
 
-      {/* ВЕРХНЯЯ ШТОРКА: курсы (контент — CourseSheet) */}
-      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курсы">
-        <CourseSheet
-          onPicked={(title) => {
-            setCourseTitle(title);
+      {/* ВЕРХНЯЯ ШТОРКА: выбор/управление курсами */}
+      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
+        <TopicsPanel
+          onPicked={async (s: Subject) => {
+            await setUserSubjects([s.code]);
+            setCourseTitle(s.title);
+            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
             setOpen(null);
           }}
-          onAddClick={() => {
-            // из CourseSheet открыть нижнюю «Добавить курс»
-            setOpen(null);
-            requestAnimationFrame(() => setAddOpen(true));
-          }}
+          onAddClick={openAddCourse} // из верхней шторки открываем нижнюю «Добавить курс»
         />
       </TopSheet>
 
@@ -151,27 +142,17 @@ export default function HUD() {
 
       {/* ВЕРХНЯЯ ШТОРКА: энергия */}
       <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
-        <EnergySheetBody
-          value={energy}
-          onOpenSubscription={() => {
-            setOpen(null);
-            location.assign('/subscription');
-          }}
-        />
+        <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
-      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» */}
+      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» — перекрывает HUD и экран полностью */}
       <AddCourseSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdded={(c: Course) => {
-          setCourseTitle(c.title);
-          try {
-            localStorage.setItem('exampli:activeCourseId', String(c.id));
-          } catch {}
-          window.dispatchEvent(
-            new CustomEvent('exampli:courseChanged', { detail: { id: c.id, title: c.title, code: c.code } })
-          );
+        onAdded={(s) => {
+          // s: { id, code, title, level } — приходит из AddCourseSheet
+          setCourseTitle(s.title);
+          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
           setAddOpen(false);
         }}
       />
@@ -181,15 +162,14 @@ export default function HUD() {
 
 /* ================== ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ================== */
 
-import { apiUser as apiUserForSheets } from '../lib/api';
-import { useEffect as useEffect2, useState as useState2 } from 'react';
-
 function StreakSheetBody() {
-  const [streak, setStreak] = useState2(0);
-  useEffect2(() => {
+  const [streak, setStreak] = useState(0);
+  useEffect(() => {
     (async () => {
-      const u = await apiUserForSheets();
-      setStreak(typeof u?.streak === 'number' ? u.streak : 0);
+      const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      if (!id) return;
+      const { data: u } = await supabase.from('users').select('streak').eq('tg_id', String(id)).single();
+      setStreak(u?.streak ?? 0);
     })();
   }, []);
   const days = Array.from({ length: 30 }, (_, i) => i + 1);
@@ -219,18 +199,14 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
   const percent = Math.max(0, Math.min(100, Math.round((value / 25) * 100)));
   return (
     <>
-      <div className="progress">
-        <div style={{ width: `${percent}%` }} />
-      </div>
+      <div className="progress"><div style={{ width: `${percent}%` }} /></div>
       <div className="mt-2 text-sm text-muted">{value}/25</div>
       <div className="grid gap-3 mt-5">
         <button type="button" className="card text-left" onClick={onOpenSubscription}>
           <div className="font-semibold">Безлимит (демо)</div>
           <div className="text-sm text-muted">Нажми, чтобы открыть «Абонемент»</div>
         </button>
-        <button type="button" className="btn w-full" onClick={onOpenSubscription}>
-          + Пополнить / Оформить
-        </button>
+        <button type="button" className="btn w-full" onClick={onOpenSubscription}>+ Пополнить / Оформить</button>
       </div>
     </>
   );

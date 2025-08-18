@@ -1,25 +1,18 @@
 // src/pages/Home.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import SkillRoad from '../components/SkillRoad';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
 import FloatingDecor from '../components/FloatingDecor';
-import {
-  apiUser,
-  apiUserCourses,
-  apiLessonsByCourse,
-  type Course,
-} from '../lib/api';
 
 type RoadItem = { id: string; title: string; subtitle?: string };
 
-const ACTIVE_ID_KEY = 'exampli:activeCourseId';
+const ACTIVE_KEY = 'exampli:activeSubjectCode';
 
 export default function Home() {
-  // Telegram-пользователь (оставим для потенциального UI)
-  const [tgUser] = useState<any>(
-    () => (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null
-  );
+  // Telegram-пользователь (не обязателен, но оставим для потенциального UI)
+  const [tgUser] = useState<any>(() => (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null);
 
   // состояние страницы
   const [items, setItems] = useState<RoadItem[]>([]);
@@ -27,7 +20,7 @@ export default function Home() {
   const [openTopics, setOpenTopics] = useState(false);
 
   // активный курс
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [activeCode, setActiveCode] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState<string>('');
 
   // тема декора под «дорогой»
@@ -39,105 +32,105 @@ export default function Home() {
   }, [courseTitle]);
 
   // ======== helpers: localStorage =========
-  const readActiveFromStorage = useCallback((): number | null => {
-    try {
-      const v = localStorage.getItem(ACTIVE_ID_KEY);
-      return v ? Number(v) : null;
-    } catch {
-      return null;
-    }
+  const readActiveFromStorage = useCallback((): string | null => {
+    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
   }, []);
-  const writeActiveToStorage = useCallback((id: number) => {
-    try {
-      localStorage.setItem(ACTIVE_ID_KEY, String(id));
-    } catch {}
+  const writeActiveToStorage = useCallback((code: string) => {
+    try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
   }, []);
 
-  // ======== ensureActiveCourse: определяем активный курс (id + title) =========
-  const ensureActiveCourse = useCallback(async (): Promise<{ id: number | null; title: string }> => {
+  // ======== ensureActiveCourse: определяем активный курс (code + title) =========
+  const ensureActiveCourse = useCallback(async (): Promise<{ code: string | null; title: string }> => {
     // 1) уже выбран в состоянии
-    if (activeId) return { id: activeId, title: courseTitle };
+    if (activeCode) return { code: activeCode, title: courseTitle };
 
     // 2) восстановим из localStorage
-    const storedId = readActiveFromStorage();
-    let list: Course[] = [];
+    const stored = readActiveFromStorage();
+    if (stored) {
+      const { data: subj } = await supabase
+        .from('subjects')
+        .select('id,title,code')
+        .eq('code', stored)
+        .single(); // если нет — вернёт error, data=null
+      if (subj?.code) {
+        setActiveCode(subj.code);
+        setCourseTitle(subj.title || '');
+        return { code: subj.code as string, title: (subj.title as string) || '' };
+      }
+    }
 
-    // подтянем список курсов пользователя (его часто ещё нужнее для title)
+    // 3) возьмём первый курс пользователя через связь user_subjects → subjects
+    const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (!tgId) return { code: null, title: '' };
+
+    const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+    if (!user?.id) return { code: null, title: '' };
+
+    const { data: rel } = await supabase
+      .from('user_subjects')
+      .select('subject_id, subjects(title, code)')
+      .eq('user_id', user.id)
+      .order('id', { ascending: true })
+      .limit(1);
+
+    const rows = (rel as Array<{ subjects?: { title?: string; code?: string } }> | null) || [];
+    const first = rows[0]?.subjects;
+    const fCode = first?.code ?? null;
+    const fTitle = first?.title ?? '';
+
+    if (fCode) {
+      setActiveCode(fCode);
+      setCourseTitle(fTitle);
+      writeActiveToStorage(fCode);
+      return { code: fCode, title: fTitle };
+    }
+
+    return { code: null, title: '' };
+  }, [activeCode, courseTitle, readActiveFromStorage, writeActiveToStorage]);
+
+  // ======== fetchLessons: грузим уроки по активному subject (по коду) =========
+  const fetchLessons = useCallback(async (codeArg?: string | null) => {
+    const code = codeArg ?? activeCode;
+    setLoading(true);
     try {
-      list = await apiUserCourses();
-    } catch {}
+      if (!code) { setItems([]); return; }
 
-    const pickById = (id: number | null) => {
-      if (!id || !list.length) return { id: null as number | null, title: '' };
-      const found = list.find((c) => c.id === id) || null;
-      return { id: found?.id ?? null, title: found?.title ?? '' };
-    };
+      // найдём subject_id по коду
+      const { data: subj } = await supabase
+        .from('subjects')
+        .select('id,title,code')
+        .eq('code', code)
+        .single();
 
-    if (storedId) {
-      const p = pickById(storedId);
-      if (p.id) {
-        setActiveId(p.id);
-        setCourseTitle(p.title);
-        return p;
-      }
+      const subjectId = (subj?.id as number) || null;
+      if (!subjectId) { setItems([]); return; }
+
+      // первые 12 уроков ТОЛЬКО этого предмета
+      const { data } = await supabase
+        .from('lessons')
+        .select('id,title')
+        .eq('subject_id', subjectId)
+        .order('order_index', { ascending: true })
+        .limit(12);
+
+      const mapped: RoadItem[] = (data as Array<{ id: number; title: string }> | null || []).map((l) => ({
+        id: String(l.id),
+        title: l.title,
+        subtitle: (subj?.title as string) || '',
+      }));
+
+      setItems(mapped);
+      if (!courseTitle && subj?.title) setCourseTitle(subj.title as string);
+    } finally {
+      setLoading(false);
     }
-
-    // 3) users.current_course_id
-    const u = await apiUser();
-    if (u?.current_course_id) {
-      const p = pickById(u.current_course_id);
-      if (p.id) {
-        setActiveId(p.id);
-        setCourseTitle(p.title);
-        writeActiveToStorage(p.id);
-        return p;
-      }
-    }
-
-    // 4) fallback: первый курс пользователя
-    if (list.length) {
-      const first = list[0];
-      setActiveId(first.id);
-      setCourseTitle(first.title);
-      writeActiveToStorage(first.id);
-      return { id: first.id, title: first.title };
-    }
-
-    return { id: null, title: '' };
-  }, [activeId, courseTitle, readActiveFromStorage, writeActiveToStorage]);
-
-  // ======== fetchLessons: грузим уроки по активному course_id =========
-  const fetchLessons = useCallback(
-    async (idArg?: number | null, titleArg?: string) => {
-      const id = idArg ?? activeId;
-      setLoading(true);
-      try {
-        if (!id) {
-          setItems([]);
-          return;
-        }
-
-        const lessons = await apiLessonsByCourse(id);
-        const mapped: RoadItem[] = (lessons || []).slice(0, 12).map((l) => ({
-          id: String(l.id),
-          title: l.lesson, // поле из новой схемы
-          subtitle: titleArg || courseTitle || '',
-        }));
-
-        setItems(mapped);
-        if (!courseTitle && titleArg) setCourseTitle(titleArg);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [activeId, courseTitle]
-  );
+  }, [activeCode, courseTitle]);
 
   // ======== первичная загрузка =========
   useEffect(() => {
     (async () => {
       const sel = await ensureActiveCourse();
-      await fetchLessons(sel.id, sel.title);
+      await fetchLessons(sel.code);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -145,31 +138,16 @@ export default function Home() {
   // ======== реакция на смену курса из других частей приложения =========
   useEffect(() => {
     const onChanged = (evt: Event) => {
-      const e = evt as CustomEvent<{ id?: number; title?: string; code?: string }>;
-      const id = typeof e.detail?.id === 'number' ? e.detail.id : null;
+      const e = evt as CustomEvent<{ title?: string; code?: string }>;
+      const code = e.detail?.code || null;
       const title = e.detail?.title || '';
-
-      if (id) {
-        setActiveId(id);
-        writeActiveToStorage(id);
-        if (title) setCourseTitle(title);
-        fetchLessons(id, title);
-        return;
+      if (code) {
+        setActiveCode(code);
+        writeActiveToStorage(code);
       }
-
-      // на случай старых мест, где прилетает только title/code — попробуем найти курс по списку
-      (async () => {
-        const list = await apiUserCourses();
-        const found = title ? list.find((c) => c.title === title) : null;
-        if (found) {
-          setActiveId(found.id);
-          setCourseTitle(found.title);
-          writeActiveToStorage(found.id);
-          fetchLessons(found.id, found.title);
-        }
-      })();
+      if (title) setCourseTitle(title);
+      fetchLessons(code);
     };
-
     window.addEventListener('exampli:courseChanged', onChanged as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
   }, [fetchLessons, writeActiveToStorage]);
@@ -185,13 +163,21 @@ export default function Home() {
       <TopicsPanel
         open={openTopics}
         onClose={() => setOpenTopics(false)}
+        onPicked={(s) => {
+          // прямой выбор из левой панели
+          setActiveCode(s.code);
+          setCourseTitle(s.title);
+          writeActiveToStorage(s.code);
+          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+          setOpenTopics(false);
+        }}
       />
 
       {/* отступ, чтобы дорога не упиралась в кнопку тем */}
       <div style={{ height: 64 }} />
 
       {/* состояния */}
-      {!activeId && !loading && (
+      {!activeCode && !loading && (
         <div className="card">
           Курсы не выбраны. Нажми «🧩 Выбрать тему» сверху и добавь курс.
         </div>
