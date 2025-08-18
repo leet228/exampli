@@ -1,13 +1,17 @@
 // src/lib/api.ts
 
 // Можно переопределить домен через .env:
-// NEXT_PUBLIC_API_BASE=https://api.kursik.online
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://api.kursik.online';
-
+// VITE_API_BASE=https://api.kursik.online
+const API_BASE = import.meta.env?.VITE_API_BASE || 'https://api.kursik.online';
 const url = (path: string) => `${API_BASE}${path}`;
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url(path), init);
+  const res = await fetch(url(path), {
+    // если понадобятся куки/сессии — раскомментируй:
+    // credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    ...init,
+  });
   if (!res.ok) {
     let extra = '';
     try { extra = await res.text(); } catch {}
@@ -23,24 +27,26 @@ function pickFromQuery(name: string): string | null {
   } catch { return null; }
 }
 
-// --- Telegram helpers ---
-function tg() {
+// ---------- Telegram helpers ----------
+function tgUser() {
   const w: any = typeof window !== 'undefined' ? window : {};
   return w?.Telegram?.WebApp?.initDataUnsafe?.user || null;
 }
-function tgId(): string | null {
-  const id = tg()?.id;
-  return id ? String(id) : null;
-}
 
-function devTgId(): string | null {
-  // 1) из ?tg=123
+/** Единый источник tg_id:
+ *  1) Telegram WebApp
+ *  2) ?tg=123 → сохраняем в localStorage('DEV_TG_ID')
+ *  3) localStorage('DEV_TG_ID')
+ */
+function tgId(): string | null {
+  const fromTg = tgUser()?.id;
+  if (fromTg) return String(fromTg);
+
   const q = pickFromQuery('tg');
   if (q) {
     try { localStorage.setItem('DEV_TG_ID', q); } catch {}
     return q;
   }
-  // 2) из localStorage
   try {
     const v = localStorage.getItem('DEV_TG_ID');
     if (v) return v;
@@ -48,16 +54,16 @@ function devTgId(): string | null {
   return null;
 }
 
-// --- Types ---
+// ---------- Types ----------
 export type Course = { id: number; code: string; title: string; level: string };
 
 export type User = {
   id: number;
   tg_id: string;
-  username?: string;
-  first_name?: string;
-  last_name?: string;
-  avatar_url?: string;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
   xp: number;
   streak: number;
   energy: number; // 0..25
@@ -70,29 +76,32 @@ export type User = {
 export type Topic = { id: number; topic: string };
 export type Subtopic = { id: number; subtopic: string };
 
-// --- API wrappers ---
+// ---------- API wrappers ----------
 export async function apiHealth() {
   return fetchJSON<{ ok: boolean; db?: boolean; error?: string }>('/health');
 }
 
+/** Вернёт пользователя по tg_id (или null, если tg_id не найден вовсе) */
 export async function apiUser(): Promise<User | null> {
   const id = tgId();
   if (!id) return null;
   return fetchJSON<User | null>(`/users/by-tg?tg_id=${encodeURIComponent(id)}`);
 }
 
+/** Синхронизация полей из Telegram. Работает и в dev (без Telegram):
+ *  отправим только tg_id, остальные поля будут null. */
 export async function apiSyncTg() {
-  const u = tg();
-  if (!u) return null;
+  const id = tgId();
+  if (!id) return null;
+  const t = tgUser();
   return fetchJSON<User>('/users/sync-tg', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      tg_id: String(u.id),
-      username: u.username || null,
-      first_name: u.first_name || null,
-      last_name: u.last_name || null,
-      avatar_url: u.photo_url || null,
+      tg_id: String(id),
+      username: t?.username ?? null,
+      first_name: t?.first_name ?? null,
+      last_name: t?.last_name ?? null,
+      avatar_url: t?.photo_url ?? null,
     }),
   });
 }
@@ -101,61 +110,47 @@ export async function apiCourses(): Promise<Course[]> {
   return fetchJSON<Course[]>('/courses');
 }
 
+/** Курсы пользователя по tg_id */
 export async function apiUserCourses(): Promise<Course[]> {
   const id = tgId();
   if (!id) return [];
-  return fetchJSON<Course[]>(
-    `/users/courses?tg_id=${encodeURIComponent(id)}`
-  );
+  return fetchJSON<Course[]>(`/users/courses?tg_id=${encodeURIComponent(id)}`);
 }
 
+/** Добавить курс пользователю (по id или code) */
 export async function apiAddCourseToUser(arg: { course_id?: number; code?: string }) {
   const id = tgId();
   if (!id) return { error: 'tg_id missing' };
   return fetchJSON<{ ok?: true; user?: any; error?: string }>(
     '/users/add-course',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tg_id: id, ...arg }),
-    }
+    { method: 'POST', body: JSON.stringify({ tg_id: id, ...arg }) }
   );
 }
 
+/** Установить текущий курс пользователю */
 export async function apiSetCurrentCourse(course_id: number) {
   const id = tgId();
   if (!id) return null;
   return fetchJSON('/users/current', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tg_id: id, current_course_id: course_id }),
   });
 }
 
 export async function apiSetCurrentSelection(args: {
-  course_id?: number;
-  topic_id?: number;
-  subtopic_id?: number;
+  course_id?: number; topic_id?: number; subtopic_id?: number;
 }) {
-  const uid = tgId();
-  if (!uid) return null;
-
-  const body: any = { tg_id: String(uid) };
+  const id = tgId();
+  if (!id) return null;
+  const body: any = { tg_id: id };
   if (args.course_id != null) body.current_course_id = args.course_id;
   if (args.topic_id != null) body.current_topic_id = args.topic_id;
   if (args.subtopic_id != null) body.current_subtopic_id = args.subtopic_id;
-
-  return fetchJSON('/users/current', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  return fetchJSON('/users/current', { method: 'PATCH', body: JSON.stringify(body) });
 }
 
 export async function apiLessonsByCourse(course_id: number) {
-  return fetchJSON<{ id: number; lesson: string }[]>(
-    `/lessons?course_id=${course_id}`
-  );
+  return fetchJSON<{ id: number; lesson: string }[]>(`/lessons?course_id=${course_id}`);
 }
 
 export async function apiTopics(course_id: number) {
@@ -163,11 +158,10 @@ export async function apiTopics(course_id: number) {
 }
 
 export async function apiSubtopics(course_id: number, topic_id: number) {
-  return fetchJSON<Subtopic[]>(
-    `/subtopics?course_id=${course_id}&topic_id=${topic_id}`
-  );
+  return fetchJSON<Subtopic[]>(`/subtopics?course_id=${course_id}&topic_id=${topic_id}`);
 }
 
+/** Если у тебя нет эндпоинта — просто не используй его на фронте */
 export async function apiLeaderboard(limit = 50) {
   return fetchJSON<
     { id: number; tg_id: string; username: string | null; first_name: string | null; xp: number | null; streak: number | null }[]
