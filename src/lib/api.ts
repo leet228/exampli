@@ -16,6 +16,13 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function pickFromQuery(name: string): string | null {
+  try {
+    const u = new URL(window.location.href);
+    return u.searchParams.get(name);
+  } catch { return null; }
+}
+
 // --- Telegram helpers ---
 function tg() {
   const w: any = typeof window !== 'undefined' ? window : {};
@@ -24,6 +31,21 @@ function tg() {
 function tgId(): string | null {
   const id = tg()?.id;
   return id ? String(id) : null;
+}
+
+function devTgId(): string | null {
+  // 1) из ?tg=123
+  const q = pickFromQuery('tg');
+  if (q) {
+    try { localStorage.setItem('DEV_TG_ID', q); } catch {}
+    return q;
+  }
+  // 2) из localStorage
+  try {
+    const v = localStorage.getItem('DEV_TG_ID');
+    if (v) return v;
+  } catch {}
+  return null;
 }
 
 // --- Types ---
