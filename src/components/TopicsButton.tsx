@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { hapticTiny } from '../lib/haptics';
 
 export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
   const [topicTitle, setTopicTitle] = useState<string>('Тема');
@@ -33,7 +34,7 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
 
   return (
     <motion.button type="button" className="topics-hero" style={{ top }}
-      onClick={onOpen} whileHover={{scale:1.02}} whileTap={{scale:0.98}}>
+      onClick={(e) => { hapticTiny(); onOpen }} whileHover={{scale:1.02}} whileTap={{scale:0.98}}>
       <div className="text-left leading-tight">
         <div className="text-[10px] opacity-90">{topicTitle}</div>
         <div className="text-sm font-semibold">{subtopicTitle}</div>
