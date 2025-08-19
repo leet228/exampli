@@ -1,30 +1,23 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
 
 export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
-  const [title, setTitle] = useState('Выбрать тему');
+  const [topicTitle, setTopicTitle] = useState<string>('Тема');
+  const [subtopicTitle, setSubtopicTitle] = useState<string>('Выбрать подтему');
   const [top, setTop] = useState(120);
 
+  // слушаем обновления «бейджа» из TopicsPanel
   useEffect(() => {
-    (async () => {
-      const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!id) return;
-      const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(id)).single();
-      if (!u) return;
-      const { data: rel } = await supabase.from('user_subjects').select('subject_id').eq('user_id', u.id).limit(1);
-      const sid = rel?.[0]?.subject_id;
-      if (sid) {
-        const { data: s } = await supabase.from('subjects').select('title').eq('id', sid).single();
-        if (s?.title) setTitle(s.title);
-      }
-    })();
-    const onChanged = (e:any)=>{ if(e?.detail?.title) setTitle(e.detail.title); };
-    window.addEventListener('exampli:courseChanged', onChanged);
-    return ()=> window.removeEventListener('exampli:courseChanged', onChanged);
+    const onBadge = (e: Event) => {
+      const d = (e as CustomEvent).detail || {};
+      if (d.topicTitle) setTopicTitle(d.topicTitle);
+      if (d.subtopicTitle) setSubtopicTitle(d.subtopicTitle);
+    };
+    window.addEventListener('exampli:topicBadge', onBadge as EventListener);
+    return () => window.removeEventListener('exampli:topicBadge', onBadge as EventListener);
   }, []);
 
-  // позиция по вертикали = низ HUD + 10px
+  // позиция под HUD
   useEffect(() => {
     const measure = () => {
       const hud = document.querySelector('.hud-fixed') as HTMLElement | null;
@@ -33,7 +26,7 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     measure();
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
-    window.addEventListener('exampli:overlayToggled', measure); // панель открылась/закрылась
+    window.addEventListener('exampli:overlayToggled', measure);
     const t1=setTimeout(measure,120), t2=setTimeout(measure,500);
     return ()=>{ window.removeEventListener('resize',measure); window.removeEventListener('orientationchange',measure); window.removeEventListener('exampli:overlayToggled',measure); clearTimeout(t1); clearTimeout(t2); };
   }, []);
@@ -41,10 +34,11 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
   return (
     <motion.button type="button" className="topics-hero" style={{ top }}
       onClick={onOpen} whileHover={{scale:1.02}} whileTap={{scale:0.98}}>
-      <span className="mr-1 text-xl">‹</span>
-      <span className="mr-1"></span>
-      <span className="font-semibold">{title}</span>
-      <span className="ml-1 opacity-80">▾</span>
+      <div className="text-left leading-tight">
+        <div className="text-[10px] opacity-90">{topicTitle}</div>
+        <div className="text-sm font-semibold">{subtopicTitle}</div>
+      </div>
+      <span className="ml-2 opacity-80">▾</span>
     </motion.button>
   );
 }

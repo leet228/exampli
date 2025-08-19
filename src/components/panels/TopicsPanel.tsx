@@ -1,212 +1,173 @@
 // src/components/panels/TopicsPanel.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import SidePanel from './SidePanel';
 
-type Subject = { id: number; code: string; title: string; level: string };
+type Subject   = { id: number; code: string; title: string };
+type Topic     = { id: number; subject_id: number; title: string; order_index: number };
+type Subtopic  = { id: number; subject_id: number; topic_id: number; title: string; order_index: number };
 
-type Props =
-  // Режим ПАНЕЛИ (Home.tsx): показываем левую выезжающую панель
-  | { open: boolean; onClose: () => void; onPicked?: (s: Subject) => void; onAddClick?: () => void }
-  // Режим ВСТАВКИ в TopSheet (HUD.tsx): просто отдаём контент без контейнера
-  | { open?: undefined; onClose?: undefined; onPicked?: (s: Subject) => void; onAddClick?: () => void };
+type Props = { open: boolean; onClose: () => void };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
 
-export default function TopicsPanel(props: Props) {
-  const { open, onClose, onPicked, onAddClick } = props as {
-    open?: boolean;
-    onClose?: () => void;
-    onPicked?: (s: Subject) => void;
-    onAddClick?: () => void;
-  };
+export default function TopicsPanel({ open, onClose }: Props) {
+  const [subject, setSubject] = useState<Subject | null>(null);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [subsByTopic, setSubsByTopic] = useState<Record<number, Subtopic[]>>({});
+  const [expandedTopicId, setExpandedTopicId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [activeCode, setActiveCode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // --- helpers ---
-  const readActiveFromStorage = useCallback(() => {
+  // -- helpers: активный курс из localStorage
+  const readActiveCode = useCallback(() => {
     try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
   }, []);
-  const writeActiveToStorage = useCallback((code: string) => {
-    try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
-  }, []);
 
-  // Загрузка курсов пользователя
-  const loadUserSubjects = useCallback(async () => {
+  // -- загрузка активного предмета + тем/подтем
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!tgId) { setSubjects([]); return; }
+      const code = readActiveCode();
+      if (!code) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
 
-      const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-      if (!user?.id) { setSubjects([]); return; }
-
-      // вытягиваем все курсы пользователя
-      const { data: rel } = await supabase
-        .from('user_subjects')
-        .select('subject_id')
-        .eq('user_id', user.id);
-
-      const ids = (rel || []).map(r => r.subject_id as number);
-      if (!ids.length) { setSubjects([]); return; }
-
-      const { data } = await supabase
+      const { data: subj } = await supabase
         .from('subjects')
-        .select('id, code, title, level')
-        .in('id', ids)
-        .order('title');
+        .select('id, code, title')
+        .eq('code', code)
+        .single();
+      if (!subj?.id) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
+      setSubject(subj as Subject);
 
-      const list = (data as Subject[]) || [];
-      setSubjects(list);
+      const { data: tps } = await supabase
+        .from('topics')
+        .select('id, subject_id, title, order_index')
+        .eq('subject_id', subj.id)
+        .order('order_index', { ascending: true });
 
-      // восстановить активный код
-      const stored = readActiveFromStorage();
-      const initial = (stored && list.find(s => s.code === stored)?.code) || list[0]?.code || null;
-      if (initial) setActiveCode(initial);
+      const tlist = (tps as Topic[]) || [];
+      setTopics(tlist);
+
+      const { data: subs } = await supabase
+        .from('subtopics')
+        .select('id, subject_id, topic_id, title, order_index')
+        .eq('subject_id', subj.id)
+        .order('topic_id', { ascending: true })
+        .order('order_index', { ascending: true });
+
+      const map: Record<number, Subtopic[]> = {};
+      (subs as Subtopic[] || []).forEach(s => {
+        if (!map[s.topic_id]) map[s.topic_id] = [];
+        map[s.topic_id].push(s);
+      });
+      setSubsByTopic(map);
     } finally {
       setLoading(false);
     }
-  }, [readActiveFromStorage]);
+  }, [readActiveCode]);
 
-  // Когда компонент в режиме левой панели — грузим только когда она открыта
-  // Когда это контент для TopSheet — грузим сразу
+  // грузим при открытии панели (и когда сменился курс извне)
+  useEffect(() => { if (open) void loadData(); }, [open, loadData]);
   useEffect(() => {
-    if (typeof open === 'boolean') {
-      if (open) void loadUserSubjects();
-    } else {
-      void loadUserSubjects();
-    }
-  }, [open, loadUserSubjects]);
-
-  // Слушаем внешние события, чтобы обновиться:
-  // - после добавления нового курса (subjectsChanged — если решишь диспатчить)
-  // - после переключения/выбора курса (courseChanged — для подсветки)
-  useEffect(() => {
-    const onSubjectsChanged = () => loadUserSubjects();
-    const onCourseChanged = (evt: Event) => {
-      const e = evt as CustomEvent<{ title?: string; code?: string }>;
-      if (e.detail?.code) {
-        setActiveCode(e.detail.code);
-        writeActiveToStorage(e.detail.code);
-      }
-    };
-    window.addEventListener('exampli:subjectsChanged', onSubjectsChanged);
+    const onCourseChanged = () => { if (open) void loadData(); };
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
-    return () => {
-      window.removeEventListener('exampli:subjectsChanged', onSubjectsChanged);
-      window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
-    };
-  }, [loadUserSubjects, writeActiveToStorage]);
+    return () => window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+  }, [open, loadData]);
 
-  // --- UI блоки ---
-  const grid = useMemo(() => {
-    if (loading) {
-      return (
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aspect-square rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
-          ))}
-        </div>
-      );
-    }
-
-    if (!subjects.length) {
-      return (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted">
-          Курсы не выбраны. Нажми «Добавить» ниже.
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-3 gap-3">
-        {subjects.map((s) => {
-          const active = s.code === activeCode;
-          return (
-            <motion.button
-              key={s.id}
-              type="button"
-              layout
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setActiveCode(s.code);
-                writeActiveToStorage(s.code);
-                if (typeof onPicked === 'function') onPicked(s);
-                // шлём единое событие, чтобы «дорога» и профиль обновились
-                window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
-                  detail: { title: s.title, code: s.code },
-                }));
-              }}
-              className={[
-                'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
-                active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
-              ].join(' ')}
-            >
-              {/* свечащийся маркер активного */}
-              <AnimatePresence>
-                {active && (
-                  <motion.span
-                    layoutId="subject-active-glow"
-                    className="absolute inset-0 rounded-2xl"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    style={{
-                      boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset',
-                    }}
-                  />
-                )}
-              </AnimatePresence>
-
-              <div className="relative z-10">
-                <div className="text-2xl mb-1">📘</div>
-                <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
-                <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
-              </div>
-            </motion.button>
-          );
-        })}
-
-        {/* Плитка «+ Добавить» */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            if (typeof onAddClick === 'function') onAddClick();
-            else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
-          }}
-          className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
-        >
-          <div className="flex flex-col items-center">
-            <div className="text-2xl">＋</div>
-            <div className="text-[10px] text-muted mt-1">Добавить</div>
-          </div>
-        </motion.button>
-      </div>
-    );
-  }, [subjects, activeCode, loading, onPicked, onAddClick, writeActiveToStorage]);
-
-  // Режим «панели слева»
-  if (typeof open === 'boolean') {
-    if (!open) return null;
-    return (
-      <>
-        <div className="side-backdrop" onClick={onClose} />
-        <aside className="side-panel">
-          <div className="side-panel-header flex items-center justify-center">
-            <div className="text-lg font-semibold">Темы</div>
-          </div>
-          <div className="side-panel-body">
-            {grid}
-          </div>
-        </aside>
-      </>
-    );
+  // выбор подтемы → сообщаем дороге и кнопке, закрываем панель
+  function pickSubtopic(t: Topic, st: Subtopic) {
+    window.dispatchEvent(new CustomEvent('exampli:subtopicChanged', {
+      detail: {
+        subjectId: subject?.id,
+        topicId: t.id, topicTitle: t.title,
+        subtopicId: st.id, subtopicTitle: st.title,
+      },
+    }));
+    // отдельное маленькое событие для кнопки (две строки)
+    window.dispatchEvent(new CustomEvent('exampli:topicBadge', {
+      detail: { topicTitle: t.title, subtopicTitle: st.title },
+    }));
+    onClose();
   }
 
-  // Режим «контента для TopSheet» (без контейнера)
-  return <div className="pb-1">{grid}</div>;
+  const body = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="grid gap-3">
+          {Array.from({ length: 6 }).map((_,i)=><div key={i} className="h-16 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />)}
+        </div>
+      );
+    }
+    if (!subject) {
+      return <div className="card">Курс не выбран.</div>;
+    }
+    if (!topics.length) {
+      return <div className="card">В этом курсе пока нет тем.</div>;
+    }
+
+    return (
+      <div className="space-y-3">
+        {topics.map(t => {
+          const opened = expandedTopicId === t.id;
+          const subs = subsByTopic[t.id] || [];
+          return (
+            <div key={t.id} className="rounded-2xl border border-white/10 overflow-hidden">
+              {/* Тема (как на первом скрине) */}
+              <button
+                onClick={() => setExpandedTopicId(opened ? null : t.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09]"
+              >
+                <div className="w-11 h-11 rounded-2xl grid place-items-center bg-white/10 text-xl">✚</div>
+                <div className="flex-1">
+                  <div className="text-base font-semibold">{t.title}</div>
+                  {/* можно вывести «N АБСЧНИТТЕ» позже, сейчас опустим прогресс */}
+                </div>
+                <motion.span
+                  animate={{ rotate: opened ? 90 : 0 }}
+                  transition={{ type: 'tween', duration: .18 }}
+                  className="text-white/60 text-xl">›</motion.span>
+              </button>
+
+              {/* Подтемы (как на втором скрине) */}
+              <AnimatePresence initial={false}>
+                {opened && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="divide-y divide-white/10"
+                  >
+                    {subs.map(st => (
+                      <button
+                        key={st.id}
+                        onClick={() => pickSubtopic(t, st)}
+                        className="w-full text-left px-4 py-3 hover:bg-white/[0.06]"
+                      >
+                        {st.title}
+                      </button>
+                    ))}
+                    {!subs.length && (
+                      <div className="px-4 py-3 text-sm text-white/60">Подтем пока нет</div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }, [loading, subject, topics, subsByTopic, expandedTopicId]);
+
+  return (
+    <SidePanel
+      open={open}
+      onClose={onClose}
+      title={subject?.title || 'Темы'}
+      useTelegramBack
+      hideLocalClose
+    >
+      {body}
+    </SidePanel>
+  );
 }

@@ -5,6 +5,7 @@ import TopSheet from './sheets/TopSheet';
 import TopicsPanel from './panels/TopicsPanel';
 import AddCourseSheet from './panels/AddCourseSheet';
 import { setUserSubjects } from '../lib/userState';
+import CoursesPanel from './sheets/CourseSheet'
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -124,7 +125,7 @@ export default function HUD() {
 
       {/* ВЕРХНЯЯ ШТОРКА: выбор/управление курсами */}
       <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
-        <TopicsPanel
+        <CoursesPanel
           onPicked={async (s: Subject) => {
             await setUserSubjects([s.code]);
             setCourseTitle(s.title);

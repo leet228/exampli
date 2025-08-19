@@ -1,182 +1,212 @@
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
+// src/components/panels/TopicsPanel.tsx
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import BottomSheet from './BottomSheet';
-import { setUserSubjects } from '../../lib/userState';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
-type Subject = {
-  id: string;
-  title: string;
-  level: 'ОГЭ' | 'ЕГЭ' | string;
-  code: string;
-};
+type Subject = { id: number; code: string; title: string; level: string };
 
-export default function CourseSheet({
-  open,
-  onClose,
-  onPicked,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onPicked: (title: string) => void;
-}) {
+type Props =
+  // Режим ПАНЕЛИ (Home.tsx): показываем левую выезжающую панель
+  | { open: boolean; onClose: () => void; onPicked?: (s: Subject) => void; onAddClick?: () => void }
+  // Режим ВСТАВКИ в TopSheet (HUD.tsx): просто отдаём контент без контейнера
+  | { open?: undefined; onClose?: undefined; onPicked?: (s: Subject) => void; onAddClick?: () => void };
+
+const ACTIVE_KEY = 'exampli:activeSubjectCode';
+
+export default function CoursesPanel(props: Props) {
+  const { open, onClose, onPicked, onAddClick } = props as {
+    open?: boolean;
+    onClose?: () => void;
+    onPicked?: (s: Subject) => void;
+    onAddClick?: () => void;
+  };
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [expanded, setExpanded] = useState<'ОГЭ' | 'ЕГЭ' | null>(null);
-  const [selected, setSelected] = useState<Subject | null>(null);
-  const tg = (typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : undefined);
+  const [activeCode, setActiveCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Загружаем курсы при открытии
-  useEffect(() => {
-    if (!open) return;
-    (async () => {
+  // --- helpers ---
+  const readActiveFromStorage = useCallback(() => {
+    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+  }, []);
+  const writeActiveToStorage = useCallback((code: string) => {
+    try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
+  }, []);
+
+  // Загрузка курсов пользователя
+  const loadUserSubjects = useCallback(async () => {
+    setLoading(true);
+    try {
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      if (!tgId) { setSubjects([]); return; }
+
+      const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+      if (!user?.id) { setSubjects([]); return; }
+
+      // вытягиваем все курсы пользователя
+      const { data: rel } = await supabase
+        .from('user_subjects')
+        .select('subject_id')
+        .eq('user_id', user.id);
+
+      const ids = (rel || []).map(r => r.subject_id as number);
+      if (!ids.length) { setSubjects([]); return; }
+
       const { data } = await supabase
         .from('subjects')
-        .select('id,title,level,code')
-        .order('level', { ascending: true })
-        .order('title', { ascending: true });
+        .select('id, code, title, level')
+        .in('id', ids)
+        .order('title');
 
-      setSubjects((data as Subject[]) || []);
-    })();
-  }, [open]);
+      const list = (data as Subject[]) || [];
+      setSubjects(list);
 
-  // Telegram BackButton
-  useEffect(() => {
-    if (!tg) return;
-    if (open) {
-      tg.BackButton.show();
-      const handler = () => onClose();
-      tg.onEvent('backButtonClicked', handler);
-      return () => {
-        tg.offEvent('backButtonClicked', handler);
-        tg.BackButton.hide();
-      };
+      // восстановить активный код
+      const stored = readActiveFromStorage();
+      const initial = (stored && list.find(s => s.code === stored)?.code) || list[0]?.code || null;
+      if (initial) setActiveCode(initial);
+    } finally {
+      setLoading(false);
     }
-  }, [open, onClose, tg]);
+  }, [readActiveFromStorage]);
 
-  // Группировка по ОГЭ/ЕГЭ
-  const grouped = useMemo(() => {
-    const by = (lvl: string) => subjects.filter((s) => (s.level || '').toUpperCase().includes(lvl));
-    return {
-      ОГЭ: by('ОГЭ'),
-      ЕГЭ: by('ЕГЭ'),
+  // Когда компонент в режиме левой панели — грузим только когда она открыта
+  // Когда это контент для TopSheet — грузим сразу
+  useEffect(() => {
+    if (typeof open === 'boolean') {
+      if (open) void loadUserSubjects();
+    } else {
+      void loadUserSubjects();
+    }
+  }, [open, loadUserSubjects]);
+
+  // Слушаем внешние события, чтобы обновиться:
+  // - после добавления нового курса (subjectsChanged — если решишь диспатчить)
+  // - после переключения/выбора курса (courseChanged — для подсветки)
+  useEffect(() => {
+    const onSubjectsChanged = () => loadUserSubjects();
+    const onCourseChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ title?: string; code?: string }>;
+      if (e.detail?.code) {
+        setActiveCode(e.detail.code);
+        writeActiveToStorage(e.detail.code);
+      }
     };
-  }, [subjects]);
+    window.addEventListener('exampli:subjectsChanged', onSubjectsChanged);
+    window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    return () => {
+      window.removeEventListener('exampli:subjectsChanged', onSubjectsChanged);
+      window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    };
+  }, [loadUserSubjects, writeActiveToStorage]);
 
-  async function addSelected() {
-    if (!selected) return;
-    // сохраняем выбор пользователя как раньше (массив кодов)
-    await setUserSubjects([selected.code]);
-    window.dispatchEvent(new CustomEvent('exampli:courseChanged'));
-    onPicked(selected.title);
-    onClose(); // окно уезжает вниз (анимацию делает BottomSheet)
+  // --- UI блоки ---
+  const grid = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="grid grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+          ))}
+        </div>
+      );
+    }
+
+    if (!subjects.length) {
+      return (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted">
+          Курсы не выбраны. Нажми «Добавить» ниже.
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-3 gap-3">
+        {subjects.map((s) => {
+          const active = s.code === activeCode;
+          return (
+            <motion.button
+              key={s.id}
+              type="button"
+              layout
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setActiveCode(s.code);
+                writeActiveToStorage(s.code);
+                if (typeof onPicked === 'function') onPicked(s);
+                // шлём единое событие, чтобы «дорога» и профиль обновились
+                window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
+                  detail: { title: s.title, code: s.code },
+                }));
+              }}
+              className={[
+                'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
+                active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
+              ].join(' ')}
+            >
+              {/* свечащийся маркер активного */}
+              <AnimatePresence>
+                {active && (
+                  <motion.span
+                    layoutId="subject-active-glow"
+                    className="absolute inset-0 rounded-2xl"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    style={{
+                      boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset',
+                    }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div className="relative z-10">
+                <div className="text-2xl mb-1">📘</div>
+                <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
+                <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
+              </div>
+            </motion.button>
+          );
+        })}
+
+        {/* Плитка «+ Добавить» */}
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            if (typeof onAddClick === 'function') onAddClick();
+            else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
+          }}
+          className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+        >
+          <div className="flex flex-col items-center">
+            <div className="text-2xl">＋</div>
+            <div className="text-[10px] text-muted mt-1">Добавить</div>
+          </div>
+        </motion.button>
+      </div>
+    );
+  }, [subjects, activeCode, loading, onPicked, onAddClick, writeActiveToStorage]);
+
+  // Режим «панели слева»
+  if (typeof open === 'boolean') {
+    if (!open) return null;
+    return (
+      <>
+        <div className="side-backdrop" onClick={onClose} />
+        <aside className="side-panel">
+          <div className="side-panel-header flex items-center justify-center">
+            <div className="text-lg font-semibold">Темы</div>
+          </div>
+          <div className="side-panel-body">
+            {grid}
+          </div>
+        </aside>
+      </>
+    );
   }
 
-  return (
-    <BottomSheet open={open} onClose={onClose} title="Курсы">
-      <div className="space-y-4">
-        {/* Блоки ОГЭ/ЕГЭ */}
-        {(['ОГЭ', 'ЕГЭ'] as const).map((cat) => (
-          <CategoryBlock
-            key={cat}
-            title={cat}
-            items={grouped[cat]}
-            expanded={expanded === cat}
-            onToggle={() => setExpanded(expanded === cat ? null : cat)}
-            selectedId={selected?.id || null}
-            onSelect={(subj) => setSelected(subj)}
-          />
-        ))}
-
-        {/* Кнопка ДОБАВИТЬ */}
-        <button
-          onClick={addSelected}
-          disabled={!selected}
-          className={`w-full h-12 rounded-2xl font-semibold transition
-            ${selected ? 'bg-blue-500 text-white active:scale-[0.99]' : 'bg-white/10 text-white/60'}
-          `}
-        >
-          ДОБАВИТЬ
-        </button>
-
-        {/* “Крестик телеги” — закрывает мини‑апп, если нужно именно так */}
-        <button
-          type="button"
-          onClick={() => {
-            if (tg?.close) tg.close();
-            else onClose();
-          }}
-          className="mx-auto block text-sm text-white/50 hover:text-white"
-        >
-          Закрыть
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-/* ===== Вспомогательный компонент ===== */
-
-function CategoryBlock({
-  title,
-  items,
-  expanded,
-  onToggle,
-  selectedId,
-  onSelect,
-}: {
-  title: string;
-  items: Subject[];
-  expanded: boolean;
-  onToggle: () => void;
-  selectedId: string | null;
-  onSelect: (s: Subject) => void;
-}) {
-  return (
-    <div className="rounded-3xl border border-white/10 overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09] text-white"
-      >
-        <span className="font-semibold">{title}</span>
-        <motion.span
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ type: 'tween', duration: 0.18 }}
-          className="text-white/60"
-        >
-          ▾
-        </motion.span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="divide-y divide-white/10"
-          >
-            {items.map((s) => {
-              const active = selectedId === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => onSelect(s)}
-                  className={`w-full flex items-center justify-between px-4 py-3 transition
-                    ${active
-                      ? 'bg-blue-500/10 text-white ring-1 ring-blue-500'
-                      : 'text-white/90 hover:bg-white/[0.06]'}
-                  `}
-                >
-                  <div className="font-medium">{s.title}</div>
-                  <div className="text-xl">📘</div>
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  // Режим «контента для TopSheet» (без контейнера)
+  return <div className="pb-1">{grid}</div>;
 }
