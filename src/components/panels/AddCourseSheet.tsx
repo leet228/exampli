@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { addUserSubject } from '../../lib/userState';
 import FullScreenSheet from '../sheets/FullScreenSheet';
+import { hapticTiny } from '../../lib/haptics';
+
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -66,7 +68,7 @@ export default function AddCourseSheet({
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setPickedId(s.id)}
+                    onClick={() => { hapticTiny(); setPickedId(s.id); }}  /* ← тик при выборе курса */
                     className={`flex items-center justify-between rounded-2xl px-4 py-3 border
                       ${active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'}
                     `}
@@ -92,7 +94,7 @@ export default function AddCourseSheet({
         <button
           type="button"
           disabled={!picked}
-          onClick={save}
+          onClick={() => { hapticTiny(); save(); }}   /* ← тик при нажатии «Добавить» */
           className={`w-full rounded-2xl py-4 font-semibold transition
             ${picked ? 'btn' : 'btn-outline opacity-60 cursor-not-allowed'}
           `}

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { PropsWithChildren, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { hapticTiny } from '../../lib/haptics';
 
 type Props = {
   open: boolean;
@@ -19,7 +20,7 @@ export default function SidePanel({ open, onClose, title, useTelegramBack, hideL
     // показываем системную "Назад" и перехватываем клик
     if (useTelegramBack && tg?.BackButton) {
       tg.BackButton.show();
-      const handler = () => onClose(); // не закрываем мини-апп, а просто закрываем панель
+      const handler = () => { hapticTiny(); onClose(); }; // лёгкая вибрация + закрыть панель
       tg.onEvent?.('backButtonClicked', handler);
 
       return () => {

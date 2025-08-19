@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { hapticTiny } from '../../lib/haptics';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -131,10 +132,10 @@ export default function CoursesPanel(props: Props) {
               layout
               whileTap={{ scale: 0.98 }}
               onClick={() => {
+                hapticTiny(); // вибрация кнопки при выборе курса
                 setActiveCode(s.code);
                 writeActiveToStorage(s.code);
                 if (typeof onPicked === 'function') onPicked(s);
-                // шлём единое событие, чтобы «дорога» и профиль обновились
                 window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
                   detail: { title: s.title, code: s.code },
                 }));
@@ -154,9 +155,7 @@ export default function CoursesPanel(props: Props) {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    style={{
-                      boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset',
-                    }}
+                    style={{ boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset' }}
                   />
                 )}
               </AnimatePresence>
@@ -175,6 +174,7 @@ export default function CoursesPanel(props: Props) {
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={() => {
+            hapticTiny(); // та же вибрация на плюсик
             if (typeof onAddClick === 'function') onAddClick();
             else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
           }}

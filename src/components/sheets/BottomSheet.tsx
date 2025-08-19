@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { hapticTiny } from '../../lib/haptics';
+
 
 type BottomSheetProps = {
   open: boolean;
@@ -16,7 +18,10 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     if (!tg) return;
     if (open) {
       tg.BackButton?.show?.();
-      const handler = () => onClose();
+      const handler = () => { 
+        hapticTiny();        // ← вибрация как у обычной кнопки
+        onClose(); 
+      };
       tg.BackButton?.onClick?.(handler);
       return () => {
         try { tg.BackButton?.offClick?.(handler); } catch {}
