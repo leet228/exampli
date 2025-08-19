@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import BottomSheet from './BottomSheet';
 import { supabase } from '../../lib/supabase';
+import { hapticTiny } from '../../lib/haptics';
 
 export default function EnergySheet({ open, onClose }: { open: boolean; onClose: () => void }){
   const [energy, setEnergy] = useState(25);
@@ -25,7 +26,12 @@ export default function EnergySheet({ open, onClose }: { open: boolean; onClose:
           <div className="font-semibold">Безлимит (демо)</div>
           <div className="text-sm text-muted">Открой супер-режим — скоро</div>
         </button>
-        <button className="btn w-full" onClick={() => alert('Пополнение энергии — скоро')}>+ Пополнить</button>
+        <button
+          className="btn w-full"
+          onClick={() => { hapticTiny(); alert('Пополнение энергии — скоро'); }}
+        >
+          + Пополнить
+        </button>
       </div>
     </BottomSheet>
   );

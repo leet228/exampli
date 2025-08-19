@@ -50,3 +50,19 @@ export function hapticSlideClose() {
     if ('vibrate' in navigator) (navigator as any).vibrate(8);
   } catch {}
 }
+
+export function hapticSelect() {
+  try {
+    if (typeof window === 'undefined') return;
+    const tg = (window as any)?.Telegram?.WebApp?.HapticFeedback;
+
+    // В Telegram / iOS — нативный selection
+    if (tg?.selectionChanged) { tg.selectionChanged(); return; }
+
+    // Альтернатива: один «средний» удар, похожий по ощущению
+    if (tg?.impactOccurred) { tg.impactOccurred('medium'); return; }
+
+    // Фолбэк для веба (Android vibration API)
+    if ('vibrate' in navigator) (navigator as any).vibrate([12]);
+  } catch {}
+}

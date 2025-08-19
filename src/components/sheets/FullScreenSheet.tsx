@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { hapticTiny } from '../../lib/haptics';
 
 type FullScreenSheetProps = {
   open: boolean;
@@ -12,18 +13,21 @@ type FullScreenSheetProps = {
 export default function FullScreenSheet({ open, onClose, title, children }: FullScreenSheetProps) {
   // Telegram BackButton
   useEffect(() => {
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (!tg) return;
-    if (open) {
-      tg.BackButton?.show?.();
-      const handler = () => onClose();
-      tg.BackButton?.onClick?.(handler);
-      return () => {
-        try { tg.BackButton?.offClick?.(handler); } catch {}
-        tg.BackButton?.hide?.();
-      };
-    }
-  }, [open, onClose]);
+      const tg = (window as any)?.Telegram?.WebApp;
+      if (!tg) return;
+      if (open) {
+        tg.BackButton?.show?.();
+        const handler = () => { 
+          hapticTiny();        // ← вибрация как у обычной кнопки
+          onClose(); 
+        };
+        tg.BackButton?.onClick?.(handler);
+        return () => {
+          try { tg.BackButton?.offClick?.(handler); } catch {}
+          tg.BackButton?.hide?.();
+        };
+      }
+    }, [open, onClose]);
 
   // Лочим фон
   useEffect(() => {
