@@ -12,7 +12,7 @@ type ItemProps = {
 const Item = ({ to, label = '', iconSrc, iconEmoji }: ItemProps) => (
   <NavLink
     to={to}
-    onPointerDown={hapticTiny} // моментальный отклик при тапе
+     // моментальный отклик при тапе
     onClick={hapticTiny}       // резерв на случай отсутствия Pointer Events
     className={({ isActive }) =>
       `flex flex-col items-center gap-1 px-4 py-2 rounded-2xl ${
