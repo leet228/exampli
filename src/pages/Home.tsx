@@ -160,17 +160,10 @@ export default function Home() {
 
       {/* плавающая кнопка «Темы» и левая панель */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
+
       <TopicsPanel
         open={openTopics}
         onClose={() => setOpenTopics(false)}
-        onPicked={(s) => {
-          // прямой выбор из левой панели
-          setActiveCode(s.code);
-          setCourseTitle(s.title);
-          writeActiveToStorage(s.code);
-          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
-          setOpenTopics(false);
-        }}
       />
 
       {/* отступ, чтобы дорога не упиралась в кнопку тем */}
