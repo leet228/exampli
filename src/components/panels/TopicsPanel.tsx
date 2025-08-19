@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import SidePanel from './SidePanel';
+import { hapticTiny, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 
 type Subject   = { id: number; code: string; title: string };
 type Topic     = { id: number; subject_id: number; title: string; order_index: number };
@@ -114,13 +115,18 @@ export default function TopicsPanel({ open, onClose }: Props) {
             <div key={t.id} className="rounded-2xl border border-white/10 overflow-hidden">
               {/* Тема (как на первом скрине) */}
               <button
-                onClick={() => setExpandedTopicId(opened ? null : t.id)}
+                onClick={() => {
+                  const willOpen = !opened;
+                  if (willOpen) hapticSlideReveal();
+                  else hapticSlideClose();
+                  setExpandedTopicId(willOpen ? t.id : null);
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09]"
               >
                 <div className="w-11 h-11 rounded-2xl grid place-items-center bg-white/10 text-xl">✚</div>
                 <div className="flex-1">
                   <div className="text-base font-semibold">{t.title}</div>
-                  {/* можно вывести «N АБСЧНИТТЕ» позже, сейчас опустим прогресс */}
+                  {/* прогресс можно добавить позже */}
                 </div>
                 <motion.span
                   animate={{ rotate: opened ? 90 : 0 }}
@@ -140,7 +146,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
                     {subs.map(st => (
                       <button
                         key={st.id}
-                        onClick={() => pickSubtopic(t, st)}
+                        onClick={() => { hapticTiny(); pickSubtopic(t, st); }}
                         className="w-full text-left px-4 py-3 hover:bg-white/[0.06]"
                       >
                         {st.title}
