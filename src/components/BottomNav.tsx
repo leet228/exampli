@@ -1,16 +1,19 @@
 import { NavLink } from 'react-router-dom';
 import { ReactNode } from 'react';
+import { hapticTiny } from '../lib/haptics'; // поправь путь под свой проект
 
 type ItemProps = {
   to: string;
   label?: string;
-  iconSrc?: string;       // путь к SVG/PNG в public, например "/stickers/home.svg"
-  iconEmoji?: ReactNode;  // если хочешь эмодзи или React-иконку
+  iconSrc?: string;
+  iconEmoji?: ReactNode;
 };
 
 const Item = ({ to, label = '', iconSrc, iconEmoji }: ItemProps) => (
   <NavLink
     to={to}
+    onPointerDown={hapticTiny} // моментальный отклик при тапе
+    onClick={hapticTiny}       // резерв на случай отсутствия Pointer Events
     className={({ isActive }) =>
       `flex flex-col items-center gap-1 px-4 py-2 rounded-2xl ${
         isActive ? 'bg-white/10' : 'hover:bg-white/5'
@@ -22,7 +25,6 @@ const Item = ({ to, label = '', iconSrc, iconEmoji }: ItemProps) => (
     ) : (
       <span className="text-lg">{iconEmoji}</span>
     )}
-    {/* если подписи не нужны — оставь пусто; для доступности можно sr-only */}
     {label ? (
       <div className="text-[11px] text-muted">{label}</div>
     ) : (
