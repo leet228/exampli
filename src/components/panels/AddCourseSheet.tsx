@@ -70,21 +70,21 @@ export default function AddCourseSheet({
                     key={s.id}
                     type="button"
                     onClick={() => { hapticSelect(); setPickedId(s.id); }}  /* ← тик при выборе курса */
-                    className={`flex items-center justify-between rounded-2xl px-4 py-3 border
+                    className={`flex items-center justify-between rounded-2xl h-14 px-3 border
                       ${active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'}
                     `}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Иконка курса без обводки */}
+                      {/* Иконка курса без обводки, крупнее и ближе к краю */}
                       <img
                         src={imgSrc}
                         alt={s.title}
-                        className="w-16 h-16 object-contain"
+                        className="w-10 h-10 object-contain shrink-0"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
-                      <div className="text-left">
-                        <div className="font-semibold">{s.title}</div>
-                        <div className="text-[11px] text-muted">{s.level}</div>
+                      {/* Только название курса; без уровня/кода. Вертикально по центру ряда */}
+                      <div className="text-left leading-tight">
+                        <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
                       </div>
                     </div>
                     <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
