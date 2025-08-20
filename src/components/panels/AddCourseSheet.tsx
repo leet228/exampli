@@ -75,15 +75,13 @@ export default function AddCourseSheet({
                     `}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Иконка курса. Если файла нет — будет пусто (img скрываем onError), при этом контейнер сохраняет размер */}
-                      <div className="w-10 h-10 rounded-xl bg-white/10 overflow-hidden flex items-center justify-center">
-                        <img
-                          src={imgSrc}
-                          alt={s.title}
-                          className="w-20 h-20 object-contain"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      </div>
+                      {/* Иконка курса без обводки */}
+                      <img
+                        src={imgSrc}
+                        alt={s.title}
+                        className="w-12 h-12 object-contain"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
                       <div className="text-left">
                         <div className="font-semibold">{s.title}</div>
                         <div className="text-[11px] text-muted">{s.level}</div>
