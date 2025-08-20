@@ -212,24 +212,29 @@ body::before{
   96% { transform: scaleY(1); }
 }
 
-/* ===== Нижний HUD: разделитель сверху как в дуо ===== */
-.bottomnav{
-  position: fixed;
-}
+/* ===== Нижний HUD: только разделитель сверху ===== */
+.bottomnav{ position:fixed; }
 .bottomnav::before{
   content:"";
-  position:absolute;
-  left:0; right:0; top:-12px;
-  height:12px;                       /* воздушный зазор */
-  background: linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.35));
-  border-top: 1px solid rgba(255,255,255,.06);  /* тонкая светлая линия-разделитель */
+  position:absolute; left:0; right:0; top:-10px;
+  height:10px;
+  background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.35));
+  border-top: 1px solid rgba(255,255,255,.08); /* тонкая линия */
   pointer-events:none;
 }
 
-/* сам бар немного «мягче» */
+/* сам бар без обводок */
 .hud-bar{
+  background: color-mix(in oklab, var(--card) 92%, black 0%);
+  backdrop-filter: blur(8px);
+  border: none;
   box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  border-radius: 22px;
 }
+
+/* Квадратная рамка активного таба (не скейлится) */
+.bottomnav a .active-ring{ opacity:0; }
+.bottomnav a[aria-current="page"] .active-ring{ opacity:1; }
 
 /* ====== Запрет выделения текста и callout ====== */
 * {
