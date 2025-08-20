@@ -58,7 +58,7 @@ export default function AddCourseSheet({
   return (
     <FullScreenSheet open={open} onClose={onClose} title="Курсы">
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
-      <div className="space-y-5 pb-32">
+      <div className="space-y-5 pb-36">
         {Object.entries(grouped).map(([level, items]) => (
           <div key={level}>
             <div className="px-1 pb-2 text-xs tracking-wide text-muted uppercase">{level}</div>
@@ -110,7 +110,7 @@ export default function AddCourseSheet({
 
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
       <div className="fixed inset-x-0 bottom-0 z-50 bg-[color:var(--surface,#0b0b0c)] border-t border-white/10">
-        <div className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+        <div className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+22px)]">
           <button
             type="button"
             disabled={!picked}
