@@ -110,7 +110,7 @@ export default function AddCourseSheet({
 
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
       <div className="fixed inset-x-0 bottom-0 z-50 bg-[color:var(--surface,#0b0b0c)] border-t border-white/10">
-        <div className="px-4 pt-3 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
           <button
             type="button"
             disabled={!picked}
