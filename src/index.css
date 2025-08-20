@@ -4,11 +4,11 @@
 
 /* ====== Тема ====== */
 :root {
-  --bg: #111111;
+  --bg: #2b3841;
   --card: #0f1726;
   --text: #e5edff;
   --muted: #9bb0d3;
-  --accent: #3b82f6;
+  --accent: #0091ff;
 
   /* геометрия HUD */
   --hud-top: calc(env(safe-area-inset-top) + 96px); /* отступ от верха Telegram */
