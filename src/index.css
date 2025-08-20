@@ -217,12 +217,12 @@ body::before{
 .bottomnav::before{
   content:"";
   position:absolute; left:0; right:0; top:0;
-  height:3px;
+  height:2px;
   background: rgba(255,255,255,.12); /* тонкая разделительная линия */
   pointer-events:none;
 }
 .hud-bar{
-  background: transparent;   /* такой же как фон */
+  background: #191919;   /* такой же как фон */
   backdrop-filter: none;
   border: none;
   box-shadow: none;
