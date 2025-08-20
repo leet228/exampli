@@ -64,6 +64,7 @@ export default function AddCourseSheet({
             <div className="grid gap-2">
               {items.map((s) => {
                 const active = s.id === pickedId;
+                const imgSrc = `/subjects/${s.code}.svg`; // svg лежат в public/subjects/<code>.svg
                 return (
                   <button
                     key={s.id}
@@ -74,7 +75,15 @@ export default function AddCourseSheet({
                     `}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">📘</div>
+                      {/* Иконка курса. Если файла нет — будет пусто (img скрываем onError), при этом контейнер сохраняет размер */}
+                      <div className="w-10 h-10 rounded-xl bg-white/10 overflow-hidden flex items-center justify-center">
+                        <img
+                          src={imgSrc}
+                          alt={s.title}
+                          className="w-8 h-8 object-contain"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
                       <div className="text-left">
                         <div className="font-semibold">{s.title}</div>
                         <div className="text-[11px] text-muted">{s.level}</div>
