@@ -4,7 +4,7 @@
 
 /* ====== Тема ====== */
 :root {
-  --bg: #2b3841;
+  --bg: #373737;
   --card: #0f1726;
   --text: #e5edff;
   --muted: #9bb0d3;
@@ -137,22 +137,35 @@ html, body, #root { overflow-x: hidden; }
 .progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
 
-.topics-hero { top: calc(var(--hud-top) + var(--hud-h) + 10px); }
-
-/* ===== кнопка-баннер как у Дуо ===== */
+/* ===== кнопка-баннер как у Дуо (wide) ===== */
 .topics-hero{
-  position:fixed;
-  top:calc(var(--hud-top) + var(--hud-h) + 10px);
-  left:0; right:0;            /* центрирование по viewport */
-  margin-inline:auto;
-  width:max-content;          /* по контенту */
-  max-width:calc(100% - 28px);
-  z-index:39;
-  display:inline-flex; align-items:center; gap:8px;
-  border-radius:20px; padding:10px 14px;
-  border:1px solid rgba(255,255,255,.10);
-  background:linear-gradient(135deg,rgba(236,72,153,.75),rgba(99,102,241,.75));
-  color:#fff; box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(4px);
+  position: fixed;
+  top: calc(var(--hud-top) + var(--hud-h) + 10px);
+  /* равные поля по краям, чтобы смотреться «вровень» с UI */
+  left: 12px;
+  right: 12px;
+
+  /* на всю ширину контейнера */
+  width: auto;
+  max-width: none;
+
+  z-index: 39;
+
+  /* компоновка: текст слева, стрелка справа */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  /* визуал */
+  height: 60px;                 /* близко к скрину */
+  padding: 12px 16px;           /* вертикальный/горизонтальный ритм */
+  border-radius: 18px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: var(--accent);    /* синий баннер */
+  box-shadow: 0 8px 22px rgba(0,0,0,.35), inset 0 -2px 0 rgba(0,0,0,.12);
+  color: #fff;
+  backdrop-filter: blur(4px);
 }
 
 :root { color-scheme: dark; }
