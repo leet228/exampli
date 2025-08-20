@@ -217,7 +217,7 @@ body::before{
 .bottomnav::before{
   content:"";
   position:absolute; left:0; right:0; top:0;
-  height:2px;
+  height:3px;
   background: rgba(255,255,255,.12); /* тонкая разделительная линия */
   pointer-events:none;
 }
