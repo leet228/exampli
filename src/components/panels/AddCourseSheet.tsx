@@ -113,7 +113,8 @@ export default function AddCourseSheet({
         className="
           sticky bottom-0 left-0 right-0
           -mx-4 px-4
-          pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+24px)]
+          pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]
+          mb-[-16px]
           bg-[color:var(--surface,#0b0b0c)]
           border-t border-white/10
         "
