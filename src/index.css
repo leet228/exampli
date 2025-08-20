@@ -4,7 +4,7 @@
 
 /* ====== Тема ====== */
 :root {
-  --bg: #020408;
+  --bg: #111111;
   --card: #0f1726;
   --text: #e5edff;
   --muted: #9bb0d3;
@@ -197,4 +197,13 @@ body::before{
   0%, 88%, 100% { transform: scaleY(1); }
   92% { transform: scaleY(0.2); }
   96% { transform: scaleY(1); }
+}
+
+/* ====== Запрет выделения текста и callout ====== */
+* {
+  -webkit-user-select: none; /* Safari / iOS */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  user-select: none;         /* Современные браузеры */
+  -webkit-touch-callout: none; /* Убирает контекстное меню iOS */
 }
