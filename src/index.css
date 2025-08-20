@@ -213,20 +213,33 @@ body::before{
 }
 
 /* нижний HUD = та же подложка, что и фон */
-.bottomnav { position: fixed; }
+.bottomnav { 
+  position: fixed; 
+  bottom: 20px;            /* ← подняли бар вверх на 20px (подбери значение) */
+  left: 0; 
+  right: 0;
+}
+
+/* разделительная полоска теперь тоже выше */
 .bottomnav::before{
   content:"";
-  position:absolute; left:0; right:0; top:0;
+  position:absolute; 
+  left:0; 
+  right:0; 
+  top:-10px;               /* ← смещаем полоску выше бара (было 0) */
   height:2px;
-  background: rgba(255,255,255,.12); /* тонкая разделительная линия */
+  background: rgba(255,255,255,.12);
   pointer-events:none;
 }
+
 .hud-bar{
-  background: #191919;   /* такой же как фон */
+  background: #191919;   /* фон тот же */
   backdrop-filter: none;
   border: none;
   box-shadow: none;
   border-radius: 0;
+  margin-left: 14px;
+  margin-right: 14px;
 }
 
 .bottomnav a .active-ring { opacity:0; }
