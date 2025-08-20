@@ -223,39 +223,41 @@ body::before{
 }
 
 /* разделительная полоска теперь тоже выше */
+
+/* разделительная полоска — в самом верху контейнера */
 .bottomnav::before{
+  left: 14px;
+  right: 14px;
   content:"";
   position:absolute; 
   left:0; 
   right:0; 
-  top:-10px;               /* ← смещаем полоску выше бара (было 0) */
+  top:0;                  /* ← линия ровно по верхней кромке bottomnav */
   height:2px;
   background: rgba(255,255,255,.12);
   pointer-events:none;
 }
 
+/* сам бар без «карточности» — фон берём из .bottomnav */
 .hud-bar{
-  background: #191919;   /* фон тот же */
+  background: transparent;    /* ← убираем локальный фон, он теперь у .bottomnav */
   backdrop-filter: none;
   border: none;
   box-shadow: none;
   border-radius: 0;
   margin-left: 14px;
-  margin-right: 14px;
+  margin-right: 14px;         /* узкий бар: не до краёв */
 }
 
 .bottomnav a .active-ring { opacity:0; }
 /* базовое состояние — скрыта */
+/* рамка активного — меньше по габаритам */
 .bottomnav a .active-ring { 
   opacity: 0;
-  inset: 2px;                 /* ← рамка меньше. Подбери 2–6px */
-  border-radius: 10px;        /* квадратность как нужно */
+  inset: 2px;                 /* поджали рамку; увеличь до 4–6px если нужно ещё меньше */
+  border-radius: 10px;        /* или 0 для совсем квадратных углов */
 }
-
-/* показать только у активного */
-.bottomnav a[aria-current="page"] .active-ring { 
-  opacity: 1; 
-}
+.bottomnav a[aria-current="page"] .active-ring { opacity: 1; }
 
 /* больше воздуха у краёв экрана */
 .bottomnav .hud-bar{
