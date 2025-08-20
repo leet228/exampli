@@ -79,7 +79,7 @@ export default function AddCourseSheet({
                       <img
                         src={imgSrc}
                         alt={s.title}
-                        className="w-15 h-15 object-contain shrink-0"
+                        className="w-14 h-14 object-contain shrink-0"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
                       {/* Только название курса; без уровня/кода. Вертикально по центру ряда */}
