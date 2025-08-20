@@ -58,7 +58,7 @@ export default function AddCourseSheet({
   return (
     <FullScreenSheet open={open} onClose={onClose} title="Курсы">
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
-      <div className="space-y-5 pb-28">
+      <div className="space-y-5 pb-32">
         {Object.entries(grouped).map(([level, items]) => (
           <div key={level}>
             <div className="px-1 pb-2 text-xs tracking-wide text-muted uppercase">{level}</div>
@@ -109,29 +109,19 @@ export default function AddCourseSheet({
       </div>
 
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
-      <div
-        className="
-          sticky bottom-0 left-0 right-0
-          -mx-4 px-4
-          pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]
-          mb-[-26px]
-          bg-[color:var(--surface,#0b0b0c)]
-          border-t border-white/10
-        "
-      >
-        <button
-          type="button"
-          disabled={!picked}
-          onClick={() => {
-            hapticSelect();
-            save();
-          }}
-          className={`w-full rounded-2xl py-4 font-semibold transition
-            ${picked ? 'btn' : 'bg-[#2b2d31] text-white/60 cursor-not-allowed'}
-          `}
-        >
-          {picked ? 'Добавить' : 'Выбери курс'}
-        </button>
+      <div className="fixed inset-x-0 bottom-0 z-50 bg-[color:var(--surface,#0b0b0c)] border-t border-white/10">
+        <div className="px-4 pt-3 pb-[env(safe-area-inset-bottom,0px)]">
+          <button
+            type="button"
+            disabled={!picked}
+            onClick={() => { hapticSelect(); save(); }}
+            className={`w-full rounded-2xl py-4 font-semibold transition
+              ${picked ? 'btn' : 'bg-[#2b2d31] text-white/60 cursor-not-allowed'}
+            `}
+          >
+            {picked ? 'Добавить' : 'Выбери курс'}
+          </button>
+        </div>
       </div>
     </FullScreenSheet>
   );
