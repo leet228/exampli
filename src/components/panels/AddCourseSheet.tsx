@@ -79,7 +79,7 @@ export default function AddCourseSheet({
                       <img
                         src={imgSrc}
                         alt={s.title}
-                        className="w-20 h-20 object-contain"
+                        className="w-16 h-16 object-contain"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
                       <div className="text-left">
