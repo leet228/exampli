@@ -230,7 +230,23 @@ body::before{
 }
 
 .bottomnav a .active-ring { opacity:0; }
-.bottomnav a[aria-current="page"] .active-ring { opacity:1; }
+/* базовое состояние — скрыта */
+.bottomnav a .active-ring { 
+  opacity: 0;
+  inset: 4px;                 /* ← рамка меньше. Подбери 2–6px */
+  border-radius: 10px;        /* квадратность как нужно */
+}
+
+/* показать только у активного */
+.bottomnav a[aria-current="page"] .active-ring { 
+  opacity: 1; 
+}
+
+/* больше воздуха у краёв экрана */
+.bottomnav .hud-bar{
+  margin-left: 14px;   /* подбери 12–20px по вкусу */
+  margin-right: 14px;
+}
 
 /* ====== Запрет выделения текста и callout ====== */
 * {
