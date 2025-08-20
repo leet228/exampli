@@ -174,8 +174,8 @@ html, body, #root { background-color: var(--bg); }
 body::before{
   content:"";
   position:fixed;
-  inset:-20vmax;            /* перекрыть резиновый bounce */
-  background:var(--bg);
+  inset:-20vmax;
+  background:#fbbb32; /* ← вместо var(--bg) */
   z-index:-1;
 }
 
