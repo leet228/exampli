@@ -219,7 +219,7 @@ body::before{
 /* нижний HUD = та же подложка, что и фон */
 .bottomnav { 
   position: fixed; 
-  bottom: 5px;
+  bottom: 1px;
   left: 0; 
   right: 0;
   background: var(--bg);      /* ← заливаем всю площадь ниже линии */
