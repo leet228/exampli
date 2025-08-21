@@ -88,7 +88,7 @@ html, body, #root { overflow-x: hidden; }
 .sheet-backdrop{
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.952);
+  background: #121e24;
   backdrop-filter: blur(28px);
   z-index: var(--z-bottom-sheet);
 }
@@ -124,7 +124,7 @@ html, body, #root { overflow-x: hidden; }
 .drop-backdrop{
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: #121e24;
   backdrop-filter: blur(2px);
   z-index: var(--z-top-sheet);
 }
@@ -185,7 +185,7 @@ html, body, #root { overflow-x: hidden; }
   border-radius: 20px;
   border: 1px solid rgba(0,0,0,.08);
 
-  background: #2563eb;          /* насыщенный синий (tailwind blue-600) */
+  background: #1cb0f6;          /* насыщенный синий (tailwind blue-600) */
   color: #fff;
 
   box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 -2px 0 rgba(0,0,0,.12);
