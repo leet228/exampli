@@ -14,7 +14,6 @@ const Item = ({ to, iconSrc }: ItemProps) => (
       aria-hidden
       className="active-ring pointer-events-none absolute inset-1 border-2 border-[#3BC4FF] rounded-md"
     />
-    {/* уменьшается только иконка */}
     <img
       src={iconSrc}
       alt=""
@@ -30,7 +29,9 @@ export default function BottomNav() {
         {/* узкий бар: немного не до краёв экрана */}
         <div className="hud-bar mx-3.5 flex items-center justify-around py-2 pb-6">
           <Item to="/"             iconSrc="/stickers/home.svg" />
-          <Item to="/rating"       iconSrc="/stickers/trophy.svg" />
+          <Item to="/quests"       iconSrc="/stickers/quests.svg" />
+          <Item to="/battle"       iconSrc="/stickers/battle.svg" />
+          <Item to="/ai"           iconSrc="/stickers/ai.svg" />
           <Item to="/subscription" iconSrc="/stickers/diamond.svg" />
           <Item to="/profile"      iconSrc="/stickers/profile.svg" />
         </div>
