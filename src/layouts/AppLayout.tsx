@@ -12,7 +12,7 @@ export default function AppLayout() {
   // HUD только на «Дороге»
   const showHUD = pathname === '/';
   // нижняя навигация на этих маршрутах
-  const showBottom = ['/', '/rating', '/subscription', '/profile'].includes(pathname);
+  const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
 
   const [bootDone, setBootDone] = useState(false);
   const [bootData, setBootData] = useState<BootData | null>(null);
