@@ -97,7 +97,8 @@ export default function HUD() {
       {/* Верхний HUD — фон как у всей страницы */}
       <div className="hud-fixed bg-[color:var(--bg)]">
         <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-0">
-          <div className="grid grid-cols-3 items-center">
+          {/* 4 равные колонки: Курс — Стрик — Коины — Энергия */}
+          <div className="grid grid-cols-4 items-center">
             {/* Курс (слева) */}
             <button
               type="button"
@@ -106,32 +107,30 @@ export default function HUD() {
               aria-label="Выбрать курс"
             >
               <span className="text-lg">🧩</span>
-              <span className="truncate max-w-[180px]">{courseTitle}</span>
+              <span className="truncate max-w-[160px]">{courseTitle}</span>
             </button>
 
-            {/* Центр: стрик + коины */}
-            <div className="justify-self-center flex items-center gap-4">
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
-                className="flex items-center gap-2 text-sm text-[color:var(--muted)]"
-                aria-label="Стрик"
-              >
-                <img src="/stickers/fire.svg" alt="" aria-hidden className="w-5 h-5" />
-                {streak}
-              </button>
+            {/* Стрик */}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
+              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              aria-label="Стрик"
+            >
+              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-5 h-5" />
+              <span className="tabular-nums">{streak}</span>
+            </button>
 
-              {/* Коины — между стриком и энергией */}
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
-                className="flex items-center gap-2 text-sm text-[color:var(--muted)]"
-                aria-label="Коины"
-              >
-                <span className="font-medium">{coins}</span>
-                <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-5 h-5" />
-              </button>
-            </div>
+            {/* Коины (иконка + число справа) */}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
+              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              aria-label="Коины"
+            >
+              <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-5 h-5" />
+              <span className="tabular-nums font-medium">{coins}</span>
+            </button>
 
             {/* Энергия (справа) */}
             <button
@@ -141,7 +140,7 @@ export default function HUD() {
               aria-label="Энергия"
             >
               <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-5 h-5" />
-              {energy}
+              <span className="tabular-nums">{energy}</span>
             </button>
           </div>
         </div>
