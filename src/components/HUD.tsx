@@ -6,6 +6,12 @@ import TopicsPanel from './panels/TopicsPanel';
 import AddCourseSheet from './panels/AddCourseSheet';
 import { setUserSubjects } from '../lib/userState';
 import CoursesPanel from './sheets/CourseSheet'
+import FullScreenSheet from './sheets/FullScreenSheet';
+import CoinSheet from './sheets/CoinSheet';
+
+
+const [coins, setCoins] = useState(0);      // число коинов (пока статично)
+const [coinsOpen, setCoinsOpen] = useState(false); // фуллскрин шторка
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -98,21 +104,33 @@ export default function HUD() {
               className="flex items-center gap-2"
               aria-label="Выбрать курс"
             >
-              {/* тут позже подставишь svg курса вместо эмодзи */}
               <span className="text-lg">🧩</span>
               <span className="truncate max-w-[180px]">{courseTitle}</span>
             </button>
 
-            {/* Стрик (по центру) */}
-            <button
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
-              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
-              aria-label="Стрик"
-            >
-              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-5 h-5" />
-              {streak}
-            </button>
+            {/* Центр: стрик + коины */}
+            <div className="justify-self-center flex items-center gap-4">
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
+                className="flex items-center gap-2 text-sm text-[color:var(--muted)]"
+                aria-label="Стрик"
+              >
+                <img src="/stickers/fire.svg" alt="" aria-hidden className="w-5 h-5" />
+                {streak}
+              </button>
+
+              {/* Коины — новая кнопка */}
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
+                className="flex items-center gap-2 text-sm text-[color:var(--muted)]"
+                aria-label="Коины"
+              >
+                <span className="font-medium">{coins}</span>
+                <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-5 h-5" />
+              </button>
+            </div>
 
             {/* Энергия (справа) */}
             <button
@@ -147,6 +165,9 @@ export default function HUD() {
       <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
+
+      {/* Новая шторка для коинов */}
+      <CoinSheet open={coinsOpen} onClose={() => setCoinsOpen(false)} />
 
       <AddCourseSheet
         open={addOpen}
