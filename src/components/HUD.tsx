@@ -87,43 +87,47 @@ export default function HUD() {
   }, [addOpen, open]);
 
   return (
-    <div className="hud-fixed bg-[color:var(--bg)]/90 backdrop-blur border-b border-white/5">
-      <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-2">
-        <div className="flex items-center justify-between">
-          {/* Курс */}
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('course'); }}
-            className="badge"
-            aria-label="Выбрать курс"
-          >
-            <span className="text-lg">🧩</span>
-            <span className="truncate max-w-[180px]">{courseTitle}</span>
-          </button>
+    <>
+      <div className="hud-fixed bg-[color:var(--bg)]">
+        <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-2">
+          <div className="grid grid-cols-3 items-center">
+            {/* Курс (слева) */}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('course'); }}
+              className="flex items-center gap-2"
+              aria-label="Выбрать курс"
+            >
+              {/* тут позже подставишь svg курса вместо эмодзи */}
+              <span className="text-lg">🧩</span>
+              <span className="truncate max-w-[180px]">{courseTitle}</span>
+            </button>
 
-          {/* Статусы */}
-          <div className="flex items-center gap-2">
+            {/* Стрик (по центру) */}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
-              className="badge" aria-label="Стрик"
+              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              aria-label="Стрик"
             >
-              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-4 h-4" />
+              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-5 h-5" />
               {streak}
             </button>
+
+            {/* Энергия (справа) */}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('energy'); }}
-              className="badge" aria-label="Энергия"
+              className="justify-self-end flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              aria-label="Энергия"
             >
-              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-4 h-4" />
+              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-5 h-5" />
               {energy}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ВЕРХНЯЯ ШТОРКА: выбор/управление курсами */}
       <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
         <CoursesPanel
           onPicked={async (s: Subject) => {
@@ -132,32 +136,28 @@ export default function HUD() {
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
             setOpen(null);
           }}
-          onAddClick={openAddCourse} // из верхней шторки открываем нижнюю «Добавить курс»
+          onAddClick={openAddCourse}
         />
       </TopSheet>
 
-      {/* ВЕРХНЯЯ ШТОРКА: стрик */}
       <TopSheet open={open === 'streak'} onClose={() => setOpen(null)} anchor={anchorRef} title="Стрик">
         <StreakSheetBody />
       </TopSheet>
 
-      {/* ВЕРХНЯЯ ШТОРКА: энергия */}
       <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
-      {/* НИЖНЯЯ ШТОРКА: «Добавить курс» — перекрывает HUD и экран полностью */}
       <AddCourseSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onAdded={(s) => {
-          // s: { id, code, title, level } — приходит из AddCourseSheet
           setCourseTitle(s.title);
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
           setAddOpen(false);
         }}
       />
-    </div>
+    </>
   );
 }
 
