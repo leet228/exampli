@@ -124,7 +124,7 @@ html, body, #root { overflow-x: hidden; }
 .drop-backdrop{
   position: fixed;
   inset: 0;
-  background: #121e24;
+  background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(2px);
   z-index: var(--z-top-sheet);
 }
@@ -134,7 +134,7 @@ html, body, #root { overflow-x: hidden; }
   right: 12px;
   z-index: calc(var(--z-top-sheet) + 1);
   border-radius: 16px;
-  background: #000;  
+  background: #121e24;  
   border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 20px 60px rgba(0,0,0,.35);
   overflow: hidden;
