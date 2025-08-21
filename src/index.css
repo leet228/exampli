@@ -257,8 +257,11 @@ body::before{
 /* рамка активного — меньше по габаритам */
 .bottomnav a .active-ring { 
   opacity: 0;
-  inset: 8px;                 /* поджали рамку; увеличь до 4–6px если нужно ещё меньше */
-  border-radius: 10px;        /* или 0 для совсем квадратных углов */
+  top: 8px;
+  bottom: 8px;
+  left: 12px;   /* ← больше внутрь */
+  right: 12px;  /* ← больше внутрь */
+  border-radius: 10px;
 }
 .bottomnav a[aria-current="page"] .active-ring { opacity: 1; }
 
