@@ -117,7 +117,7 @@ export default function HUD() {
               className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
-              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-9 h-9" />
+              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-10 h-10" />
               <span className="tabular-nums">{streak}</span>
             </button>
 
