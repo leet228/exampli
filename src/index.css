@@ -88,7 +88,7 @@ html, body, #root { overflow-x: hidden; }
 .sheet-backdrop{
   position: fixed;
   inset: 0;
-  background: #121e24;
+  background: rgba(0, 0, 0, 0.952);
   backdrop-filter: blur(28px);
   z-index: var(--z-bottom-sheet);
 }
