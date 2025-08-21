@@ -26,7 +26,7 @@ const Item = ({ to, iconSrc }: ItemProps) => (
 export default function BottomNav() {
   return (
     <nav className="bottomnav fixed left-0 right-0 z-[45] 
-                    bottom-[max(env(safe-area-inset-bottom),14px)] 
+                    bottom-[max(env(safe-area-inset-bottom),30px)] 
                     pb-[max(env(safe-area-inset-bottom),12px)]">
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
