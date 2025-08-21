@@ -11,8 +11,8 @@
   --accent: #0091ff;
 
   /* геометрия HUD */
-  --hud-top: calc(env(safe-area-inset-top) + 92px); /* отступ от верха Telegram */
-  --hud-h: 120px;                                    /* ВЫСОТА HUD — как просил */
+  --hud-top: calc(env(safe-area-inset-top) + 62px); /* отступ от верха Telegram */
+  --hud-h: 96px;                                    /* ВЫСОТА HUD — как просил */
   --z-hud: 40;
   --z-top-sheet: 70;
   --z-bottom-sheet: 80;
