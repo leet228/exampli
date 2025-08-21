@@ -2,16 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
-import TopicsPanel from './panels/TopicsPanel';
 import AddCourseSheet from './panels/AddCourseSheet';
 import { setUserSubjects } from '../lib/userState';
-import CoursesPanel from './sheets/CourseSheet'
-import FullScreenSheet from './sheets/FullScreenSheet';
+import CoursesPanel from './sheets/CourseSheet';
 import CoinSheet from './sheets/CoinSheet';
-
-
-const [coins, setCoins] = useState(0);      // число коинов (пока статично)
-const [coinsOpen, setCoinsOpen] = useState(false); // фуллскрин шторка
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -21,6 +15,10 @@ export default function HUD() {
   const [courseTitle, setCourseTitle] = useState('Курс');
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
+
+  // коины и их шторка
+  const [coins, setCoins] = useState(0);          // TODO: подставить из БД, если нужно
+  const [coinsOpen, setCoinsOpen] = useState(false);
 
   // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
@@ -41,6 +39,8 @@ export default function HUD() {
     if (user) {
       setStreak(user.streak ?? 0);
       setEnergy(((user.hearts ?? 5) as number) * 5);
+      // если будет поле coins — раскомментируй:
+      // setCoins(user.coins ?? 0);
     }
 
     if (user?.id) {
@@ -90,12 +90,13 @@ export default function HUD() {
   // подпинываем плавающие элементы (баннер) пересчитать позицию
   useEffect(() => {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
-  }, [addOpen, open]);
+  }, [addOpen, open, coinsOpen]);
 
   return (
     <>
+      {/* Верхний HUD — фон как у всей страницы */}
       <div className="hud-fixed bg-[color:var(--bg)]">
-        <div ref={anchorRef} className="max-w-xl mx-auto px-5 /* py-2 → */ py-0">
+        <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-0">
           <div className="grid grid-cols-3 items-center">
             {/* Курс (слева) */}
             <button
@@ -120,7 +121,7 @@ export default function HUD() {
                 {streak}
               </button>
 
-              {/* Коины — новая кнопка */}
+              {/* Коины — между стриком и энергией */}
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
@@ -146,6 +147,7 @@ export default function HUD() {
         </div>
       </div>
 
+      {/* Верхние шторки */}
       <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
         <CoursesPanel
           onPicked={async (s: Subject) => {
@@ -166,9 +168,10 @@ export default function HUD() {
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
-      {/* Новая шторка для коинов */}
+      {/* Фуллскрин «Кошелёк» (коины) */}
       <CoinSheet open={coinsOpen} onClose={() => setCoinsOpen(false)} />
 
+      {/* Нижняя «Добавить курс» */}
       <AddCourseSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
