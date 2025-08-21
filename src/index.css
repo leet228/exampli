@@ -58,7 +58,7 @@ body {
   position:absolute;
   left:0; right:0;
   top: calc(-1 * var(--hud-top));  /* тянем фон вверх до 0 */
-  bottom: -9px;                     /* и до нижней кромки HUD */
+  bottom: -9.5px;                     /* и до нижней кромки HUD */
   background: var(--bg);
   z-index: -1;                      /* под контентом HUD */
 }
