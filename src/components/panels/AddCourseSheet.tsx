@@ -116,7 +116,7 @@ export default function AddCourseSheet({
             disabled={!picked}
             onClick={() => { hapticSelect(); save(); }}
             className={`w-full rounded-2xl py-4 font-semibold transition
-              ${picked ? 'btn' : 'bg-[#2b2d31] text-white/60 cursor-not-allowed'}
+              ${picked ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}
             `}
           >
             {picked ? 'Добавить' : 'Выбери курс'}
