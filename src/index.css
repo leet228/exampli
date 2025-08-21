@@ -5,10 +5,10 @@
 /* ====== Тема ====== */
 :root {
   --bg: #121e24;
-  --card: #0f1726;
+  --card: #121e24;
   --text: #e5edff;
   --muted: #9bb0d3;
-  --accent: #0091ff;
+  --accent: #1cb0f6;
 
   /* геометрия HUD */
   --hud-top: calc(env(safe-area-inset-top) + 42px); /* отступ от верха Telegram */
