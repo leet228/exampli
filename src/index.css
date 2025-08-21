@@ -217,12 +217,14 @@ body::before{
 }
 
 /* нижний HUD = та же подложка, что и фон */
-.bottomnav { 
-  position: fixed; 
-  left: 0; 
+.bottomnav {
+  position: fixed;
+  left: 0;
   right: 0;
-  background: var(--bg);      /* ← заливаем всю площадь ниже линии */
-  padding-top: 2px;          /* расстояние от линии до контента */
+  bottom: 0;              /* ← прибито к самому низу */
+  background: var(--bg);  /* фон заливает всё */
+  padding-top: 2px;
+  z-index: var(--z-hud);  /* чтобы всегда был над декором, но ниже шторок */
 }
 
 /* разделительная полоска теперь тоже выше */
