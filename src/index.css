@@ -41,7 +41,22 @@ body {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
 
 /* ====== Безопасные зоны / HUD ====== */
-.hud-fixed { position: fixed; top: var(--hud-top); left: 0; right: 0; z-index: 40; }
+.hud-fixed {
+  position: fixed;
+  top: 0;         /* ← от самого верха */
+  left: 0;
+  right: 0;
+  z-index: var(--z-hud);
+  background: var(--bg); /* ← фон как у дороги */
+}
+
+.hud-overlay {
+  position: fixed;
+  inset: 0 0 auto 0;  /* сверху до кнопки */
+  background: var(--bg);
+  z-index: calc(var(--z-hud) - 1); /* под HUD-контентом */
+}
+
 .hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
 
 /* даём месту контенту (ниже фикс-HUD и плавающей кнопки тем) */

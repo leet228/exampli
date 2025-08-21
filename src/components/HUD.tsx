@@ -89,7 +89,7 @@ export default function HUD() {
   return (
     <>
       <div className="hud-fixed bg-[color:var(--bg)]">
-        <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-2">
+        <div ref={anchorRef} className="max-w-xl mx-auto px-5">
           <div className="grid grid-cols-3 items-center">
             {/* Курс (слева) */}
             <button
