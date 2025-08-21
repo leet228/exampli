@@ -1,18 +1,24 @@
+// src/pages/AppRouter.tsx (или твой путь)
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import Home from './Home';
-import Profile from './Profile';
-import Rating from './Rating';
-import Subscription from './Subscription';
 import AppLayout from '../layouts/AppLayout';
+
+import Home from './Home';
+import Subscription from './Subscription';
+import Profile from './Profile';
+import Quests from './Quests';
+import Battle from './Battle';
+import AI from './AI';
 
 const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { path: '/', element: <Home /> },
-      { path: '/subscription', element: <Subscription /> },
-      { path: '/profile', element: <Profile /> },
-      { path: '/rating', element: <Rating /> },
+      { path: '/',            element: <Home /> },
+      { path: '/quests',      element: <Quests /> },
+      { path: '/battle',      element: <Battle /> },
+      { path: '/ai',          element: <AI /> },
+      { path: '/subscription',element: <Subscription /> },
+      { path: '/profile',     element: <Profile /> },
     ],
   },
 ]);
