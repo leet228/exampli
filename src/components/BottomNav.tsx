@@ -28,7 +28,7 @@ export default function BottomNav() {
     <nav className="bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0">
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
-        <div className="hud-bar mx-3.5 flex items-center justify-around py-2">
+        <div className="hud-bar mx-3.5 flex items-center justify-around py-2 pb-6">
           <Item to="/"             iconSrc="/stickers/home.svg" />
           <Item to="/rating"       iconSrc="/stickers/trophy.svg" />
           <Item to="/subscription" iconSrc="/stickers/diamond.svg" />
