@@ -26,8 +26,8 @@ const Item = ({ to, iconSrc }: ItemProps) => (
 export default function BottomNav() {
   return (
     <nav className="bottomnav fixed left-0 right-0 z-[45] 
-                    bottom-[max(env(safe-area-inset-bottom),30px)] 
-                    pb-[max(env(safe-area-inset-bottom),12px)]">
+                    bottom-[max(env(safe-area-inset-bottom),2px)] 
+                    pb-[max(env(safe-area-inset-bottom),8px)]">
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
         <div className="hud-bar mx-3.5 flex items-center justify-around py-2">
