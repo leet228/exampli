@@ -139,7 +139,7 @@ export default function HUD() {
               className="justify-self-end flex items-center gap-2 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
-              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-5 h-5" />
+              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-9 h-9" />
               <span className="tabular-nums">{energy}</span>
             </button>
           </div>
