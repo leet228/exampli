@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../../lib/haptics';
@@ -8,6 +9,7 @@ type Subject = { id: number; code: string; title: string; level: string };
 export default function AddCourseBlocking({ open, onPicked }: { open: boolean; onPicked: (s: Subject) => void }){
   const [all, setAll] = useState<Subject[]>([]);
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   useEffect(() => { if (!open) return;
     (async () => {
@@ -48,19 +50,51 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
               {isOpen && (
                 <div className="rounded-2xl bg-[#101b20] border border-white/10 p-2">
                   <div className="grid gap-2">
-                    {items.map(s => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => { hapticSelect(); onPicked(s); }}
-                        className="w-full flex items-center justify-between rounded-2xl h-14 px-3 border border-white/10 bg-white/5"
-                      >
-                        <div className="text-left leading-tight">
-                          <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
-                        </div>
-                        <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
-                      </button>
-                    ))}
+                    {items.map(s => {
+                      const imgSrc = `/subjects/${s.code}.svg`;
+                      const isSel = selectedId === s.id;
+                      return (
+                        <motion.button
+                          key={s.id}
+                          type="button"
+                          whileTap={{ scale: 0.97 }}
+                          animate={isSel ? { scale: [1, 0.96, 1.02, 1] } : {}}
+                          transition={{ duration: 0.28 }}
+                          onClick={() => {
+                            setSelectedId(s.id);
+                            hapticSelect();
+                            setTimeout(() => { onPicked(s); }, 220);
+                          }}
+                          className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
+                            isSel ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={imgSrc}
+                              alt={s.title}
+                              className="w-14 h-14 object-contain shrink-0"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
+                            <div className="text-left leading-tight">
+                              <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
+                            </div>
+                          </div>
+
+                          <div className={`w-2.5 h-2.5 rounded-full ${isSel ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
+
+                          {/* subtle selection flash */}
+                          {isSel && (
+                            <motion.span
+                              className="absolute inset-0 pointer-events-none"
+                              initial={{ backgroundColor: 'rgba(255,255,255,0.0)' }}
+                              animate={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+                              transition={{ duration: 0.2 }}
+                            />
+                          )}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
