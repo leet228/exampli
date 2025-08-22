@@ -18,7 +18,7 @@ const Item = ({ to, iconSrc }: ItemProps) => (
     <img
       src={iconSrc}
       alt=""
-      className={`${iconSrc.includes('/ai.svg') ? 'w-12.5 h-12.5' : 'w-9 h-9'} transition-transform duration-150 group-active:scale-90`}
+      className={`${iconSrc.includes('/ai.svg') ? 'w-12 h-12' : 'w-9 h-9'} transition-transform duration-150 group-active:scale-90`}
     />
   </NavLink>
 );
