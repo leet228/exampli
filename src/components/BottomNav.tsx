@@ -15,14 +15,13 @@ const Item = ({ to, iconSrc }: ItemProps) => (
       aria-hidden
       className="active-ring pointer-events-none absolute inset-1 border-2 border-[#3BC4FF] rounded-md"
     />
-    <img
-      src={iconSrc}
-      alt=""
-      className={`${iconSrc.includes('/ai.svg') ? 'aspect-square object-contain shrink-0' : 'aspect-square object-contain shrink-0'} transition-transform duration-150 group-active:scale-90`}
-      width={iconSrc.includes('/ai.svg') ? 56 : 48}
-      height={iconSrc.includes('/ai.svg') ? 56 : 48}
-      style={{ width: iconSrc.includes('/ai.svg') ? '56px' : '48px', height: iconSrc.includes('/ai.svg') ? '56px' : '48px' }}
-    />
+    <span className={`${iconSrc.includes('/ai.svg') ? 'w-[56px] h-[56px]' : 'w-[48px] h-[48px]'} inline-flex items-center justify-center shrink-0`}>
+      <img
+        src={iconSrc}
+        alt=""
+        className="w-full h-full object-contain block"
+      />
+    </span>
   </NavLink>
 );
 
