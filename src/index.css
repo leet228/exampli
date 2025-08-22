@@ -278,8 +278,8 @@ body::before{
 /* рамка активного — меньше по габаритам */
 .bottomnav a .active-ring { 
   opacity: 0;
-  top: 8px;
-  bottom: 8px;
+  top: 10px;
+  bottom: 10px;
   left: 12px;   /* ← больше внутрь */
   right: 12px;  /* ← больше внутрь */
   border-radius: 10px;
@@ -288,8 +288,8 @@ body::before{
 
 /* уменьшенная рамка только для ai.svg (крупная иконка) */
 .bottomnav a[data-icon="ai"] .active-ring {
-  top: 10px;
-  bottom: 10px;
+  top: 14px;
+  bottom: 14px;
   left: 17px;
   right: 17px;
 }
