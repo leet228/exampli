@@ -7,7 +7,7 @@ const Item = ({ to, iconSrc }: ItemProps) => (
   <NavLink
     to={to}
     onClick={hapticTiny}
-    className="group relative flex flex-col items-center justify-center px-4 py-2"
+    className="group relative flex flex-col items-center justify-center px-4 py-3 overflow-visible min-h-[64px]"
     data-icon={iconSrc.includes('/ai.svg') ? 'ai' : undefined}
   >
     {/* рамка активного таба — всегда в DOM, видимость через CSS по aria-current */}
@@ -31,7 +31,7 @@ export default function BottomNav() {
     <nav className="bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0">
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
-        <div className="hud-bar mx-3.5 flex items-center justify-around py-2 pb-6">
+        <div className="hud-bar mx-3.5 flex items-center justify-around py-3 pb-6">
           <Item to="/"             iconSrc="/stickers/home.svg" />
           <Item to="/quests"       iconSrc="/stickers/quests.svg" />
           <Item to="/battle"       iconSrc="/stickers/battle.svg" />
