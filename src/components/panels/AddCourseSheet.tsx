@@ -59,7 +59,7 @@ export default function AddCourseSheet({
   return (
     <FullScreenSheet open={open} onClose={onClose} title="Курсы">
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
-      <div className="space-y-5 pb-44">
+      <div className="space-y-5 pb-44 px-4">
         {Object.entries(grouped).map(([level, items]) => {
           const isOpen = !!openLevels[level];
           return (
@@ -71,7 +71,7 @@ export default function AddCourseSheet({
                   if (next) hapticSlideReveal(); else hapticSlideClose();
                   setOpenLevels((prev) => ({ ...prev, [level]: next }));
                 }}
-                className={`flex items-center justify-between rounded-2xl px-4 py-3 border ${
+                className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 border ${
                   isOpen ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
                 }`}
                 aria-expanded={isOpen}
@@ -93,7 +93,7 @@ export default function AddCourseSheet({
                           hapticSelect();
                           setPickedId(s.id);
                         }}
-                        className={`flex items-center justify-between rounded-2xl h-14 px-3 border ${
+                        className={`w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                           active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
                         }`}
                       >
