@@ -46,6 +46,7 @@ export default function Onboarding({ open, onDone }: Props) {
   const [digits, setDigits] = useState<string>('');
   const [showPicker, setShowPicker] = useState<boolean>(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
+  const tapRef = useRef<{ y: number; t: number } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const prefixOptions = useMemo(() => [
@@ -206,21 +207,35 @@ export default function Onboarding({ open, onDone }: Props) {
             </button>
             {showPicker && (
               <div
-                className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur"
+                className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-1"
+                style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
                 onMouseDown={(e) => e.preventDefault()}
               >
+                <div className="h-1" />
                 {prefixOptions.map((p) => (
                   <button
                     key={p.code}
                     type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits(''); }}
+                    onMouseDown={(e) => { e.preventDefault(); tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+                    onPointerDown={(e) => { tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+                    onPointerUp={(e) => {
+                      const y = (e as any).clientY ?? 0;
+                      const stamp = Date.now();
+                      const start = tapRef.current;
+                      const moved = start ? Math.abs(y - start.y) : 999;
+                      const dt = start ? (stamp - start.t) : 999;
+                      if (moved < 10 && dt < 350) {
+                        hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits('');
+                      }
+                      tapRef.current = null;
+                    }}
                     className={`flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-white/10 ${p.code===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
                   >
                     <span className="text-lg">{p.flag}</span>
                     <span className="font-semibold">{p.code}</span>
                   </button>
                 ))}
+                <div className="h-1" />
               </div>
             )}
           </div>
