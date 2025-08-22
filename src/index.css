@@ -291,8 +291,8 @@ body::before{
   /* ~13px и ~17px в ремах (1rem = 16px) */
   top: 0.8125rem;     /* ≈ 13px */
   bottom: 0.8125rem;  /* ≈ 13px */
-  left: 1.0125rem;    /* ≈ 16.2px */
-  right: 1.0125rem;   /* ≈ 16.2px */
+  left: 1rem;    /* ≈ 16.2px */
+  right: 1rem;   /* ≈ 16.2px */
 }
 
 /* компактнее рамка только для home */
