@@ -114,33 +114,33 @@ export default function HUD() {
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
-              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              className="justify-self-center flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
-              <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-8 h-8" />
-              <span className="tabular-nums">{streak}</span>
+              <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-9 h-9" />
+              <span className="tabular-nums font-bold text-[color:var(--muted)]">{streak}</span>
             </button>
 
             {/* Коины (иконка + число справа) */}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
-              className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              className="justify-self-center flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Коины"
             >
-              <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-7 h-7" />
-              <span className="tabular-nums font-medium">{coins}</span>
+              <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-8 h-8" />
+              <span className="tabular-nums font-bold text-base">{coins}</span>
             </button>
 
             {/* Энергия (справа) */}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('energy'); }}
-              className="justify-self-end flex items-center gap-2 text-sm text-[color:var(--muted)]"
+              className="justify-self-end flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
-              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-7 h-7" />
-              <span className="tabular-nums">{energy}</span>
+              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-8 h-8" />
+              <span className="tabular-nums font-bold text-base text-white">{energy}</span>
             </button>
           </div>
         </div>
