@@ -287,7 +287,7 @@ export default function Onboarding({ open, onDone }: Props) {
           className="btn w-full"
           onClick={finish}
         >
-          Продолжить
+          Выбрать
         </button>
       </div>
     </div>
