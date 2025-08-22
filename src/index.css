@@ -288,10 +288,10 @@ body::before{
 
 /* уменьшенная рамка только для ai.svg (крупная иконка) */
 .bottomnav a[data-icon="ai"] .active-ring {
-  top: 10px;
-  bottom: 10px;
-  left: 16px;
-  right: 16px;
+  top: 14px;
+  bottom: 14px;
+  left: 17px;
+  right: 17px;
 }
 
 /* больше воздуха у краёв экрана */
