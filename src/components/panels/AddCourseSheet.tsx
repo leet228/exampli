@@ -81,7 +81,7 @@ export default function AddCourseSheet({
               </button>
 
               {isOpen && (
-                <div className="rounded-2xl bg-[rgba(0,0,0,0.28)] border border-white/10 p-2">
+                <div className="rounded-2xl bg-[#101b20] border border-white/10 p-2">
                   <div className="grid gap-2">
                   {items.map((s) => {
                     const active = s.id === pickedId;
