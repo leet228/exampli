@@ -142,15 +142,12 @@ export default function TopicsPanel({ open, onClose }: Props) {
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     className="divide-y divide-white/10"
+                    style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
                   >
                     {subs.map(st => (
-                      <button
-                        key={st.id}
-                        onClick={() => { hapticTiny(); pickSubtopic(t, st); }}
-                        className="w-full text-left px-4 py-3 hover:bg-white/[0.06]"
-                      >
+                      <TapSafeRow key={st.id} onPick={() => { hapticTiny(); pickSubtopic(t, st); }}>
                         {st.title}
-                      </button>
+                      </TapSafeRow>
                     ))}
                     {!subs.length && (
                       <div className="px-4 py-3 text-sm text-white/60">Подтем пока нет</div>
@@ -175,5 +172,27 @@ export default function TopicsPanel({ open, onClose }: Props) {
     >
       {body}
     </SidePanel>
+  );
+}
+
+function TapSafeRow({ children, onPick }: { children: React.ReactNode; onPick: () => void }) {
+  const tapRef = useState<{ y: number; t: number } | null>(null)[0] as any;
+  return (
+    <button
+      onMouseDown={(e) => { (e as any).preventDefault?.(); tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+      onPointerDown={(e) => { tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+      onPointerUp={(e) => {
+        const y = (e as any).clientY ?? 0;
+        const stamp = Date.now();
+        const start = tapRef.current;
+        const moved = start ? Math.abs(y - start.y) : 999;
+        const dt = start ? (stamp - start.t) : 999;
+        if (moved < 10 && dt < 350) onPick();
+        tapRef.current = null;
+      }}
+      className="w-full text-left px-4 py-3 hover:bg-white/[0.06]"
+    >
+      {children}
+    </button>
   );
 }
