@@ -129,7 +129,7 @@ export default function HUD() {
               aria-label="Коины"
             >
               <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-8 h-8" />
-              <span className="tabular-nums font-bold text-base text-yellow-400">{coins}</span>
+              <span className="tabular-nums font-bold text-lg text-yellow-400">{coins}</span>
             </button>
 
             {/* Энергия (справа) */}
