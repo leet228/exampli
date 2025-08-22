@@ -46,6 +46,7 @@ export default function Onboarding({ open, onDone }: Props) {
   const [digits, setDigits] = useState<string>('');
   const [showPicker, setShowPicker] = useState<boolean>(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const prefixOptions = useMemo(() => [
     { code: '+7',   flag: '🇷🇺', max: 10, fmt: 'ru10' },
@@ -139,6 +140,30 @@ export default function Onboarding({ open, onDone }: Props) {
 
   const formatted = formatDigits(prefix, digits);
 
+  const handleBackspace = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Backspace') return;
+    const el = inputRef.current;
+    if (!el) return;
+    const sel = el.selectionStart ?? formatted.length;
+    // сколько цифр слева от каретки
+    const digitsBefore = (formatted.slice(0, sel).match(/\d/g) || []).length;
+    if (digitsBefore <= 0) return;
+    e.preventDefault();
+    const newDigits = digits.slice(0, digitsBefore - 1) + digits.slice(digitsBefore);
+    setDigits(newDigits);
+    // восстановим каретку после форматирования
+    setTimeout(() => {
+      const newFormatted = formatDigits(prefix, newDigits);
+      // позиция после удаления: после digitsBefore-1-й цифры
+      let count = 0; let pos = 0;
+      while (pos < newFormatted.length && count < digitsBefore - 1) {
+        if (/\d/.test(newFormatted[pos])) count++;
+        pos++;
+      }
+      try { el.setSelectionRange(pos, pos); } catch {}
+    }, 0);
+  }, [digits, formatted, formatDigits, prefix]);
+
   const firstStep = (
     <div className="flex flex-col items-center text-center gap-6 w-full min-h-[60vh] justify-center">
       <img src="/stickers/onBoarding.svg" alt="Onboarding" className="w-64 h-64 object-contain" />
@@ -180,11 +205,15 @@ export default function Onboarding({ open, onDone }: Props) {
               {prefix}
             </button>
             {showPicker && (
-              <div className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
+              <div
+                className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur"
+                onMouseDown={(e) => e.preventDefault()}
+              >
                 {prefixOptions.map((p) => (
                   <button
                     key={p.code}
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => { hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits(''); }}
                     className={`flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-white/10 ${p.code===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
                   >
@@ -205,7 +234,9 @@ export default function Onboarding({ open, onDone }: Props) {
             value={formatted}
             onFocus={() => setShowPicker(false)}
             onChange={(e) => onDigitsChange(e.currentTarget.value)}
+            onKeyDown={handleBackspace}
             maxLength={50}
+            ref={inputRef}
           />
         </div>
         <div className="mt-2 text-xs text-[color:var(--muted)] text-left">
