@@ -94,7 +94,10 @@ export default function HUD() {
 
   // Слушаем глобальное событие, чтобы открыть AddCourseSheet после онбординга
   useEffect(() => {
-    const handler = () => setAddOpen(true);
+    const handler = () => {
+      (window as any).__exampliAfterOnboarding = true;
+      setAddOpen(true);
+    };
     window.addEventListener('exampli:openAddCourse', handler);
     return () => window.removeEventListener('exampli:openAddCourse', handler);
   }, []);
@@ -186,6 +189,7 @@ export default function HUD() {
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
           setAddOpen(false);
         }}
+        useTelegramBack={!((window as any).__exampliAfterOnboarding === true)}
       />
     </>
   );

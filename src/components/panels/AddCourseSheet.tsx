@@ -10,10 +10,12 @@ export default function AddCourseSheet({
   open,
   onClose,
   onAdded,
+  useTelegramBack = true,
 }: {
   open: boolean;
   onClose: () => void;
   onAdded: (s: Subject) => void;
+  useTelegramBack?: boolean;
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
@@ -57,7 +59,7 @@ export default function AddCourseSheet({
   };
 
   return (
-    <FullScreenSheet open={open} onClose={onClose} title="Курсы" useTelegramBack={false}>
+    <FullScreenSheet open={open} onClose={onClose} title="Курсы" useTelegramBack={useTelegramBack}>
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44 px-4">
         {Object.entries(grouped).map(([level, items]) => {
