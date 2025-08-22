@@ -69,19 +69,20 @@ export default function AddCourseSheet({
                 onClick={() => {
                   const next = !isOpen;
                   if (next) hapticSlideReveal(); else hapticSlideClose();
-                  setOpenLevels((prev) => ({ ...prev, [level]: next }));
+                  setOpenLevels(() => (next ? { [level]: true } : {}));
                 }}
                 className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 border ${
                   isOpen ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
                 }`}
                 aria-expanded={isOpen}
               >
-                <span className="text-sm tracking-wide uppercase text-muted">{level}</span>
-                <span className={`text-muted transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                <span className="text-sm tracking-wide uppercase font-semibold text-white">{level}</span>
+                <span className={`transition-transform duration-200 ${isOpen ? 'rotate-90 text-white' : 'text-muted'}`}>▶</span>
               </button>
 
               {isOpen && (
-                <div className="grid gap-2">
+                <div className="rounded-2xl bg-[rgba(0,0,0,0.28)] border border-white/10 p-2">
+                  <div className="grid gap-2">
                   {items.map((s) => {
                     const active = s.id === pickedId;
                     const imgSrc = `/subjects/${s.code}.svg`;
@@ -114,6 +115,7 @@ export default function AddCourseSheet({
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               )}
             </div>
