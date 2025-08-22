@@ -52,7 +52,7 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
         <>
           <motion.div
             className="sheet-backdrop"
-            onClick={onClose}
+            onClick={dismissible ? onClose : undefined}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

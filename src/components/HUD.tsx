@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import TopSheet from './sheets/TopSheet';
 import AddCourseSheet from './panels/AddCourseSheet';
+import AddCourseBlocking from './panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import CoursesPanel from './sheets/CourseSheet';
 import CoinSheet from './sheets/CoinSheet';
@@ -180,17 +181,29 @@ export default function HUD() {
       {/* Фуллскрин «Кошелёк» (коины) */}
       <CoinSheet open={coinsOpen} onClose={() => setCoinsOpen(false)} />
 
-      {/* Нижняя «Добавить курс» */}
-      <AddCourseSheet
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onAdded={(s) => {
-          setCourseTitle(s.title);
-          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
-          setAddOpen(false);
-        }}
-        useTelegramBack={!((window as any).__exampliAfterOnboarding === true)}
-      />
+      {/* Выбор курса: после онбординга — блокирующий полноэкранный; иначе — обычная шторка */}
+      {((window as any).__exampliAfterOnboarding === true) ? (
+        <AddCourseBlocking
+          open={addOpen}
+          onPicked={(s) => {
+            void setUserSubjects([s.code]);
+            setCourseTitle(s.title);
+            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            (window as any).__exampliAfterOnboarding = false;
+            setAddOpen(false);
+          }}
+        />
+      ) : (
+        <AddCourseSheet
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onAdded={(s) => {
+            setCourseTitle(s.title);
+            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            setAddOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
