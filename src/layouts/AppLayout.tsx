@@ -17,9 +17,7 @@ export default function AppLayout() {
 
   const [bootDone, setBootDone] = useState(false);
   const [bootData, setBootData] = useState<BootData | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
-    try { return localStorage.getItem('exampli:onboardDone') !== '1'; } catch { return true; }
-  });
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -42,16 +40,10 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // решаем показывать ли онбординг на основе сервера
+      // решаем показывать ли онбординг ТОЛЬКО по данным сервера (новый пользователь)
       const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
-      // если поле phone_number не было загружено — не блокируем по этому признаку
       const needsPhone = !!(ce.detail as any)?.user && !((ce.detail as any)?.user?.phone_number);
-      try {
-        const localDone = localStorage.getItem('exampli:onboardDone') === '1';
-        setShowOnboarding(!localDone && (!hasSubjects || needsPhone));
-      } catch {
-        setShowOnboarding(!hasSubjects || needsPhone);
-      }
+      setShowOnboarding(!hasSubjects || needsPhone);
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);

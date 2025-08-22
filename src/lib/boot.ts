@@ -45,17 +45,17 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const user = await ensureUser();
   step(++i, TOTAL);
 
-  // 2) статы пользователя
-  const { data: statsRow } = await supabase
+  // 2) полные данные пользователя (включая phone_number)
+  const { data: userRow } = await supabase
     .from('users')
-    .select('xp,streak,hearts')
+    .select('id,xp,streak,hearts,phone_number')
     .eq('id', user?.id ?? -1)
     .single();
 
   const stats = {
-    xp: statsRow?.xp ?? 0,
-    streak: statsRow?.streak ?? 0,
-    hearts: statsRow?.hearts ?? 5,
+    xp: userRow?.xp ?? 0,
+    streak: userRow?.streak ?? 0,
+    hearts: userRow?.hearts ?? 5,
   };
   step(++i, TOTAL);
 
@@ -133,7 +133,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   step(++i, TOTAL);
 
   const boot: BootData = {
-    user: user ?? null,
+    user: (userRow ?? user) ?? null,
     stats,
     subjects: subjectsArr,
     lessons: lessonsArr,
