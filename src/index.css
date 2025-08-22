@@ -278,20 +278,20 @@ body::before{
 /* рамка активного — меньше по габаритам */
 .bottomnav a .active-ring { 
   opacity: 0;
-  top: 4px;
-  bottom: 4px;
-  left: 8px;   /* ← больше внутрь */
-  right: 8px;  /* ← больше внутрь */
+  top: 6px;      /* чуть меньше по высоте */
+  bottom: 6px;   /* чуть меньше по высоте */
+  left: 8px;
+  right: 8px;
   border-radius: 10px;
 }
 .bottomnav a[aria-current="page"] .active-ring { opacity: 1; }
 
 /* уменьшенная рамка только для ai.svg (крупная иконка) */
 .bottomnav a[data-icon="ai"] .active-ring {
-  top: 14px;
-  bottom: 14px;
-  left: 17px;
-  right: 17px;
+  top: 4px;     /* шире и выше рамка под AI */
+  bottom: 4px;
+  left: 6px;
+  right: 6px;
 }
 
 /* больше воздуха у краёв экрана */

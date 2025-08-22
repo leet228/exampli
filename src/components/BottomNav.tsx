@@ -8,14 +8,14 @@ const Item = ({ to, iconSrc }: ItemProps) => (
     to={to}
     onClick={hapticTiny}
     className="group relative flex flex-col items-center justify-center px-2 py-2 overflow-visible min-h-[56px]"
-    data-icon={iconSrc.includes('/ai.svg') ? 'ai' : undefined}
+    data-icon={iconSrc.includes('/ai.svg') ? 'ai' : (iconSrc.includes('/home.svg') ? 'home' : undefined)}
   >
     {/* рамка активного таба — всегда в DOM, видимость через CSS по aria-current */}
     <span
       aria-hidden
       className="active-ring pointer-events-none absolute inset-1 border-2 border-[#3BC4FF] rounded-md"
     />
-    <span className={`${iconSrc.includes('/ai.svg') ? 'w-[48px] h-[48px]' : 'w-[40px] h-[40px]'} inline-flex items-center justify-center shrink-0`}>
+    <span className={`${iconSrc.includes('/ai.svg') ? 'w-[52px] h-[52px]' : (iconSrc.includes('/home.svg') ? 'w-[44px] h-[44px]' : 'w-[40px] h-[40px]')} inline-flex items-center justify-center shrink-0`}>
       <img
         src={iconSrc}
         alt=""
