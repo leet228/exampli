@@ -92,6 +92,13 @@ export default function HUD() {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
   }, [addOpen, open, coinsOpen]);
 
+  // Слушаем глобальное событие, чтобы открыть AddCourseSheet после онбординга
+  useEffect(() => {
+    const handler = () => setAddOpen(true);
+    window.addEventListener('exampli:openAddCourse', handler);
+    return () => window.removeEventListener('exampli:openAddCourse', handler);
+  }, []);
+
   return (
     <>
       {/* Верхний HUD — фон как у всей страницы */}

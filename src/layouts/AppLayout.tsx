@@ -5,6 +5,7 @@ import HUD from '../components/HUD';
 import BottomNav from '../components/BottomNav';
 import Splash from '../components/Splash';
 import type { BootData } from '../lib/boot';
+import Onboarding from '../components/Onboarding';
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -16,6 +17,9 @@ export default function AppLayout() {
 
   const [bootDone, setBootDone] = useState(false);
   const [bootData, setBootData] = useState<BootData | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    try { return localStorage.getItem('exampli:onboardDone') !== '1'; } catch { return true; }
+  });
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -68,6 +72,20 @@ export default function AppLayout() {
       <div id="app-container" className="max-w-xl mx-auto p-5">
         <Outlet context={{ bootData }} />
       </div>
+
+      {/* Onboarding поверх после boot */}
+      {bootDone && (
+        <Onboarding
+          open={showOnboarding}
+          onDone={() => {
+            setShowOnboarding(false);
+            // Откроем выбор курса сразу после онбординга
+            setTimeout(() => {
+              window.dispatchEvent(new Event('exampli:openAddCourse'));
+            }, 0);
+          }}
+        />
+      )}
 
       {/* Нижняя навигация (после загрузки, чтобы не мигала под сплэшем) */}
       {showBottom && bootDone && <BottomNav />}
