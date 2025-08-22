@@ -296,10 +296,10 @@ body::before{
 
 /* компактнее рамка только для home */
 .bottomnav a[data-icon="home"] .active-ring {
-  top: 10px;
-  bottom: 10px;
-  left: 14px;
-  right: 14px;
+  top: 8px;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
 }
 
 /* больше воздуха у краёв экрана */
