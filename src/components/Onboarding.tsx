@@ -37,6 +37,7 @@ export default function Onboarding({ open, onDone }: Props) {
 
   const finish = useCallback(() => {
     try { localStorage.setItem('exampli:onboardDone', '1'); } catch {}
+    (window as any).__exampliOnboardShown = true;
     hapticTiny();
     onDone();
   }, [onDone]);

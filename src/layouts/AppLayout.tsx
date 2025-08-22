@@ -43,7 +43,13 @@ export default function AppLayout() {
       // решаем показывать ли онбординг ТОЛЬКО по данным сервера (новый пользователь)
       const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
       const needsPhone = !!(ce.detail as any)?.user && !((ce.detail as any)?.user?.phone_number);
-      setShowOnboarding(!hasSubjects || needsPhone);
+      // показываем онбординг только один раз за сессию
+      const session = (window as any).__exampliOnboardShown as boolean | undefined;
+      if (!session && (!hasSubjects || needsPhone)) {
+        setShowOnboarding(true);
+      } else {
+        setShowOnboarding(false);
+      }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);

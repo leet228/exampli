@@ -46,6 +46,15 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
   }, [done]);
 
   useEffect(() => {
+    // если уже всё загружено — не показываем сплэш повторно
+    const existing = (window as any).__exampliBoot as BootData | undefined;
+    if (existing) {
+      setBoot(existing);
+      setDone(true);
+      onReady(existing);
+      return;
+    }
+
     let live = true;
     (async () => {
       const data = await bootPreload();
