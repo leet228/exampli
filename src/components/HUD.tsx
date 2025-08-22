@@ -117,7 +117,7 @@ export default function HUD() {
               className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
-              <img src="/stickers/fire.svg" alt="" aria-hidden className="w-10 h-10" />
+              <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-8 h-8" />
               <span className="tabular-nums">{streak}</span>
             </button>
 
@@ -128,7 +128,7 @@ export default function HUD() {
               className="justify-self-center flex items-center gap-2 text-sm text-[color:var(--muted)]"
               aria-label="Коины"
             >
-              <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-9 h-9" />
+              <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-7 h-7" />
               <span className="tabular-nums font-medium">{coins}</span>
             </button>
 
@@ -139,7 +139,7 @@ export default function HUD() {
               className="justify-self-end flex items-center gap-2 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
-              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-9 h-9" />
+              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-7 h-7" />
               <span className="tabular-nums">{energy}</span>
             </button>
           </div>
