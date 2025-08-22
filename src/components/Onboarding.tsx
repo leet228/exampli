@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { hapticSlideReveal, hapticTiny, hapticSelect } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
@@ -45,8 +45,32 @@ export default function Onboarding({ open, onDone }: Props) {
   const [prefix, setPrefix] = useState<string>('+7');
   const [digits, setDigits] = useState<string>('');
   const [showPicker, setShowPicker] = useState<boolean>(false);
-  const prefixOptions = useMemo(() => ['+7', '+375', '+380', '+374', '+1'], []);
-  const prefixMax: Record<string, number> = useMemo(() => ({ '+7': 10, '+375': 9, '+380': 9, '+374': 8, '+1': 10 }), []);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+
+  const prefixOptions = useMemo(() => [
+    { code: '+7',   flag: '🇷🇺', max: 10, fmt: 'ru10' },
+    { code: '+375', flag: '🇧🇾', max:  9, fmt: 'nine' },
+    { code: '+380', flag: '🇺🇦', max:  9, fmt: 'nine' },
+    { code: '+374', flag: '🇦🇲', max:  8, fmt: 'eight' },
+    { code: '+1',   flag: '🇺🇸', max: 10, fmt: 'us10' },
+    { code: '+44',  flag: '🇬🇧', max: 10, fmt: 'us10' },
+    { code: '+49',  flag: '🇩🇪', max: 10, fmt: 'us10' },
+    { code: '+48',  flag: '🇵🇱', max:  9, fmt: 'nine' },
+    { code: '+90',  flag: '🇹🇷', max: 10, fmt: 'us10' },
+    { code: '+81',  flag: '🇯🇵', max: 10, fmt: 'us10' },
+  ], []);
+  const prefixMax: Record<string, number> = useMemo(() => Object.fromEntries(prefixOptions.map(p => [p.code, p.max])), [prefixOptions]);
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!pickerRef.current) return;
+      if (!(e.target instanceof Node)) return;
+      if (!pickerRef.current.contains(e.target)) setShowPicker(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showPicker]);
 
   const onDigitsChange = useCallback((raw: string) => {
     const only = (raw || '').replace(/\D+/g, '');
@@ -67,6 +91,53 @@ export default function Onboarding({ open, onDone }: Props) {
     } catch {}
     next();
   }, [digits, next, prefix]);
+
+  const formatDigits = useCallback((pfx: string, ds: string): string => {
+    const n = ds;
+    const len = n.length;
+    // choose pattern
+    let groups: number[] = [];
+    if (pfx === '+7') groups = [3, 3, 2, 2];
+    else if (pfx === '+1' || pfx === '+44' || pfx === '+49' || pfx === '+90' || pfx === '+81') groups = [3, 3, 4];
+    else if (pfx === '+375' || pfx === '+380' || pfx === '+48') groups = [2, 3, 2, 2];
+    else if (pfx === '+374') groups = [2, 3, 3];
+    else groups = [3, 3, 2, 2];
+
+    let i = 0;
+    let out = '';
+    // first group in parentheses
+    const g0 = groups[0] || 0;
+    const part0 = n.slice(i, i + g0);
+    if (part0) {
+      out += '(' + part0;
+      if (part0.length === g0) out += ') ';
+    }
+    i += part0.length;
+
+    for (let gi = 1; gi < groups.length && i < len; gi++) {
+      const sz = groups[gi];
+      const take = n.slice(i, i + sz);
+      if (!take) break;
+      if (gi > 1) out += '-';
+      else if (part0.length < g0) out += '';
+      else out += (gi === 1 ? '' : '-');
+      out += (gi === 1 && part0.length < g0 ? take : take);
+      i += take.length;
+    }
+
+    // if still remains without groups, append with dashes every 2
+    if (i < len) {
+      let rem = n.slice(i);
+      while (rem.length) {
+        out += (out && out[out.length - 1] !== ' ' ? '-' : '');
+        out += rem.slice(0, 2);
+        rem = rem.slice(2);
+      }
+    }
+    return out;
+  }, []);
+
+  const formatted = formatDigits(prefix, digits);
 
   const firstStep = (
     <div className="flex flex-col items-center text-center gap-6 w-full min-h-[60vh] justify-center">
@@ -100,7 +171,7 @@ export default function Onboarding({ open, onDone }: Props) {
 
       <div className="w-full px-6 max-w-md">
         <div className="flex items-stretch gap-2">
-          <div className="relative">
+          <div className="relative" ref={pickerRef}>
             <button
               type="button"
               onClick={() => { hapticSelect(); setShowPicker((v) => !v); }}
@@ -109,15 +180,16 @@ export default function Onboarding({ open, onDone }: Props) {
               {prefix}
             </button>
             {showPicker && (
-              <div className="absolute z-10 mt-2 min-w-[120px] rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
+              <div className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
                 {prefixOptions.map((p) => (
                   <button
-                    key={p}
+                    key={p.code}
                     type="button"
-                    onClick={() => { hapticSelect(); setPrefix(p); setShowPicker(false); setDigits(''); }}
-                    className={`block w-full text-left px-4 py-3 hover:bg-white/10 ${p===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
+                    onClick={() => { hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits(''); }}
+                    className={`flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-white/10 ${p.code===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
                   >
-                    {p}
+                    <span className="text-lg">{p.flag}</span>
+                    <span className="font-semibold">{p.code}</span>
                   </button>
                 ))}
               </div>
@@ -129,10 +201,11 @@ export default function Onboarding({ open, onDone }: Props) {
             pattern="[0-9]*"
             type="tel"
             className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-left font-semibold tracking-wider placeholder:text-[color:var(--muted)]"
-            placeholder={prefix === '+7' ? '(___) ___-__-__' : 'Введите номер'}
-            value={digits}
+            placeholder={prefix === '+7' ? '(XXX) XXX-XX-XX' : 'Введите номер'}
+            value={formatted}
+            onFocus={() => setShowPicker(false)}
             onChange={(e) => onDigitsChange(e.currentTarget.value)}
-            maxLength={prefixMax[prefix] || 12}
+            maxLength={50}
           />
         </div>
         <div className="mt-2 text-xs text-[color:var(--muted)] text-left">
