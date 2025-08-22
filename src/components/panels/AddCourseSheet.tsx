@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { addUserSubject } from '../../lib/userState';
 import FullScreenSheet from '../sheets/FullScreenSheet';
-import { hapticTiny, hapticSelect } from '../../lib/haptics';
+import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -17,6 +17,7 @@ export default function AddCourseSheet({
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
+  const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -59,53 +60,65 @@ export default function AddCourseSheet({
     <FullScreenSheet open={open} onClose={onClose} title="Курсы">
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44">
-        {Object.entries(grouped).map(([level, items]) => (
-          <div key={level}>
-            <div className="px-1 pb-2 text-xs tracking-wide text-muted uppercase">{level}</div>
-            <div className="grid gap-2">
-              {items.map((s) => {
-                const active = s.id === pickedId;
-                const imgSrc = `/subjects/${s.code}.svg`;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      hapticSelect();
-                      setPickedId(s.id);
-                    }}
-                    className={`flex items-center justify-between rounded-2xl h-14 px-3 border
-                      ${
-                        active
-                          ? 'border-[var(--accent)] bg-[color:var(--accent)]/10'
-                          : 'border-white/10 bg-white/5'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={imgSrc}
-                        alt={s.title}
-                        className="w-14 h-14 object-contain shrink-0"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+        {Object.entries(grouped).map(([level, items]) => {
+          const isOpen = !!openLevels[level];
+          return (
+            <div key={level} className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isOpen;
+                  if (next) hapticSlideReveal(); else hapticSlideClose();
+                  setOpenLevels((prev) => ({ ...prev, [level]: next }));
+                }}
+                className={`flex items-center justify-between rounded-2xl px-4 py-3 border ${
+                  isOpen ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
+                }`}
+                aria-expanded={isOpen}
+              >
+                <span className="text-sm tracking-wide uppercase text-muted">{level}</span>
+                <span className={`text-muted transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+              </button>
+
+              {isOpen && (
+                <div className="grid gap-2">
+                  {items.map((s) => {
+                    const active = s.id === pickedId;
+                    const imgSrc = `/subjects/${s.code}.svg`;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          hapticSelect();
+                          setPickedId(s.id);
                         }}
-                      />
-                      <div className="text-left leading-tight">
-                        <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
-                      </div>
-                    </div>
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        active ? 'bg-[var(--accent)]' : 'bg-white/20'
-                      }`}
-                    />
-                  </button>
-                );
-              })}
+                        className={`flex items-center justify-between rounded-2xl h-14 px-3 border ${
+                          active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={imgSrc}
+                            alt={s.title}
+                            className="w-14 h-14 object-contain shrink-0"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                          <div className="text-left leading-tight">
+                            <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
+                          </div>
+                        </div>
+                        <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
