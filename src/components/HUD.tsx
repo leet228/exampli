@@ -114,11 +114,11 @@ export default function HUD() {
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
-              className="justify-self-center flex items-center gap-1 text-sm text-[color:var(--muted)]"
+              className="justify-self-center flex items-center gap-0 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
               <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-9 h-9" />
-              <span className="tabular-nums font-bold text-[color:var(--muted)]">{streak}</span>
+              <span className="tabular-nums font-bold text-lg -ml-1 text-[color:var(--muted)]">{streak}</span>
             </button>
 
             {/* Коины (иконка + число справа) */}
@@ -129,7 +129,7 @@ export default function HUD() {
               aria-label="Коины"
             >
               <img src="/stickers/coin_cat.svg" alt="" aria-hidden className="w-8 h-8" />
-              <span className="tabular-nums font-bold text-base">{coins}</span>
+              <span className="tabular-nums font-bold text-base text-yellow-400">{coins}</span>
             </button>
 
             {/* Энергия (справа) */}
