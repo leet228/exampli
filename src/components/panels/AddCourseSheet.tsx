@@ -57,7 +57,7 @@ export default function AddCourseSheet({
   };
 
   return (
-    <FullScreenSheet open={open} onClose={onClose} title="Курсы">
+    <FullScreenSheet open={open} onClose={onClose} title="Курсы" useTelegramBack={false}>
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44 px-4">
         {Object.entries(grouped).map(([level, items]) => {

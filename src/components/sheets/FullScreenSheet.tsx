@@ -8,14 +8,16 @@ type FullScreenSheetProps = {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  useTelegramBack?: boolean;
+  dismissible?: boolean;
 };
 
-export default function FullScreenSheet({ open, onClose, title, children }: FullScreenSheetProps) {
+export default function FullScreenSheet({ open, onClose, title, children, useTelegramBack = true, dismissible = true }: FullScreenSheetProps) {
   // Telegram BackButton
   useEffect(() => {
       const tg = (window as any)?.Telegram?.WebApp;
       if (!tg) return;
-      if (open) {
+      if (open && useTelegramBack) {
         tg.BackButton?.show?.();
         const handler = () => { 
           hapticTiny();        // ← вибрация как у обычной кнопки
@@ -27,7 +29,7 @@ export default function FullScreenSheet({ open, onClose, title, children }: Full
           tg.BackButton?.hide?.();
         };
       }
-    }, [open, onClose]);
+    }, [open, onClose, useTelegramBack]);
 
   // Лочим фон
   useEffect(() => {
