@@ -8,6 +8,7 @@ const Item = ({ to, iconSrc }: ItemProps) => (
     to={to}
     onClick={hapticTiny}
     className="group relative flex flex-col items-center justify-center px-4 py-2"
+    data-icon={iconSrc.includes('/ai.svg') ? 'ai' : undefined}
   >
     {/* рамка активного таба — всегда в DOM, видимость через CSS по aria-current */}
     <span
@@ -17,7 +18,7 @@ const Item = ({ to, iconSrc }: ItemProps) => (
     <img
       src={iconSrc}
       alt=""
-      className={`${iconSrc.includes('/ai.svg') ? 'w-11 h-11' : 'w-9 h-9'} transition-transform duration-150 group-active:scale-90`}
+      className={`${iconSrc.includes('/ai.svg') ? 'w-12 h-12' : 'w-9 h-9'} transition-transform duration-150 group-active:scale-90`}
     />
   </NavLink>
 );

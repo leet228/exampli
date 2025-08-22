@@ -286,6 +286,14 @@ body::before{
 }
 .bottomnav a[aria-current="page"] .active-ring { opacity: 1; }
 
+/* уменьшенная рамка только для ai.svg (крупная иконка) */
+.bottomnav a[data-icon="ai"] .active-ring {
+  top: 12px;
+  bottom: 12px;
+  left: 18px;
+  right: 18px;
+}
+
 /* больше воздуха у краёв экрана */
 .bottomnav .hud-bar{
   margin-left: 14px;   /* подбери 12–20px по вкусу */
