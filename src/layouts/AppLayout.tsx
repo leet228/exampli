@@ -42,6 +42,16 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
+      // решаем показывать ли онбординг на основе сервера
+      const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
+      // если поле phone_number не было загружено — не блокируем по этому признаку
+      const needsPhone = !!(ce.detail as any)?.user && !((ce.detail as any)?.user?.phone_number);
+      try {
+        const localDone = localStorage.getItem('exampli:onboardDone') === '1';
+        setShowOnboarding(!localDone && (!hasSubjects || needsPhone));
+      } catch {
+        setShowOnboarding(!hasSubjects || needsPhone);
+      }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
