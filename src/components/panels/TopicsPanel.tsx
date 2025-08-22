@@ -94,7 +94,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   const body = useMemo(() => {
     if (loading) {
       return (
-        <div className="grid gap-3">
+        <div className="grid gap-3" style={{ overscrollBehavior: 'contain', touchAction: 'none' }}>
           {Array.from({ length: 6 }).map((_,i)=><div key={i} className="h-16 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />)}
         </div>
       );
@@ -107,7 +107,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
     }
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" style={{ overscrollBehaviorY: 'contain' }}>
         {topics.map(t => {
           const opened = expandedTopicId === t.id;
           const subs = subsByTopic[t.id] || [];

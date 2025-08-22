@@ -55,7 +55,7 @@ export default function SidePanel({ open, onClose, title, useTelegramBack, hideL
               <div className="text-base font-semibold">{title}</div>
               <div className="opacity-0">•</div>
             </div>
-            <div className="side-panel-body">{children}</div>
+            <div className="side-panel-body" style={{ overscrollBehavior: 'contain' }}>{children}</div>
           </motion.aside>
         </>
       )}
