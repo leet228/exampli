@@ -294,6 +294,14 @@ body::before{
   right: 14px;
 }
 
+/* компактнее рамка только для home */
+.bottomnav a[data-icon="home"] .active-ring {
+  top: 10px;
+  bottom: 10px;
+  left: 14px;
+  right: 14px;
+}
+
 /* больше воздуха у краёв экрана */
 .bottomnav .hud-bar{
   margin-left: 14px;   /* подбери 12–20px по вкусу */
