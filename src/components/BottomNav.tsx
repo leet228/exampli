@@ -18,7 +18,10 @@ const Item = ({ to, iconSrc }: ItemProps) => (
     <img
       src={iconSrc}
       alt=""
-      className={`${iconSrc.includes('/ai.svg') ? 'w-[56px] h-[56px]' : 'w-[48px] h-[48px]'} aspect-square object-contain shrink-0 transition-transform duration-150 group-active:scale-90`}
+      className={`${iconSrc.includes('/ai.svg') ? 'aspect-square object-contain shrink-0' : 'aspect-square object-contain shrink-0'} transition-transform duration-150 group-active:scale-90`}
+      width={iconSrc.includes('/ai.svg') ? 56 : 48}
+      height={iconSrc.includes('/ai.svg') ? 56 : 48}
+      style={{ width: iconSrc.includes('/ai.svg') ? '56px' : '48px', height: iconSrc.includes('/ai.svg') ? '56px' : '48px' }}
     />
   </NavLink>
 );
