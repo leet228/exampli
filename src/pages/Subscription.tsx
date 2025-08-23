@@ -27,14 +27,10 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="px-1 mt-[-85px]">
-        <div className="text-2xl font-extrabold">КУРСИК <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
-      </div>
-
       {/* карусель тарифов */}
       <div
         ref={trackRef}
-        className="w-full overflow-x-auto no-scrollbar mt-4"
+        className="w-full overflow-x-auto no-scrollbar mt-[-85px]"
         style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
       >
         <div className="flex gap-4 px-1" style={{ width: '100%' }}>
@@ -84,8 +80,18 @@ export default function Subscription() {
         ))}
       </div>
 
-      <div className="text-xs text-muted text-center">
-        Оплата и биллинг появятся позже. Сейчас это демонстрация экрана.
+      {/* Коины */}
+      <div className="mt-2 px-1 text-xl font-extrabold">Коины</div>
+      <div className="grid gap-3 px-1">
+        {[{ icon:'💰', amount:1200, price:'99 ₽' }, { icon:'🧺', amount:3000, price:'199 ₽' }, { icon:'🛒', amount:6500, price:'399 ₽' }].map((g,i)=>(
+          <div key={i} className="rounded-3xl p-4 border border-white/10 bg-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl" aria-hidden>{g.icon}</div>
+              <div className="text-lg font-semibold tabular-nums">{g.amount}</div>
+            </div>
+            <button type="button" className="btn px-5 py-2">{g.price}</button>
+          </div>
+        ))}
       </div>
     </div>
   );
