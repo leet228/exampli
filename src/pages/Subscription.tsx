@@ -111,22 +111,24 @@ export default function Subscription() {
             className="absolute inset-[-6px] rounded-3xl pointer-events-none"
             initial={{ opacity: 0, scale: 0.992 }}
             animate={{
-              opacity: [0, 1, 0.75, 0.45, 0.0],
-              scale: [0.992, 1.01, 1.005, 1.0, 1.0],
+              opacity: [0, 1, 0.8, 0.4, 0],
+              scale: [0.992, 1.008, 1.002, 1.0, 1.0],
               boxShadow: [
                 '0 0 0 0px rgba(56,189,248,0.00), 0 0 0 rgba(56,189,248,0.00)',
-                '0 0 0 10px rgba(56,189,248,0.85), 0 0 36px rgba(56,189,248,0.65)',
-                '0 0 0 8px rgba(56,189,248,0.55), 0 0 28px rgba(56,189,248,0.40)',
+                '0 0 0 10px rgba(56,189,248,0.70), 0 0 36px rgba(56,189,248,0.50)',
+                '0 0 0 6px rgba(56,189,248,0.35), 0 0 22px rgba(56,189,248,0.28)',
+                '0 0 0 2px rgba(56,189,248,0.12), 0 0 10px rgba(56,189,248,0.10)',
                 '0 0 0 0px rgba(56,189,248,0.00), 0 0 0 rgba(56,189,248,0.00)'
               ],
               backgroundColor: [
                 'rgba(56,189,248,0.00)',
-                'rgba(56,189,248,0.18)',
-                'rgba(56,189,248,0.12)',
+                'rgba(56,189,248,0.16)',
+                'rgba(56,189,248,0.10)',
+                'rgba(56,189,248,0.04)',
                 'rgba(56,189,248,0.00)'
               ]
             }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.5, 0.8, 1] }}
           />
         )}
         <div className="text-xl font-extrabold">Коины</div>
