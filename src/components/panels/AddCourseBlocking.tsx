@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
+import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../../lib/haptics';
 
@@ -63,6 +64,9 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           onClick={() => {
                             setSelectedId(s.id);
                             hapticSelect();
+                            // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
+                            try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
+                            cacheSet(CACHE_KEYS.activeCourseCode, s.code, 10 * 60_000);
                             setTimeout(() => { onPicked(s); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${

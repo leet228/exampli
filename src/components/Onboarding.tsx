@@ -30,7 +30,16 @@ export default function Onboarding({ open, onDone }: Props) {
       if (phone) {
         const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
         if (tgId) {
-          await supabase.from('users').update({ phone_number: String(phone) }).eq('tg_id', String(tgId));
+          // не блокируем UI: обновим номер в фоне
+          void supabase.from('users').update({ phone_number: String(phone) }).eq('tg_id', String(tgId));
+          // подправим локальный boot-кэш, чтобы следующий экран не мигал
+          try {
+            const boot = (window as any).__exampliBoot as any | undefined;
+            if (boot?.user) {
+              boot.user.phone_number = String(phone);
+              (window as any).__exampliBoot = boot;
+            }
+          } catch {}
         }
       }
     } catch {}
@@ -94,16 +103,18 @@ export default function Onboarding({ open, onDone }: Props) {
       const full = `${prefix}${digits}`;
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
       if (tgId) {
-        await supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
+        // не блокируем UI: fire-and-forget
+        void supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
       }
-    } catch {}
-    // синхронизируем локальный boot-кэш, чтобы AppLayout не открыл приветствие снова
-    try {
-      const boot = (window as any).__exampliBoot as any | undefined;
-      if (boot) {
-        boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
-        (window as any).__exampliBoot = boot;
-      }
+      // локально отметим телефон у пользователя
+      try {
+        const boot = (window as any).__exampliBoot as any | undefined;
+        if (boot) {
+          if (boot.user) boot.user.phone_number = full;
+          boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
+          (window as any).__exampliBoot = boot;
+        }
+      } catch {}
     } catch {}
     next();
   }, [digits, next, prefix]);

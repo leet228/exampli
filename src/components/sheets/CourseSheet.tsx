@@ -137,6 +137,11 @@ export default function CoursesPanel(props: Props) {
                 window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
                   detail: { title: s.title, code: s.code },
                 }));
+                // мгновенно записать выбранный курс в users (в фоне)
+                const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                if (tgId) {
+                  void supabase.from('users').update({ added_course: s.id }).eq('tg_id', String(tgId));
+                }
               }}
               className={[
                 'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
