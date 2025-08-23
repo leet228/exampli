@@ -40,16 +40,12 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // решаем показывать ли онбординг ТОЛЬКО по данным сервера (новый пользователь)
-      const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
-      const needsPhone = !!(ce.detail as any)?.user && !((ce.detail as any)?.user?.phone_number);
-      // показываем онбординг только один раз за сессию
+      // Онбординг по users_onboarding: если нет строки — boot создал её с false/false
+      const ob = ce.detail?.onboarding || null;
+      const showPhone = ob && !ob.phone_given;
+      const showCourse = ob && ob.phone_given && !ob.course_taken;
       const session = (window as any).__exampliOnboardShown as boolean | undefined;
-      if (!session && (!hasSubjects || needsPhone)) {
-        setShowOnboarding(true);
-      } else {
-        setShowOnboarding(false);
-      }
+      setShowOnboarding(!session && (!!showPhone || !!showCourse));
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);

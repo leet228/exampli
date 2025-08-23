@@ -10,7 +10,17 @@ export default function Onboarding({ open, onDone }: Props) {
   const canGoNext = true;
 
   useEffect(() => {
-    if (open) setStep(0);
+    if (!open) return;
+    // читаем bootData, чтобы определить стартовый шаг
+    const boot = (window as any).__exampliBoot as any | undefined;
+    const ob = boot?.onboarding || null;
+    if (ob) {
+      if (!ob.phone_given) setStep(1); // сразу телефон
+      else if (ob.phone_given && !ob.course_taken) setStep(2); // сразу спасибо → выбор курса
+      else setStep(0);
+    } else {
+      setStep(0);
+    }
   }, [open]);
 
   const next = useCallback(() => {
@@ -91,6 +101,9 @@ export default function Onboarding({ open, onDone }: Props) {
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
       if (tgId) {
         await supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
+        // отметим в users_onboarding: phone_given = true
+        const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+        if (u?.id) await supabase.from('users_onboarding').update({ phone_given: true }).eq('user_id', u.id);
       }
     } catch {}
     next();

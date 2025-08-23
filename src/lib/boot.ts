@@ -20,6 +20,7 @@ export type BootData = {
   stats: { xp: number; streak: number; hearts: number };
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
+  onboarding?: { phone_given: boolean; course_taken: boolean } | null;
 };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
@@ -57,6 +58,27 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     streak: userRow?.streak ?? 0,
     hearts: userRow?.hearts ?? 5,
   };
+  step(++i, TOTAL);
+
+  // 2b) onboarding row (ensure exists)
+  let onboarding: { phone_given: boolean; course_taken: boolean } | null = null;
+  if (userRow?.id) {
+    const { data: ob } = await supabase
+      .from('users_onboarding')
+      .select('phone_given,course_taken')
+      .eq('user_id', userRow.id)
+      .single();
+    if (ob) {
+      onboarding = { phone_given: !!(ob as any).phone_given, course_taken: !!(ob as any).course_taken };
+    } else {
+      const { data: created } = await supabase
+        .from('users_onboarding')
+        .insert({ user_id: userRow.id, phone_given: false, course_taken: false })
+        .select('phone_given,course_taken')
+        .single();
+      onboarding = created ? { phone_given: !!(created as any).phone_given, course_taken: !!(created as any).course_taken } : { phone_given: false, course_taken: false };
+    }
+  }
   step(++i, TOTAL);
 
   // 3) связи user → subjects
@@ -137,6 +159,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     stats,
     subjects: subjectsArr,
     lessons: lessonsArr,
+    onboarding,
   };
 
   (window as any).__exampliBoot = boot;
