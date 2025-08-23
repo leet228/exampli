@@ -30,8 +30,26 @@ export default function HUD() {
   const [addOpen, setAddOpen] = useState(false);
 
   const loadUserSnapshot = useCallback(async () => {
+    const ACTIVE_KEY = 'exampli:activeSubjectCode';
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (!tgId) return;
+    if (!tgId) {
+      // офф-телеграм режим: попробуем взять код из localStorage
+      try {
+        const stored = localStorage.getItem(ACTIVE_KEY);
+        if (stored) {
+          setCourseCode(stored);
+          setIconOk(true);
+          const { data: subj } = await supabase
+            .from('subjects')
+            .select('title')
+            .eq('code', stored)
+            .single();
+          const t = subj?.title as string | undefined;
+          if (t) setCourseTitle(t);
+        }
+      } catch {}
+      return;
+    }
 
     const { data: user } = await supabase
       .from('users')
@@ -64,6 +82,22 @@ export default function HUD() {
         const code  = subj?.code  as string | undefined;
         if (title) setCourseTitle(title);
         if (code) { setCourseCode(code); setIconOk(true); }
+      } else {
+        // если в users нет added_course — подхватим локально выбранный код
+        try {
+          const stored = localStorage.getItem(ACTIVE_KEY);
+          if (stored) {
+            setCourseCode(stored);
+            setIconOk(true);
+            const { data: subj2 } = await supabase
+              .from('subjects')
+              .select('title')
+              .eq('code', stored)
+              .single();
+            const t = subj2?.title as string | undefined;
+            if (t) setCourseTitle(t);
+          }
+        } catch {}
       }
     }
   }, []);
@@ -78,17 +112,18 @@ export default function HUD() {
       const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
       if (e.detail?.code) { setCourseCode(e.detail.code); setIconOk(true); }
-      refresh();
     };
 
     const onVisible = () => { if (!document.hidden) refresh(); };
 
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+    window.addEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       alive = false;
       window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
+      window.removeEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [loadUserSnapshot]);
