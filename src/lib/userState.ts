@@ -27,6 +27,7 @@ export async function ensureUser(): Promise<UserStats | null> {
       first_name: tgUser?.first_name,
       last_name: tgUser?.last_name,
     }).select('*').single();
+    try { (window as any).__exampliNewUserCreated = true; } catch {}
     // ensure onboarding row exists for this user
     try {
       if ((created as any)?.id) {

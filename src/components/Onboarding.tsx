@@ -14,13 +14,8 @@ export default function Onboarding({ open, onDone }: Props) {
     // читаем bootData, чтобы определить стартовый шаг
     const boot = (window as any).__exampliBoot as any | undefined;
     const ob = boot?.onboarding || null;
-    if (ob) {
-      if (!ob.phone_given) setStep(1); // сразу телефон
-      else if (ob.phone_given && !ob.course_taken) setStep(2); // сразу спасибо → выбор курса
-      else setStep(0);
-    } else {
-      setStep(0);
-    }
+    if (ob && !ob.phone_given) setStep(1); // сразу телефон
+    else setStep(0);
   }, [open]);
 
   const next = useCallback(() => {
