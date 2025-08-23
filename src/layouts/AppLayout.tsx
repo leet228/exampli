@@ -110,6 +110,8 @@ export default function AppLayout() {
           setOpenCoursePicker(false);
           // оповестим остальных
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));
+          // перезапустим Splash/boot для повторной прогрузки и кэширования
+          setBootDone(false);
         }}
       />
 
