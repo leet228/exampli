@@ -1,11 +1,10 @@
 // src/pages/Home.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import SkillRoad from '../components/SkillRoad';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
-import FloatingDecor from '../components/FloatingDecor';
 
 type RoadItem = { id: string; title: string; subtitle?: string };
 
@@ -24,13 +23,6 @@ export default function Home() {
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState<string>('');
 
-  // тема декора под «дорогой»
-  const decorTheme = useMemo<'math' | 'russian' | 'default'>(() => {
-    const t = (courseTitle || '').toLowerCase();
-    if (t.includes('математ')) return 'math';
-    if (t.includes('русск')) return 'russian';
-    return 'default';
-  }, [courseTitle]);
 
   // ======== helpers: localStorage =========
   const readActiveFromStorage = useCallback((): string | null => {
@@ -164,9 +156,6 @@ export default function Home() {
   // ======== рендер =========
   return (
     <div className="overflow-x-hidden">
-      {/* декор под дорогу */}
-      <FloatingDecor theme={decorTheme} />
-
       {/* плавающая кнопка «Темы» и левая панель */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
 
