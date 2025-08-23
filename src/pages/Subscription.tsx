@@ -126,7 +126,7 @@ export default function Subscription() {
                 'rgba(56,189,248,0.00)'
               ]
             }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
           />
         )}
         <div className="text-xl font-extrabold">Коины</div>

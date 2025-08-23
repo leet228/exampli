@@ -74,12 +74,14 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <img
-                              src={imgSrc}
-                              alt={s.title}
-                              className="w-14 h-14 object-contain shrink-0"
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                            />
+                            <div className="w-14 h-14 rounded-xl bg-white/5 grid place-items-center overflow-hidden shrink-0">
+                              <img
+                                src={imgSrc}
+                                alt={s.title}
+                                className="max-w-[80%] max-h-[80%] object-contain"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            </div>
                             <div className="text-left leading-tight">
                               <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
                             </div>
