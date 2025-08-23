@@ -13,6 +13,7 @@ export default function Subscription() {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
   const [highlight, setHighlight] = useState(false);
+  const coinsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -33,13 +34,15 @@ export default function Subscription() {
       sessionStorage.removeItem('exampli:highlightCoins');
       setTimeout(() => {
         setHighlight(true);
-        setTimeout(() => setHighlight(false), 1200);
+        try { coinsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+        setTimeout(() => setHighlight(false), 2000);
       }, 100);
     }
     const handler = () => {
       setTimeout(() => {
         setHighlight(true);
-        setTimeout(() => setHighlight(false), 1200);
+        try { coinsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+        setTimeout(() => setHighlight(false), 2000);
       }, 100);
     };
     window.addEventListener('exampli:highlightCoins', handler);
@@ -102,28 +105,28 @@ export default function Subscription() {
       </div>
 
       {/* Коины */}
-      <div className="relative mt-2 px-1">
+      <div ref={coinsRef} className="relative mt-2 px-1">
         {highlight && (
           <motion.div
             className="absolute inset-[-6px] rounded-3xl pointer-events-none"
-            initial={{ opacity: 0, scale: 0.995 }}
+            initial={{ opacity: 0, scale: 0.992 }}
             animate={{
-              opacity: [0, 1, 1, 0],
-              scale: [0.995, 1.005, 1.0, 1.0],
+              opacity: [0, 1, 0.75, 0.45, 0.0],
+              scale: [0.992, 1.01, 1.005, 1.0, 1.0],
               boxShadow: [
-                '0 0 0 0px rgba(56,189,248,0.0), 0 0 0 rgba(56,189,248,0.0)',
-                '0 0 0 8px rgba(56,189,248,0.75), 0 0 28px rgba(56,189,248,0.55)',
-                '0 0 0 6px rgba(56,189,248,0.55), 0 0 22px rgba(56,189,248,0.35)',
-                '0 0 0 0px rgba(56,189,248,0.0), 0 0 0 rgba(56,189,248,0.0)'
+                '0 0 0 0px rgba(56,189,248,0.00), 0 0 0 rgba(56,189,248,0.00)',
+                '0 0 0 10px rgba(56,189,248,0.85), 0 0 36px rgba(56,189,248,0.65)',
+                '0 0 0 8px rgba(56,189,248,0.55), 0 0 28px rgba(56,189,248,0.40)',
+                '0 0 0 0px rgba(56,189,248,0.00), 0 0 0 rgba(56,189,248,0.00)'
               ],
               backgroundColor: [
                 'rgba(56,189,248,0.00)',
-                'rgba(56,189,248,0.16)',
-                'rgba(56,189,248,0.10)',
+                'rgba(56,189,248,0.18)',
+                'rgba(56,189,248,0.12)',
                 'rgba(56,189,248,0.00)'
               ]
             }}
-            transition={{ duration: 1.6, ease: 'easeInOut' }}
+            transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
           />
         )}
         <div className="text-xl font-extrabold">Коины</div>
