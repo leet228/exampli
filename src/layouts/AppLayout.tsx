@@ -6,6 +6,9 @@ import BottomNav from '../components/BottomNav';
 import Splash from '../components/Splash';
 import type { BootData } from '../lib/boot';
 import Onboarding from '../components/Onboarding';
+import AddCourseBlocking from '../components/panels/AddCourseBlocking';
+import { setUserSubjects } from '../lib/userState';
+import { supabase } from '../lib/supabase';
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -18,6 +21,7 @@ export default function AppLayout() {
   const [bootDone, setBootDone] = useState(false);
   const [bootData, setBootData] = useState<BootData | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+  const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -51,10 +55,7 @@ export default function AppLayout() {
       } else if (showCourse) {
         // сразу открываем выбор курса, онбординг не показываем
         setShowOnboarding(false);
-        (window as any).__exampliAfterOnboarding = true;
-        setTimeout(() => {
-          window.dispatchEvent(new Event('exampli:openAddCourse'));
-        }, 0);
+        setOpenCoursePicker(true);
       } else {
         // показываем онбординг только если нужен экран телефона
         setShowOnboarding(showPhone);
@@ -96,13 +97,29 @@ export default function AppLayout() {
           open={showOnboarding}
           onDone={() => {
             setShowOnboarding(false);
-            // Откроем выбор курса сразу после онбординга
-            setTimeout(() => {
-              window.dispatchEvent(new Event('exampli:openAddCourse'));
-            }, 0);
+            setOpenCoursePicker(true);
           }}
         />
       )}
+
+      {/* Выбор курса сверху уровня Layout, если нужно без HUD */}
+      <AddCourseBlocking
+        open={openCoursePicker}
+        onPicked={async (s) => {
+          await setUserSubjects([s.code]);
+          // отметим onboarding
+          try {
+            const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+            if (tgId) {
+              const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+              if (u?.id) await supabase.from('users_onboarding').update({ course_taken: true }).eq('user_id', u.id);
+            }
+          } catch {}
+          setOpenCoursePicker(false);
+          // оповестим остальных
+          window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));
+        }}
+      />
 
       {/* Нижняя навигация (после загрузки, чтобы не мигала под сплэшем) */}
       {showBottom && bootDone && <BottomNav />}
