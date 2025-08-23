@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../../lib/haptics';
+import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -67,7 +68,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
                             cacheSet(CACHE_KEYS.activeCourseCode, s.code, 10 * 60_000);
-                            setTimeout(() => { onPicked(s); }, 220);
+                            setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                             isSel ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'

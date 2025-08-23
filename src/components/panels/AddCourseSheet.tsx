@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
+import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -66,15 +67,9 @@ export default function AddCourseSheet({
 
     onAdded(picked);
     onClose();
-    // оповестим UI о смене курса и возможном обновлении панелей
+    // оповестим UI (и сохраним снимок) через store
     window.dispatchEvent(new CustomEvent('exampli:subjectsChanged'));
-    window.dispatchEvent(
-      new CustomEvent('exampli:courseChanged', {
-        detail: { title: picked.title, code: picked.code },
-      }),
-    );
-    try { localStorage.setItem('exampli:activeSubjectCode', picked.code); } catch {}
-    cacheSet(CACHE_KEYS.activeCourseCode, picked.code, 10 * 60_000);
+    storeSetActiveCourse({ code: picked.code, title: picked.title });
     // обновим кеш пользователя (added_course обновился)
     try {
       const prev = JSON.parse(localStorage.getItem('exampli:' + 'user') || '{}');

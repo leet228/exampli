@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hapticTiny } from '../../lib/haptics';
+import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -134,9 +135,7 @@ export default function CoursesPanel(props: Props) {
                 setActiveCode(s.code);
                 writeActiveToStorage(s.code);
                 if (typeof onPicked === 'function') onPicked(s);
-                window.dispatchEvent(new CustomEvent('exampli:courseChanged', {
-                  detail: { title: s.title, code: s.code },
-                }));
+                storeSetActiveCourse({ code: s.code, title: s.title });
                 // мгновенно записать выбранный курс в users (в фоне)
                 const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
                 if (tgId) {

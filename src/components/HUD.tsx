@@ -7,6 +7,7 @@ import TopSheet from './sheets/TopSheet';
 import AddCourseSheet from './panels/AddCourseSheet';
 import AddCourseBlocking from './panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
+import { getActiveCourse, subscribeActiveCourse, setActiveCourse as storeSetActiveCourse } from '../lib/courseStore';
 import CoursesPanel from './sheets/CourseSheet';
 // CoinSheet более не используется; переход на страницу подписки
 
@@ -124,6 +125,23 @@ export default function HUD() {
   }, []);
 
   useEffect(() => {
+    // начальная инициализация из courseStore (моментально)
+    const snap = getActiveCourse();
+    if (snap?.code) {
+      setCourseCode(snap.code);
+      if (snap.title) setCourseTitle(snap.title);
+      setIconOk(true);
+    }
+
+    // подписка на изменения активного курса
+    const unsub = subscribeActiveCourse((c) => {
+      if (c?.code) {
+        setCourseCode(c.code);
+        if (c.title) setCourseTitle(c.title);
+        setIconOk(true);
+      }
+    });
+
     let alive = true;
     const refresh = async () => { if (alive) await loadUserSnapshot(); };
 
@@ -151,6 +169,7 @@ export default function HUD() {
       window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
       window.removeEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
       document.removeEventListener('visibilitychange', onVisible);
+      try { unsub(); } catch {}
     };
   }, [loadUserSnapshot]);
 
@@ -250,8 +269,7 @@ export default function HUD() {
         <CoursesPanel
           onPicked={async (s: Subject) => {
             await setUserSubjects([s.code]);
-            setCourseTitle(s.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            storeSetActiveCourse({ code: s.code, title: s.title });
             setOpen(null);
           }}
           onAddClick={openAddCourse}
@@ -274,8 +292,7 @@ export default function HUD() {
           open={addOpen}
           onPicked={(s) => {
             void setUserSubjects([s.code]);
-            setCourseTitle(s.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            storeSetActiveCourse({ code: s.code, title: s.title });
             (window as any).__exampliAfterOnboarding = false;
             setAddOpen(false);
           }}
@@ -285,8 +302,7 @@ export default function HUD() {
           open={addOpen}
           onClose={() => setAddOpen(false)}
           onAdded={(s) => {
-            setCourseTitle(s.title);
-            window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
+            storeSetActiveCourse({ code: s.code, title: s.title });
             setAddOpen(false);
           }}
         />
