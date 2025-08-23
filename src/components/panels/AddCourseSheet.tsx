@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { addUserSubject } from '../../lib/userState';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 
@@ -48,9 +47,26 @@ export default function AddCourseSheet({
 
   const save = async () => {
     if (!picked) return;
-    await addUserSubject(picked.code);
+    // запишем выбранный курс в users.added_course
+    const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (tgId) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('tg_id', String(tgId))
+        .single();
+      if (user?.id) {
+        await supabase
+          .from('users')
+          .update({ added_course: picked.id })
+          .eq('id', user.id);
+      }
+    }
+
     onAdded(picked);
     onClose();
+    // оповестим UI о смене курса и возможном обновлении панелей
+    window.dispatchEvent(new CustomEvent('exampli:subjectsChanged'));
     window.dispatchEvent(
       new CustomEvent('exampli:courseChanged', {
         detail: { title: picked.title, code: picked.code },

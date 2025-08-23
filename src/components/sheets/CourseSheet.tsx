@@ -34,38 +34,29 @@ export default function CoursesPanel(props: Props) {
     try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
   }, []);
 
-  // Загрузка курсов пользователя
+  // Загрузка выбранного курса пользователя из users.added_course
   const loadUserSubjects = useCallback(async () => {
     setLoading(true);
     try {
       const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!tgId) { setSubjects([]); return; }
 
-      const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-      if (!user?.id) { setSubjects([]); return; }
-
-      // вытягиваем все курсы пользователя
-      const { data: rel } = await supabase
-        .from('user_subjects')
-        .select('subject_id')
-        .eq('user_id', user.id);
-
-      const ids = (rel || []).map(r => r.subject_id as number);
-      if (!ids.length) { setSubjects([]); return; }
+      const { data: user } = await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
+      const addedId = (user as any)?.added_course as number | null | undefined;
+      if (!user?.id || !addedId) { setSubjects([]); setActiveCode(null); return; }
 
       const { data } = await supabase
         .from('subjects')
         .select('id, code, title, level')
-        .in('id', ids)
-        .order('title');
+        .eq('id', addedId)
+        .limit(1);
 
       const list = (data as Subject[]) || [];
       setSubjects(list);
 
-      // восстановить активный код
-      const stored = readActiveFromStorage();
-      const initial = (stored && list.find(s => s.code === stored)?.code) || list[0]?.code || null;
-      if (initial) setActiveCode(initial);
+      // активным становится именно этот добавленный курс
+      const code = list[0]?.code || null;
+      if (code) setActiveCode(code);
     } finally {
       setLoading(false);
     }
@@ -116,7 +107,7 @@ export default function CoursesPanel(props: Props) {
     if (!subjects.length) {
       return (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted">
-          Курсы не выбраны. Нажми «Добавить» ниже.
+          Курс не выбран. Нажми «Добавить» ниже.
         </div>
       );
     }
