@@ -50,11 +50,9 @@ export default function AppLayout() {
       // сбрасываем флаг «только что создан» после чтения
       (window as any).__exampliNewUserCreated = false;
       const phoneGiven = !!(ob?.phone_given);
-      const courseTaken = !!(ob?.course_taken);
       // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
       const finished = !!(ob && ob.boarding_finished);
       const needPhone = !phoneGiven;
-      const needCourse = !courseTaken;
 
       if (finished) {
         setShowOnboarding(false);
@@ -63,13 +61,9 @@ export default function AppLayout() {
       }
 
       // Решение ТОЛЬКО по users_onboarding:
-      // 1) Если course_taken = FALSE → открываем выбор курса
-      // 2) Иначе если phone_given = FALSE → показываем экран телефона (онбординг)
-      // 3) Иначе ничего
-      if (needCourse) {
-        setShowOnboarding(false);
-        setOpenCoursePicker(true);
-      } else if (needPhone) {
+      // Если телефон не дан → показываем онбординг (экран телефона)
+      // Во всех других случаях на старте онбординг не показываем
+      if (needPhone) {
         setOpenCoursePicker(false);
         setShowOnboarding(true);
       } else {
