@@ -79,23 +79,18 @@ export async function canStartLesson(): Promise<boolean> {
 }
 
 export async function addUserSubject(subjectCode: string) {
+  // заменяем семантику: теперь это установка users.added_course
   const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
   if (!id) return;
 
-  // user
   const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(id)).single();
   if (!user?.id) return;
 
-  // subject
   const { data: subj } = await supabase.from('subjects').select('id,code,title').eq('code', subjectCode).single();
   if (!subj?.id) return;
 
-  // insert (idempotent)
-  await supabase
-    .from('user_subjects')
-    .upsert([{ user_id: user.id, subject_id: subj.id }], { onConflict: 'user_id,subject_id', ignoreDuplicates: true });
+  await supabase.from('users').update({ added_course: subj.id }).eq('id', user.id);
 
-  // оповестим UI
   window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: subj.title, code: subj.code } }));
 }
 
@@ -136,13 +131,14 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 }
 
 export async function setUserSubjects(subjectCodes: string[]) {
+  // новая семантика: берём первый код и пишем его id в users.added_course
   const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
   if (!tgId) return;
   const { data: user } = await supabase.from('users').select('*').eq('tg_id', String(tgId)).single();
   if (!user) return;
-  const { data: subs } = await supabase.from('subjects').select('id, code').in('code', subjectCodes);
-  if (!subs) return;
-  // очистим старые и вставим новые
-  await supabase.from('user_subjects').delete().eq('user_id', user.id);
-  await supabase.from('user_subjects').insert(subs.map(s => ({ user_id: user.id, subject_id: s.id })));
+  const firstCode = subjectCodes[0];
+  if (!firstCode) return;
+  const { data: subj } = await supabase.from('subjects').select('id, code').eq('code', firstCode).single();
+  if (!subj?.id) return;
+  await supabase.from('users').update({ added_course: subj.id }).eq('id', user.id);
 }

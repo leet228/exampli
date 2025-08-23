@@ -62,12 +62,12 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     return boot;
   }
 
-  // 2) полные данные пользователя (включая phone_number)
+  // 2) полные данные пользователя (включая phone_number и added_course)
   let userRow: any | null = null;
   if (user?.id) {
     const { data } = await supabase
       .from('users')
-      .select('id,xp,streak,hearts,phone_number')
+      .select('id,xp,streak,hearts,phone_number,added_course')
       .eq('id', user.id)
       .single();
     userRow = data as any;
@@ -94,22 +94,11 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
   step(++i, TOTAL);
 
-  // 3) связи user → subjects
-  let rel: any[] | null = null;
-  if (user?.id) {
-    const resp = await supabase
-      .from('user_subjects')
-      .select('subject_id')
-      .eq('user_id', user.id);
-    rel = (resp.data as any[]) || null;
-  }
-
-  const subjectIds: number[] = Array.isArray(rel)
-    ? rel.map((r: any) => Number(r.subject_id)).filter(Boolean)
-    : [];
+  // 3) выбранный курс пользователя (один) из users.added_course
+  const subjectIds: number[] = userRow?.added_course ? [Number(userRow.added_course)] : [];
   step(++i, TOTAL);
 
-  // 4) сами предметы пользователя
+  // 4) сам выбранный предмет пользователя (если есть)
   let subjectsArr: SubjectRow[] = [];
   if (subjectIds.length) {
     const { data: subj } = await supabase

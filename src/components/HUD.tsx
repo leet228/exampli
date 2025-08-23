@@ -45,16 +45,22 @@ export default function HUD() {
     }
 
     if (user?.id) {
-      const { data: rel } = await supabase
-        .from('user_subjects')
-        .select('subject_id, subjects(title)')
-        .eq('user_id', user.id)
-        .order('id', { ascending: true })
-        .limit(1);
-
-      const rows = (rel as Array<{ subjects?: { title?: string } }> | null) || [];
-      const title = rows[0]?.subjects?.title;
-      if (title) setCourseTitle(title);
+      // читаем выбранный курс из users.added_course
+      const { data: u2 } = await supabase
+        .from('users')
+        .select('added_course')
+        .eq('id', user.id)
+        .single();
+      const addedId = (u2 as any)?.added_course as number | null | undefined;
+      if (addedId) {
+        const { data: subj } = await supabase
+          .from('subjects')
+          .select('title')
+          .eq('id', addedId)
+          .single();
+        const title = subj?.title as string | undefined;
+        if (title) setCourseTitle(title);
+      }
     }
   }, []);
 

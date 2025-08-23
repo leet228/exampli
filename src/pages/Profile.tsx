@@ -13,11 +13,11 @@ export default function Profile() {
       // базовый user из БД
       const { data: user } = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
-      // текущий курс
-      const { data: rel } = await supabase.from('user_subjects').select('subject_id').limit(1);
-      if (rel && rel[0]) {
-        const { data: s } = await supabase.from('subjects').select('*').eq('id', rel[0].subject_id).single();
-        if (s) setCourse(s.title);
+      // текущий курс по users.added_course
+      const addedId = (user as any)?.added_course as number | null | undefined;
+      if (addedId) {
+        const { data: s } = await supabase.from('subjects').select('title').eq('id', addedId).single();
+        if (s?.title) setCourse(s.title as string);
       }
     })();
   }, []);

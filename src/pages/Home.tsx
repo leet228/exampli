@@ -59,24 +59,30 @@ export default function Home() {
       }
     }
 
-    // 3) возьмём первый курс пользователя через связь user_subjects → subjects
+    // 3) возьмём выбранный курс пользователя из users.added_course
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!tgId) return { code: null, title: '' };
 
     const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
     if (!user?.id) return { code: null, title: '' };
 
-    const { data: rel } = await supabase
-      .from('user_subjects')
-      .select('subject_id, subjects(title, code)')
-      .eq('user_id', user.id)
-      .order('id', { ascending: true })
-      .limit(1);
-
-    const rows = (rel as Array<{ subjects?: { title?: string; code?: string } }> | null) || [];
-    const first = rows[0]?.subjects;
-    const fCode = first?.code ?? null;
-    const fTitle = first?.title ?? '';
+    const { data: u2 } = await supabase
+      .from('users')
+      .select('added_course')
+      .eq('id', user.id)
+      .single();
+    const addedId = (u2 as any)?.added_course as number | null | undefined;
+    let fCode: string | null = null;
+    let fTitle = '';
+    if (addedId) {
+      const { data: subj } = await supabase
+        .from('subjects')
+        .select('title, code')
+        .eq('id', addedId)
+        .single();
+      fCode = (subj?.code as string) ?? null;
+      fTitle = (subj?.title as string) ?? '';
+    }
 
     if (fCode) {
       setActiveCode(fCode);
