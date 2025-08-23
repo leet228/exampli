@@ -42,11 +42,12 @@ export default function CoursesPanel(props: Props) {
       const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!tgId) { setSubjects([]); return; }
 
-      const cachedU = cacheGet<any>(CACHE_KEYS.user);
-      let user: any | null = cachedU || null;
+      // читаем из кэша, если пусто — берём из базы и пишем в кэш
+      let user: any | null = cacheGet<any>(CACHE_KEYS.user);
       if (!user || user.added_course == null) {
         const fresh = await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
         user = fresh.data as any;
+        if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
       }
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (!user?.id || !addedId) { setSubjects([]); setActiveCode(null); return; }

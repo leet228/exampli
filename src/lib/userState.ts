@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { cacheSet, CACHE_KEYS } from './cache';
+import { cacheGet, cacheSet, CACHE_KEYS } from './cache';
 
 export type UserStats = {
   id: string;
@@ -94,6 +94,11 @@ export async function addUserSubject(subjectCode: string) {
   window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: subj.title, code: subj.code } }));
   try { localStorage.setItem('exampli:activeSubjectCode', subj.code); } catch {}
   cacheSet(CACHE_KEYS.activeCourseCode, subj.code, 10 * 60_000);
+  // update cached user to avoid stale added_course
+  try {
+    const cached = cacheGet<any>(CACHE_KEYS.user) || {};
+    cacheSet(CACHE_KEYS.user, { ...cached, id: user.id, added_course: subj.id }, 5 * 60_000);
+  } catch {}
 }
 
 export async function finishLesson({ correct }: { correct: boolean }) {
@@ -145,4 +150,9 @@ export async function setUserSubjects(subjectCodes: string[]) {
   await supabase.from('users').update({ added_course: subj.id }).eq('id', user.id);
   try { localStorage.setItem('exampli:activeSubjectCode', subj.code); } catch {}
   cacheSet(CACHE_KEYS.activeCourseCode, subj.code, 10 * 60_000);
+  // update cached user to avoid stale added_course
+  try {
+    const cached = cacheGet<any>(CACHE_KEYS.user) || {};
+    cacheSet(CACHE_KEYS.user, { ...cached, id: user.id, added_course: subj.id }, 5 * 60_000);
+  } catch {}
 }

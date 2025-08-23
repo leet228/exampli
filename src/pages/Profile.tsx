@@ -12,11 +12,12 @@ export default function Profile() {
       const tu = tg?.initDataUnsafe?.user;
       if (!tu) return;
       // базовый user из БД
-      const cachedU = cacheGet<any>(CACHE_KEYS.user);
-      let user: any | null = cachedU || null;
+      // читаем из кэша, если пусто — берём из базы и пишем в кэш
+      let user: any | null = cacheGet<any>(CACHE_KEYS.user);
       if (!user || user.added_course == null) {
         const fresh = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
         user = fresh.data as any;
+        if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
       cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
