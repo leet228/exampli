@@ -21,26 +21,36 @@ export default function Onboarding({ open, onDone }: Props) {
   }, []);
 
   const sharePhone = useCallback(async () => {
+    const tg = (window as any)?.Telegram?.WebApp;
     try {
-      const tg = (window as any)?.Telegram?.WebApp;
-      // Try WebApp API (Telegram may show native phone share sheet)
       const resp = await tg?.requestPhoneNumber?.();
       const phone: string | undefined = resp?.phone_number || resp?.phoneNumber || resp;
-
       if (phone) {
+        // оптимистично обновим локальный boot-кэш
+        try {
+          const boot = (window as any).__exampliBoot as any | undefined;
+          if (boot?.user) {
+            boot.user.phone_number = String(phone);
+            (window as any).__exampliBoot = boot;
+          }
+        } catch {}
+        // продолжим UI сразу
+        next();
+        // запись в БД: надёжно через id
         const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
         if (tgId) {
-          // не блокируем UI: обновим номер в фоне
-          void supabase.from('users').update({ phone_number: String(phone) }).eq('tg_id', String(tgId));
-          // подправим локальный boot-кэш, чтобы следующий экран не мигал
           try {
-            const boot = (window as any).__exampliBoot as any | undefined;
-            if (boot?.user) {
-              boot.user.phone_number = String(phone);
-              (window as any).__exampliBoot = boot;
+            const { data: user } = await supabase
+              .from('users')
+              .select('id')
+              .eq('tg_id', String(tgId))
+              .single();
+            if (user?.id) {
+              await supabase.from('users').update({ phone_number: String(phone) }).eq('id', user.id);
             }
           } catch {}
         }
+        return;
       }
     } catch {}
     next();
@@ -98,25 +108,33 @@ export default function Onboarding({ open, onDone }: Props) {
   const canSubmitPhone = (prefixMax[prefix] || 12) === digits.length;
 
   const submitPhoneManually = useCallback(async () => {
+    const tg = (window as any)?.Telegram?.WebApp;
+    const full = `${prefix}${digits}`;
+    // оптимистичный локальный апдейт
     try {
-      const tg = (window as any)?.Telegram?.WebApp;
-      const full = `${prefix}${digits}`;
+      const boot = (window as any).__exampliBoot as any | undefined;
+      if (boot) {
+        if (boot.user) boot.user.phone_number = full;
+        boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
+        (window as any).__exampliBoot = boot;
+      }
+    } catch {}
+    // UI дальше сразу
+    next();
+    // запись в БД: по id пользователя
+    try {
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
       if (tgId) {
-        // не блокируем UI: fire-and-forget
-        void supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
-      }
-      // локально отметим телефон у пользователя
-      try {
-        const boot = (window as any).__exampliBoot as any | undefined;
-        if (boot) {
-          if (boot.user) boot.user.phone_number = full;
-          boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
-          (window as any).__exampliBoot = boot;
+        const { data: user } = await supabase
+          .from('users')
+          .select('id')
+          .eq('tg_id', String(tgId))
+          .single();
+        if (user?.id) {
+          await supabase.from('users').update({ phone_number: full }).eq('id', user.id);
         }
-      } catch {}
+      }
     } catch {}
-    next();
   }, [digits, next, prefix]);
 
   const formatDigits = useCallback((pfx: string, ds: string): string => {
