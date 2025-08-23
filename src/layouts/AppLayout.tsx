@@ -49,13 +49,12 @@ export default function AppLayout() {
       const isBrandNew = !!(window as any).__exampliNewUserCreated;
       // сбрасываем флаг «только что создан» после чтения
       (window as any).__exampliNewUserCreated = false;
-      const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
       const phoneGiven = !!(ob?.phone_given);
       const courseTaken = !!(ob?.course_taken);
       // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
       const finished = !!(ob && ob.boarding_finished);
       const needPhone = !phoneGiven;
-      const needCourse = !hasSubjects || (phoneGiven && !courseTaken);
+      const needCourse = !courseTaken;
 
       if (finished) {
         setShowOnboarding(false);
@@ -63,23 +62,19 @@ export default function AppLayout() {
         return;
       }
 
-      if (isBrandNew) {
-        // только что создан — если нужен телефон, показываем онбординг; если только курс — сразу выбор курса
-        if (needPhone) {
-          setShowOnboarding(true);
-        } else if (needCourse) {
-          setShowOnboarding(false);
-          setOpenCoursePicker(true);
-        } else {
-          setShowOnboarding(false);
-        }
-      } else if (needCourse && phoneGiven) {
-        // сразу открываем выбор курса, онбординг не показываем
+      // Решение ТОЛЬКО по users_onboarding:
+      // 1) Если course_taken = FALSE → открываем выбор курса
+      // 2) Иначе если phone_given = FALSE → показываем экран телефона (онбординг)
+      // 3) Иначе ничего
+      if (needCourse) {
         setShowOnboarding(false);
         setOpenCoursePicker(true);
+      } else if (needPhone) {
+        setOpenCoursePicker(false);
+        setShowOnboarding(true);
       } else {
-        // показываем онбординг только если нужен экран телефона
-        setShowOnboarding(needPhone);
+        setShowOnboarding(false);
+        setOpenCoursePicker(false);
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
