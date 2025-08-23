@@ -53,7 +53,7 @@ export default function AppLayout() {
       const phoneGiven = !!(ob?.phone_given);
       const courseTaken = !!(ob?.course_taken);
       // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
-      const finished = !!(ob?.boarding_finished);
+      const finished = !!(ob && ob.boarding_finished);
       const needPhone = !phoneGiven;
       const needCourse = !hasSubjects || (phoneGiven && !courseTaken);
 

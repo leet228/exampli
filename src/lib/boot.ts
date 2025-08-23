@@ -36,6 +36,7 @@ function preloadImage(src: string) {
 
 export async function bootPreload(onProgress?: (p: number) => void): Promise<BootData> {
   const step = (i: number, n: number) => onProgress?.(Math.round((i / n) * 100));
+  const toBool = (v: any): boolean => v === true || v === 1 || v === 't' || v === 'true' || v === 'TRUE' || v === 'True';
 
   // план шагов:
   // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
@@ -69,14 +70,22 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       .eq('user_id', userRow.id)
       .single();
     if (ob) {
-      onboarding = { phone_given: !!(ob as any).phone_given, course_taken: !!(ob as any).course_taken, boarding_finished: !!(ob as any).boarding_finished };
+      onboarding = { 
+        phone_given: toBool((ob as any).phone_given), 
+        course_taken: toBool((ob as any).course_taken), 
+        boarding_finished: toBool((ob as any).boarding_finished) 
+      };
     } else {
       const { data: created } = await supabase
         .from('users_onboarding')
         .insert({ user_id: userRow.id, phone_given: false, course_taken: false, boarding_finished: false })
         .select('phone_given,course_taken,boarding_finished')
         .single();
-      onboarding = created ? { phone_given: !!(created as any).phone_given, course_taken: !!(created as any).course_taken, boarding_finished: !!(created as any).boarding_finished } : { phone_given: false, course_taken: false, boarding_finished: false };
+      onboarding = created ? { 
+        phone_given: toBool((created as any).phone_given), 
+        course_taken: toBool((created as any).course_taken), 
+        boarding_finished: toBool((created as any).boarding_finished) 
+      } : { phone_given: false, course_taken: false, boarding_finished: false };
     }
   }
   step(++i, TOTAL);
