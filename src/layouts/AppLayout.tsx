@@ -61,9 +61,13 @@ export default function AppLayout() {
       }
 
       // Решение ТОЛЬКО по users_onboarding:
-      // Если телефон не дан → показываем онбординг (экран телефона)
-      // Во всех других случаях на старте онбординг не показываем
-      if (needPhone) {
+      // 0) Если finished → ничего
+      // 1) Если телефон не дан → онбординг (экран телефона)
+      // 2) Иначе — ничего
+      if (finished) {
+        setShowOnboarding(false);
+        setOpenCoursePicker(false);
+      } else if (needPhone) {
         setOpenCoursePicker(false);
         setShowOnboarding(true);
       } else {

@@ -48,11 +48,15 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   step(++i, TOTAL);
 
   // 2) полные данные пользователя (включая phone_number)
-  const { data: userRow } = await supabase
-    .from('users')
-    .select('id,xp,streak,hearts,phone_number')
-    .eq('id', user?.id ?? -1)
-    .single();
+  let userRow: any | null = null;
+  if (user?.id) {
+    const { data } = await supabase
+      .from('users')
+      .select('id,xp,streak,hearts,phone_number')
+      .eq('id', user.id)
+      .single();
+    userRow = data as any;
+  }
 
   const stats = {
     xp: userRow?.xp ?? 0,
@@ -91,10 +95,14 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   step(++i, TOTAL);
 
   // 3) связи user → subjects
-  const { data: rel } = await supabase
-    .from('user_subjects')
-    .select('subject_id')
-    .eq('user_id', user?.id ?? -1);
+  let rel: any[] | null = null;
+  if (user?.id) {
+    const resp = await supabase
+      .from('user_subjects')
+      .select('subject_id')
+      .eq('user_id', user.id);
+    rel = (resp.data as any[]) || null;
+  }
 
   const subjectIds: number[] = Array.isArray(rel)
     ? rel.map((r: any) => Number(r.subject_id)).filter(Boolean)
