@@ -28,16 +28,7 @@ export async function ensureUser(): Promise<UserStats | null> {
       last_name: tgUser?.last_name,
     }).select('*').single();
     try { (window as any).__exampliNewUserCreated = true; } catch {}
-    // ensure onboarding row exists for this user
-    try {
-      if ((created as any)?.id) {
-        await supabase
-          .from('users_onboarding')
-          .insert({ user_id: (created as any).id, phone_given: false, course_taken: false, boarding_finished: false })
-          .select('user_id')
-          .single();
-      }
-    } catch {}
+    // users_onboarding больше не используем
     return created as any;
   }
   return user as any;

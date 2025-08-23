@@ -189,16 +189,7 @@ export default function HUD() {
             void setUserSubjects([s.code]);
             setCourseTitle(s.title);
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
-            // users_onboarding: course_taken = true
-            (async () => {
-              try {
-                const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-                if (tgId) {
-                  const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-                  if (u?.id) await supabase.from('users_onboarding').update({ course_taken: true, boarding_finished: true }).eq('user_id', u.id);
-                }
-              } catch {}
-            })();
+            // users_onboarding удалён: ничего не обновляем
             (window as any).__exampliAfterOnboarding = false;
             setAddOpen(false);
           }}

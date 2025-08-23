@@ -79,32 +79,17 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   };
   step(++i, TOTAL);
 
-  // 2b) onboarding row (ensure exists)
+  // 2b) онбординг теперь вычисляем только по phone_number в users
   let onboarding: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null = null;
   if (userRow?.id) {
-    const { data: ob } = await supabase
-      .from('users_onboarding')
-      .select('phone_given,course_taken,boarding_finished')
-      .eq('user_id', userRow.id)
-      .single();
-    if (ob) {
-      onboarding = { 
-        phone_given: toBool((ob as any).phone_given), 
-        course_taken: toBool((ob as any).course_taken), 
-        boarding_finished: toBool((ob as any).boarding_finished) 
-      };
-    } else {
-      const { data: created } = await supabase
-        .from('users_onboarding')
-        .insert({ user_id: userRow.id, phone_given: false, course_taken: false, boarding_finished: false })
-        .select('phone_given,course_taken,boarding_finished')
-        .single();
-      onboarding = created ? { 
-        phone_given: toBool((created as any).phone_given), 
-        course_taken: toBool((created as any).course_taken), 
-        boarding_finished: toBool((created as any).boarding_finished) 
-      } : { phone_given: false, course_taken: false, boarding_finished: false };
-    }
+    const hasPhone = !!userRow?.phone_number;
+    onboarding = {
+      phone_given: hasPhone,
+      // курс считаем «не блокирующим» условием онбординга, так что ставим true
+      course_taken: true,
+      // finished — если телефон уже дан, онбординг не нужен
+      boarding_finished: hasPhone,
+    };
   }
   step(++i, TOTAL);
 

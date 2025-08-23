@@ -44,13 +44,13 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // Онбординг по users_onboarding: если нет строки — boot создал её с false/false
+      // Онбординг теперь решается только по users.phone_number (см. boot.onboarding.phone_given)
       const ob = ce.detail?.onboarding || null;
       const isBrandNew = !!(window as any).__exampliNewUserCreated;
       // сбрасываем флаг «только что создан» после чтения
       (window as any).__exampliNewUserCreated = false;
       const phoneGiven = ob ? !!ob.phone_given : true; // если нет данных об онбординге — не показываем онбординг
-      // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
+      // Если boarding_finished=true — ничего не показывать
       const finished = !!(ob && ob.boarding_finished);
       const needPhone = ob ? !phoneGiven : false;
 
@@ -60,9 +60,9 @@ export default function AppLayout() {
         return;
       }
 
-      // Решение ТОЛЬКО по users_onboarding:
+      // Решение ТОЛЬКО по phone_number:
       // 0) Если finished → ничего
-      // 1) Если телефон не дан → онбординг (экран телефона)
+      // 1) Если телефон не дан → онбординг (с приветствия)
       // 2) Иначе — ничего
       if (finished) {
         setShowOnboarding(false);
