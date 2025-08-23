@@ -49,10 +49,10 @@ export default function AppLayout() {
       const isBrandNew = !!(window as any).__exampliNewUserCreated;
       // сбрасываем флаг «только что создан» после чтения
       (window as any).__exampliNewUserCreated = false;
-      const phoneGiven = !!(ob?.phone_given);
+      const phoneGiven = ob ? !!ob.phone_given : true; // если нет данных об онбординге — не показываем онбординг
       // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
       const finished = !!(ob && ob.boarding_finished);
-      const needPhone = !phoneGiven;
+      const needPhone = ob ? !phoneGiven : false;
 
       if (finished) {
         setShowOnboarding(false);
