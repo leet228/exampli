@@ -27,17 +27,17 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="px-1 mt-[-70px]">
+      <div className="px-1 mt-[-85px]">
         <div className="text-2xl font-extrabold">КУРСИК <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
       </div>
 
       {/* карусель тарифов */}
       <div
         ref={trackRef}
-        className="w-full overflow-x-auto no-scrollbar"
+        className="w-full overflow-x-auto no-scrollbar mt-4"
         style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="flex gap-4 px-1 mt-[-6px]" style={{ width: '100%' }}>
+        <div className="flex gap-4 px-1" style={{ width: '100%' }}>
           {plans.map((p, i) => (
             <motion.div
               key={p.id}
