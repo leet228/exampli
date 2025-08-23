@@ -9,6 +9,7 @@ import Onboarding from '../components/Onboarding';
 import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import { supabase } from '../lib/supabase';
+import SpeedInsights from '../lib/SpeedInsights';
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -117,6 +118,9 @@ export default function AppLayout() {
 
       {/* Нижняя навигация (после загрузки, чтобы не мигала под сплэшем) */}
       {showBottom && bootDone && <BottomNav />}
+
+      {/* Vercel Speed Insights */}
+      <SpeedInsights />
     </div>
   );
 }
