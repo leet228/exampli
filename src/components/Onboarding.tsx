@@ -95,7 +95,6 @@ export default function Onboarding({ open, onDone }: Props) {
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
       if (tgId) {
         await supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
-        // users_onboarding удалён
       }
     } catch {}
     // синхронизируем локальный boot-кэш, чтобы AppLayout не открыл приветствие снова

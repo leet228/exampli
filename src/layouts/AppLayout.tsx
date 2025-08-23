@@ -107,7 +107,6 @@ export default function AppLayout() {
         open={openCoursePicker}
         onPicked={async (s) => {
           await setUserSubjects([s.code]);
-          // users_onboarding удалён: ничего не обновляем
           setOpenCoursePicker(false);
           // оповестим остальных
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));

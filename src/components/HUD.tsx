@@ -195,7 +195,6 @@ export default function HUD() {
             void setUserSubjects([s.code]);
             setCourseTitle(s.title);
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } }));
-            // users_onboarding удалён: ничего не обновляем
             (window as any).__exampliAfterOnboarding = false;
             setAddOpen(false);
           }}
