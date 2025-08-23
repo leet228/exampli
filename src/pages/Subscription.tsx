@@ -27,7 +27,7 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="px-1 mt-[-20px]">
+      <div className="px-1 mt-[-50px]">
         <div className="text-2xl font-extrabold">КУРСИК <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
       </div>
 
@@ -41,15 +41,11 @@ export default function Subscription() {
           {plans.map((p, i) => (
             <motion.div
               key={p.id}
-              className="shrink-0 rounded-3xl p-5 border border-white/10"
+              className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
               style={{ minWidth: '100%', scrollSnapAlign: 'start' }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(56,189,248,0.14), rgba(99,102,241,0.14), rgba(236,72,153,0.14), rgba(239,68,68,0.14))',
-                position: 'absolute', inset: 0, borderRadius: 24, pointerEvents: 'none'
-              }} aria-hidden />
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-xl font-bold">{p.title} <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
