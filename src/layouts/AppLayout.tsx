@@ -47,18 +47,22 @@ export default function AppLayout() {
       // Онбординг по users_onboarding: если нет строки — boot создал её с false/false
       const ob = ce.detail?.onboarding || null;
       const isBrandNew = !!(window as any).__exampliNewUserCreated;
-      const showPhone = !!(ob && !ob.phone_given);
-      const showCourse = !!(ob && ob.phone_given && !ob.course_taken);
+      const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
+      const phoneGiven = !!(ob?.phone_given);
+      const courseTaken = !!(ob?.course_taken);
+      const needPhone = !phoneGiven;
+      const needCourse = !hasSubjects || (phoneGiven && !courseTaken);
+
       if (isBrandNew) {
         // только что создан — показываем онбординг с первого шага
         setShowOnboarding(true);
-      } else if (showCourse) {
+      } else if (needCourse && phoneGiven) {
         // сразу открываем выбор курса, онбординг не показываем
         setShowOnboarding(false);
         setOpenCoursePicker(true);
       } else {
         // показываем онбординг только если нужен экран телефона
-        setShowOnboarding(showPhone);
+        setShowOnboarding(needPhone);
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
