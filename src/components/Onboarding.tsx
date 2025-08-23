@@ -11,14 +11,8 @@ export default function Onboarding({ open, onDone }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    // читаем bootData, чтобы определить стартовый шаг
-    const boot = (window as any).__exampliBoot as any | undefined;
-    const ob = boot?.onboarding || null;
-    if (ob && ob.phone_given && ob.course_taken) {
-      // онбординг не нужен — защитный случай
-      setStep(0);
-    } else if (ob && !ob.phone_given) setStep(1); // сразу телефон
-    else setStep(0);
+    // Всегда начинаем с первого слайда (Welcome)
+    setStep(0);
   }, [open]);
 
   const next = useCallback(() => {
@@ -47,15 +41,7 @@ export default function Onboarding({ open, onDone }: Props) {
     try { localStorage.setItem('exampli:onboardDone', '1'); } catch {}
     (window as any).__exampliOnboardShown = true;
     (window as any).__exampliAfterOnboarding = true;
-    // Обновим boarding_finished=true
-    try {
-      const tg = (window as any)?.Telegram?.WebApp;
-      const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
-      if (tgId) {
-        const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-        if (u?.id) await supabase.from('users_onboarding').update({ boarding_finished: true }).eq('user_id', u.id);
-      }
-    } catch {}
+    // boarding_finished НЕ трогаем здесь — завершение после выбора курса
     hapticTiny();
     onDone();
   }, [onDone]);
