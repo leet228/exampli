@@ -47,6 +47,8 @@ export default function AppLayout() {
       // Онбординг по users_onboarding: если нет строки — boot создал её с false/false
       const ob = ce.detail?.onboarding || null;
       const isBrandNew = !!(window as any).__exampliNewUserCreated;
+      // сбрасываем флаг «только что создан» после чтения
+      (window as any).__exampliNewUserCreated = false;
       const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
       const phoneGiven = !!(ob?.phone_given);
       const courseTaken = !!(ob?.course_taken);
@@ -54,8 +56,15 @@ export default function AppLayout() {
       const needCourse = !hasSubjects || (phoneGiven && !courseTaken);
 
       if (isBrandNew) {
-        // только что создан — показываем онбординг с первого шага
-        setShowOnboarding(true);
+        // только что создан — если нужен телефон, показываем онбординг; если только курс — сразу выбор курса
+        if (needPhone) {
+          setShowOnboarding(true);
+        } else if (needCourse) {
+          setShowOnboarding(false);
+          setOpenCoursePicker(true);
+        } else {
+          setShowOnboarding(false);
+        }
       } else if (needCourse && phoneGiven) {
         // сразу открываем выбор курса, онбординг не показываем
         setShowOnboarding(false);
