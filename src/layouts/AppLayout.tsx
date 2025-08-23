@@ -76,6 +76,9 @@ export default function AppLayout() {
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
+    // если boot уже прошёл до монтирования — обработаем сразу
+    const existing = (window as any).__exampliBoot as BootData | undefined;
+    if (existing) ready(new CustomEvent('exampli:bootData', { detail: existing }) as unknown as Event);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
 
