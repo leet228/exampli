@@ -14,6 +14,8 @@ export default function HUD() {
   const anchorRef = useRef<HTMLDivElement>(null);
 
   const [courseTitle, setCourseTitle] = useState('Курс');
+  const [courseCode, setCourseCode] = useState<string | null>(null);
+  const [iconOk, setIconOk] = useState<boolean>(true);
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
 
@@ -55,11 +57,13 @@ export default function HUD() {
       if (addedId) {
         const { data: subj } = await supabase
           .from('subjects')
-          .select('title')
+          .select('title, code')
           .eq('id', addedId)
           .single();
         const title = subj?.title as string | undefined;
+        const code  = subj?.code  as string | undefined;
         if (title) setCourseTitle(title);
+        if (code) { setCourseCode(code); setIconOk(true); }
       }
     }
   }, []);
@@ -73,6 +77,7 @@ export default function HUD() {
     const onCourseChanged = (evt: Event) => {
       const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
+      if (e.detail?.code) { setCourseCode(e.detail.code); setIconOk(true); }
       refresh();
     };
 
@@ -123,8 +128,21 @@ export default function HUD() {
               className="flex items-center gap-2"
               aria-label="Выбрать курс"
             >
-              <span className="text-lg">🧩</span>
-              <span className="truncate max-w-[160px]">{courseTitle}</span>
+              {courseCode && iconOk ? (
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-white/25 overflow-hidden bg-white/5">
+                  <img
+                    src={`/subjects/${courseCode}.svg`}
+                    alt=""
+                    className="w-8 h-8 object-contain"
+                    onError={() => setIconOk(false)}
+                  />
+                </span>
+              ) : (
+                <span className="text-lg">🧩</span>
+              )}
+              {(!courseCode || !iconOk) && (
+                <span className="truncate max-w-[160px]">{courseTitle}</span>
+              )}
             </button>
 
             {/* Стрик */}
