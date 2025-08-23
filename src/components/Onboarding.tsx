@@ -43,10 +43,19 @@ export default function Onboarding({ open, onDone }: Props) {
     next();
   }, [next]);
 
-  const finish = useCallback(() => {
+  const finish = useCallback(async () => {
     try { localStorage.setItem('exampli:onboardDone', '1'); } catch {}
     (window as any).__exampliOnboardShown = true;
     (window as any).__exampliAfterOnboarding = true;
+    // Обновим boarding_finished=true
+    try {
+      const tg = (window as any)?.Telegram?.WebApp;
+      const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
+      if (tgId) {
+        const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+        if (u?.id) await supabase.from('users_onboarding').update({ boarding_finished: true }).eq('user_id', u.id);
+      }
+    } catch {}
     hapticTiny();
     onDone();
   }, [onDone]);

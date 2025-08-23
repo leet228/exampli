@@ -33,7 +33,7 @@ export async function ensureUser(): Promise<UserStats | null> {
       if ((created as any)?.id) {
         await supabase
           .from('users_onboarding')
-          .insert({ user_id: (created as any).id, phone_given: false, course_taken: false })
+          .insert({ user_id: (created as any).id, phone_given: false, course_taken: false, boarding_finished: false })
           .select('user_id')
           .single();
       }

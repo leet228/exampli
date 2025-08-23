@@ -52,8 +52,16 @@ export default function AppLayout() {
       const hasSubjects = (ce.detail?.subjects?.length || 0) > 0;
       const phoneGiven = !!(ob?.phone_given);
       const courseTaken = !!(ob?.course_taken);
+      // НОВЫЕ ПРАВИЛА: если boarding_finished=true — ничего не показывать
+      const finished = !!(ob?.boarding_finished);
       const needPhone = !phoneGiven;
       const needCourse = !hasSubjects || (phoneGiven && !courseTaken);
+
+      if (finished) {
+        setShowOnboarding(false);
+        setOpenCoursePicker(false);
+        return;
+      }
 
       if (isBrandNew) {
         // только что создан — если нужен телефон, показываем онбординг; если только курс — сразу выбор курса

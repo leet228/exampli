@@ -195,7 +195,7 @@ export default function HUD() {
                 const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
                 if (tgId) {
                   const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-                  if (u?.id) await supabase.from('users_onboarding').update({ course_taken: true }).eq('user_id', u.id);
+                  if (u?.id) await supabase.from('users_onboarding').update({ course_taken: true, boarding_finished: true }).eq('user_id', u.id);
                 }
               } catch {}
             })();
