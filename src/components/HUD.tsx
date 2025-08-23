@@ -1,5 +1,6 @@
 // src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import TopSheet from './sheets/TopSheet';
@@ -7,12 +8,13 @@ import AddCourseSheet from './panels/AddCourseSheet';
 import AddCourseBlocking from './panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import CoursesPanel from './sheets/CourseSheet';
-import CoinSheet from './sheets/CoinSheet';
+// CoinSheet более не используется; переход на страницу подписки
 
 type Subject = { id: number; code: string; title: string; level: string };
 
 export default function HUD() {
   const anchorRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const [courseTitle, setCourseTitle] = useState('Курс');
   const [courseCode, setCourseCode] = useState<string | null>(null);
@@ -20,9 +22,8 @@ export default function HUD() {
   const [streak, setStreak] = useState(0);
   const [energy, setEnergy] = useState(25);
 
-  // коины и их шторка
-  const [coins, setCoins] = useState(0);          // TODO: подставить из БД, если нужно
-  const [coinsOpen, setCoinsOpen] = useState(false);
+  // коины (счётчик); при клике — переход на подписку с подсветкой
+  const [coins, setCoins] = useState(0);
 
   // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
@@ -162,7 +163,7 @@ export default function HUD() {
   // подпинываем плавающие элементы (баннер) пересчитать позицию
   useEffect(() => {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
-  }, [addOpen, open, coinsOpen]);
+  }, [addOpen, open]);
 
   // Слушаем глобальное событие, чтобы открыть AddCourseSheet после онбординга
   useEffect(() => {
@@ -217,7 +218,12 @@ export default function HUD() {
             {/* Коины (иконка + число справа) */}
             <button
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCoinsOpen(true); }}
+              onClick={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                try { sessionStorage.setItem('exampli:highlightCoins','1'); } catch {}
+                window.dispatchEvent(new Event('exampli:highlightCoins'));
+                navigate('/subscription');
+              }}
               className="justify-self-center flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Коины"
             >
@@ -260,8 +266,7 @@ export default function HUD() {
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
-      {/* Фуллскрин «Кошелёк» (коины) */}
-      <CoinSheet open={coinsOpen} onClose={() => setCoinsOpen(false)} />
+      {/* Кошелёк удалён — используем страницу подписки */}
 
       {/* Выбор курса: после онбординга — блокирующий полноэкранный; иначе — обычная шторка */}
       {((window as any).__exampliAfterOnboarding === true) ? (

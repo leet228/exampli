@@ -12,6 +12,7 @@ export default function Subscription() {
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
+  const [highlight, setHighlight] = useState(false);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -24,6 +25,26 @@ export default function Subscription() {
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll as any);
   }, [plans.length]);
+
+  // ловим сигнал для подсветки секции коинов
+  useEffect(() => {
+    const flag = sessionStorage.getItem('exampli:highlightCoins');
+    if (flag === '1') {
+      sessionStorage.removeItem('exampli:highlightCoins');
+      setTimeout(() => {
+        setHighlight(true);
+        setTimeout(() => setHighlight(false), 1200);
+      }, 100);
+    }
+    const handler = () => {
+      setTimeout(() => {
+        setHighlight(true);
+        setTimeout(() => setHighlight(false), 1200);
+      }, 100);
+    };
+    window.addEventListener('exampli:highlightCoins', handler);
+    return () => window.removeEventListener('exampli:highlightCoins', handler);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -82,7 +103,7 @@ export default function Subscription() {
 
       {/* Коины */}
       <div className="mt-2 px-1 text-xl font-extrabold">Коины</div>
-      <div className="grid gap-3 px-1">
+      <div className={['grid gap-3 px-1 transition', highlight ? 'animate-pulse' : ''].join(' ')}>
         {[{ icon:'💰', amount:1200, price:'99 ₽' }, { icon:'🧺', amount:3000, price:'199 ₽' }, { icon:'🛒', amount:6500, price:'399 ₽' }].map((g,i)=>(
           <div key={i} className="rounded-3xl p-4 border border-white/10 bg-white/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
