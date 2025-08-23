@@ -27,6 +27,16 @@ export async function ensureUser(): Promise<UserStats | null> {
       first_name: tgUser?.first_name,
       last_name: tgUser?.last_name,
     }).select('*').single();
+    // ensure onboarding row exists for this user
+    try {
+      if ((created as any)?.id) {
+        await supabase
+          .from('users_onboarding')
+          .insert({ user_id: (created as any).id, phone_given: false, course_taken: false })
+          .select('user_id')
+          .single();
+      }
+    } catch {}
     return created as any;
   }
   return user as any;

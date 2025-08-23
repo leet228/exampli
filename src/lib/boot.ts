@@ -42,7 +42,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const TOTAL = 7;
   let i = 0;
 
-  // 1) пользователь
+  // 1) пользователь (ensureUser также создаёт users_onboarding для нового)
   const user = await ensureUser();
   step(++i, TOTAL);
 
