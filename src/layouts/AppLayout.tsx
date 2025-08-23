@@ -44,11 +44,18 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // Правило: показываем онбординг только если у пользователя нет phone_number
+      // Логика показа онбординга/выбора курса:
+      // 1) Если нет phone_number — показываем онбординг (как раньше)
+      // 2) Иначе если нет added_course — сразу открываем выбор курса
+      // 3) Иначе — ничего не показываем
       const userHasPhone = !!ce.detail?.user?.phone_number;
+      const userHasCourse = !!(ce.detail?.user as any)?.added_course;
       if (!userHasPhone) {
         setOpenCoursePicker(false);
         setShowOnboarding(true);
+      } else if (!userHasCourse) {
+        setShowOnboarding(false);
+        setOpenCoursePicker(true);
       } else {
         setShowOnboarding(false);
         setOpenCoursePicker(false);
