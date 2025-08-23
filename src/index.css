@@ -165,7 +165,7 @@ html, body, #root { overflow-x: hidden; }
 /* ===== кнопка-баннер как у Дуо (wide) ===== */
 .topics-hero{
   position: fixed;
-  top: calc(var(--hud-top) + var(--hud-h) - 16px);
+  top: calc(var(--hud-top) + var(--hud-h) - 20px);
   left: 12px;
   right: 12px;
 
