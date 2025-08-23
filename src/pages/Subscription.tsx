@@ -35,14 +35,14 @@ export default function Subscription() {
       setTimeout(() => {
         setHighlight(true);
         try { coinsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-        setTimeout(() => setHighlight(false), 2000);
+        setTimeout(() => setHighlight(false), 1200);
       }, 100);
     }
     const handler = () => {
       setTimeout(() => {
         setHighlight(true);
         try { coinsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-        setTimeout(() => setHighlight(false), 2000);
+        setTimeout(() => setHighlight(false), 1200);
       }, 100);
     };
     window.addEventListener('exampli:highlightCoins', handler);
@@ -126,7 +126,7 @@ export default function Subscription() {
                 'rgba(56,189,248,0.00)'
               ]
             }}
-            transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
+            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], times: [0, 0.25, 0.7, 1] }}
           />
         )}
         <div className="text-xl font-extrabold">Коины</div>
