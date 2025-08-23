@@ -27,7 +27,7 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="px-1 mt-[-50px]">
+      <div className="px-1 mt-[-70px]">
         <div className="text-2xl font-extrabold">КУРСИК <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
       </div>
 
