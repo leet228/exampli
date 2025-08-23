@@ -102,17 +102,29 @@ export default function Subscription() {
       </div>
 
       {/* Коины */}
-      <div className="mt-2 px-1 text-xl font-extrabold">Коины</div>
-      <div className={['grid gap-3 px-1 transition', highlight ? 'animate-pulse' : ''].join(' ')}>
-        {[{ icon:'💰', amount:1200, price:'99 ₽' }, { icon:'🧺', amount:3000, price:'199 ₽' }, { icon:'🛒', amount:6500, price:'399 ₽' }].map((g,i)=>(
-          <div key={i} className="rounded-3xl p-4 border border-white/10 bg-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl" aria-hidden>{g.icon}</div>
-              <div className="text-lg font-semibold tabular-nums">{g.amount}</div>
+      <div className="relative mt-2 px-1">
+        {highlight && (
+          <motion.div
+            className="absolute inset-0 rounded-2xl pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ boxShadow: '0 0 0 4px rgba(56,189,248,0.65)', background: 'rgba(56,189,248,0.10)' }}
+          />
+        )}
+        <div className="text-xl font-extrabold">Коины</div>
+        <div className="grid gap-3">
+          {[{ icon:'💰', amount:1200, price:'99 ₽' }, { icon:'🧺', amount:3000, price:'199 ₽' }, { icon:'🛒', amount:6500, price:'399 ₽' }].map((g,i)=>(
+            <div key={i} className="rounded-3xl p-4 border border-white/10 bg-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl" aria-hidden>{g.icon}</div>
+                <div className="text-lg font-semibold tabular-nums">{g.amount}</div>
+              </div>
+              <button type="button" className="btn px-5 py-2">{g.price}</button>
             </div>
-            <button type="button" className="btn px-5 py-2">{g.price}</button>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
