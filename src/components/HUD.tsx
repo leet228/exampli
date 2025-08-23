@@ -1,6 +1,7 @@
 // src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import TopSheet from './sheets/TopSheet';
 import AddCourseSheet from './panels/AddCourseSheet';
 import AddCourseBlocking from './panels/AddCourseBlocking';
@@ -35,7 +36,7 @@ export default function HUD() {
     if (!tgId) {
       // офф-телеграм режим: попробуем взять код из localStorage
       try {
-        const stored = localStorage.getItem(ACTIVE_KEY);
+        const stored = localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
         if (stored) {
           setCourseCode(stored);
           setIconOk(true);
@@ -85,6 +86,7 @@ export default function HUD() {
           setCourseCode(code);
           setIconOk(true);
           try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
+          cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
         }
       } else {
         // если в users нет added_course — попробуем boot-кэш, затем localStorage
@@ -98,7 +100,7 @@ export default function HUD() {
           try { localStorage.setItem(ACTIVE_KEY, bootCode); } catch {}
         } else {
           try {
-            const stored = localStorage.getItem(ACTIVE_KEY);
+            const stored = localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
             if (stored) {
               setCourseCode(stored);
               setIconOk(true);
@@ -129,6 +131,7 @@ export default function HUD() {
         setCourseCode(e.detail.code);
         setIconOk(true);
         try { localStorage.setItem('exampli:activeSubjectCode', e.detail.code); } catch {}
+        cacheSet(CACHE_KEYS.activeCourseCode, e.detail.code, 10 * 60_000);
       }
     };
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { cacheSet, CACHE_KEYS } from './cache';
 
 export type UserStats = {
   id: string;
@@ -91,6 +92,8 @@ export async function addUserSubject(subjectCode: string) {
   await supabase.from('users').update({ added_course: subj.id }).eq('id', user.id);
 
   window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: subj.title, code: subj.code } }));
+  try { localStorage.setItem('exampli:activeSubjectCode', subj.code); } catch {}
+  cacheSet(CACHE_KEYS.activeCourseCode, subj.code, 10 * 60_000);
 }
 
 export async function finishLesson({ correct }: { correct: boolean }) {
@@ -140,4 +143,6 @@ export async function setUserSubjects(subjectCodes: string[]) {
   const { data: subj } = await supabase.from('subjects').select('id, code').eq('code', firstCode).single();
   if (!subj?.id) return;
   await supabase.from('users').update({ added_course: subj.id }).eq('id', user.id);
+  try { localStorage.setItem('exampli:activeSubjectCode', subj.code); } catch {}
+  cacheSet(CACHE_KEYS.activeCourseCode, subj.code, 10 * 60_000);
 }

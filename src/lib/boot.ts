@@ -1,6 +1,7 @@
 // src/lib/boot.ts
 import { supabase } from './supabase';
 import { ensureUser } from './userState';
+import { cacheGet, cacheSet, CACHE_KEYS } from './cache';
 
 export type SubjectRow = {
   id: number;
@@ -45,7 +46,9 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   let i = 0;
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
-  const user = await ensureUser();
+  const cachedUser = cacheGet<any>(CACHE_KEYS.user);
+  const user = cachedUser ?? await ensureUser();
+  if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
   step(++i, TOTAL);
 
   // Если работаем вне Telegram (нет пользователя) — считаем, что это новый пользователь: показываем онбординг
@@ -71,6 +74,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       .eq('id', user.id)
       .single();
     userRow = data as any;
+    if (userRow) cacheSet(CACHE_KEYS.stats, { xp: userRow.xp ?? 0, streak: userRow.streak ?? 0, hearts: userRow.hearts ?? 5 }, 60_000);
   }
 
   const stats = {
@@ -116,7 +120,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   let activeId: number | null = null;
   let activeTitle: string | null = null;
 
-  try { activeCode = localStorage.getItem(ACTIVE_KEY); } catch {}
+  try { activeCode = localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || null; } catch {}
 
   if (activeCode) {
     const found = subjectsArr.find((s) => s.code === activeCode);
@@ -135,18 +139,27 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     activeId = first.id;
     activeTitle = first.title;
     try { localStorage.setItem(ACTIVE_KEY, activeCode); } catch {}
+    cacheSet(CACHE_KEYS.activeCourseCode, activeCode, 10 * 60_000);
   }
   step(++i, TOTAL);
 
   // 6) уроки ТОЛЬКО активного курса
   let lessonsArr: LessonRow[] = [];
   if (activeId) {
-    const { data: lessonsData } = await supabase
-      .from('lessons')
-      .select('id, title')
-      .eq('subject_id', activeId)
-      .order('order_index', { ascending: true })
-      .limit(12);
+    let lessonsData: any[] | null = null;
+    const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByCode(activeCode || ''));
+    if (cached) {
+      lessonsData = cached as any[];
+    } else {
+      const resp = await supabase
+        .from('lessons')
+        .select('id, title')
+        .eq('subject_id', activeId)
+        .order('order_index', { ascending: true })
+        .limit(12);
+      lessonsData = (resp.data as any[]) ?? [];
+      cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData, 5 * 60_000);
+    }
 
     lessonsArr = (lessonsData ?? []).map((l: any) => ({
       id: l.id,
@@ -169,6 +182,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   };
 
   (window as any).__exampliBoot = boot;
+  cacheSet(CACHE_KEYS.user, boot.user, 5 * 60_000);
+  cacheSet(CACHE_KEYS.activeCourseCode, activeCode || '', 10 * 60_000);
 
   // диспатчим bootData (как раньше)
   window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));

@@ -1,6 +1,7 @@
 // src/pages/Home.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import SkillRoad from '../components/SkillRoad';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
@@ -33,10 +34,11 @@ export default function Home() {
 
   // ======== helpers: localStorage =========
   const readActiveFromStorage = useCallback((): string | null => {
-    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+    try { return localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || null; } catch { return null; }
   }, []);
   const writeActiveToStorage = useCallback((code: string) => {
     try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
+    cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
   }, []);
 
   // ======== ensureActiveCourse: определяем активный курс (code + title) =========
@@ -126,6 +128,7 @@ export default function Home() {
       }));
 
       setItems(mapped);
+      if (code) cacheSet(CACHE_KEYS.lessonsByCode(code), data as any[], 5 * 60_000);
       if (!courseTitle && subj?.title) setCourseTitle(subj.title as string);
     } finally {
       setLoading(false);

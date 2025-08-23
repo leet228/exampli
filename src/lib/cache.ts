@@ -1,0 +1,47 @@
+// src/lib/cache.ts
+
+type CacheEntry<T = any> = { v: T; e: number | null };
+
+function safeLocalStorage(): Storage | null {
+  try { return window?.localStorage ?? null; } catch { return null; }
+}
+
+export function cacheGet<T = any>(key: string): T | null {
+  const ls = safeLocalStorage();
+  if (!ls) return null;
+  try {
+    const raw = ls.getItem(`exampli:${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEntry<T>;
+    if (parsed && (parsed.e === null || parsed.e > Date.now())) return parsed.v as T;
+    // expired
+    ls.removeItem(`exampli:${key}`);
+    return null;
+  } catch { return null; }
+}
+
+export function cacheSet<T = any>(key: string, value: T, ttlMs?: number): void {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    const entry: CacheEntry<T> = { v: value, e: typeof ttlMs === 'number' ? Date.now() + Math.max(0, ttlMs) : null };
+    ls.setItem(`exampli:${key}`, JSON.stringify(entry));
+  } catch {}
+}
+
+export function cacheRemove(key: string): void {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try { ls.removeItem(`exampli:${key}`); } catch {}
+}
+
+// Common cache keys
+export const CACHE_KEYS = {
+  user: 'user',
+  stats: 'stats',
+  activeCourseCode: 'active_course_code',
+  subjectByCode: (code: string) => `subject_code:${code}`,
+  lessonsByCode: (code: string) => `lessons_code:${code}`,
+};
+
+

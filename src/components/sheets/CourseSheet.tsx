@@ -1,6 +1,7 @@
 // src/components/panels/TopicsPanel.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hapticTiny } from '../../lib/haptics';
 
@@ -41,7 +42,8 @@ export default function CoursesPanel(props: Props) {
       const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       if (!tgId) { setSubjects([]); return; }
 
-      const { data: user } = await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
+      const cachedU = cacheGet<any>(CACHE_KEYS.user);
+      const { data: user } = cachedU ? { data: cachedU } : await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (!user?.id || !addedId) { setSubjects([]); setActiveCode(null); return; }
 
@@ -56,7 +58,7 @@ export default function CoursesPanel(props: Props) {
 
       // активным становится именно этот добавленный курс
       const code = list[0]?.code || null;
-      if (code) setActiveCode(code);
+      if (code) { setActiveCode(code); cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000); }
     } finally {
       setLoading(false);
     }

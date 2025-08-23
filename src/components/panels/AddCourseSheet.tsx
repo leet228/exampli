@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import FullScreenSheet from '../sheets/FullScreenSheet';
+import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 
 type Subject = { id: number; code: string; title: string; level: string };
@@ -72,6 +73,8 @@ export default function AddCourseSheet({
         detail: { title: picked.title, code: picked.code },
       }),
     );
+    try { localStorage.setItem('exampli:activeSubjectCode', picked.code); } catch {}
+    cacheSet(CACHE_KEYS.activeCourseCode, picked.code, 10 * 60_000);
   };
 
   return (

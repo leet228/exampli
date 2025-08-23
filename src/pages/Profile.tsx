@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 
 export default function Profile() {
   const [u, setU] = useState<any>(null);
@@ -11,8 +12,10 @@ export default function Profile() {
       const tu = tg?.initDataUnsafe?.user;
       if (!tu) return;
       // базовый user из БД
-      const { data: user } = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
+      const cachedU = cacheGet<any>(CACHE_KEYS.user);
+      const { data: user } = cachedU ? { data: cachedU } : await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
+      cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
       // текущий курс по users.added_course
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (addedId) {
