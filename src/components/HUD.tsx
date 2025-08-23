@@ -129,11 +129,11 @@ export default function HUD() {
               aria-label="Выбрать курс"
             >
               {courseCode && iconOk ? (
-                <span className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-white/25 overflow-hidden bg-white/5">
+                <span className="inline-flex items-center justify-center w-12 h-12 rounded-md border border-white/40 overflow-hidden">
                   <img
                     src={`/subjects/${courseCode}.svg`}
                     alt=""
-                    className="w-8 h-8 object-contain"
+                    className="w-12 h-12 object-contain"
                     onError={() => setIconOk(false)}
                   />
                 </span>
