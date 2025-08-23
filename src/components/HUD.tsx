@@ -66,13 +66,17 @@ export default function HUD() {
     }
 
     if (user?.id) {
-      // читаем выбранный курс из users.added_course
-      const { data: u2 } = await supabase
-        .from('users')
-        .select('added_course')
-        .eq('id', user.id)
-        .single();
-      const addedId = (u2 as any)?.added_course as number | null | undefined;
+      // читаем выбранный курс: сперва кешированный user, затем база
+      const cachedU = cacheGet<any>(CACHE_KEYS.user);
+      let addedId: number | null | undefined = cachedU?.added_course;
+      if (addedId == null) {
+        const { data: u2 } = await supabase
+          .from('users')
+          .select('added_course')
+          .eq('id', user.id)
+          .single();
+        addedId = (u2 as any)?.added_course as number | null | undefined;
+      }
       if (addedId) {
         const { data: subj } = await supabase
           .from('subjects')

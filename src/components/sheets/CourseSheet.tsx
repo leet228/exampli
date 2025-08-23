@@ -43,7 +43,11 @@ export default function CoursesPanel(props: Props) {
       if (!tgId) { setSubjects([]); return; }
 
       const cachedU = cacheGet<any>(CACHE_KEYS.user);
-      const { data: user } = cachedU ? { data: cachedU } : await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
+      let user: any | null = cachedU || null;
+      if (!user || user.added_course == null) {
+        const fresh = await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
+        user = fresh.data as any;
+      }
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (!user?.id || !addedId) { setSubjects([]); setActiveCode(null); return; }
 

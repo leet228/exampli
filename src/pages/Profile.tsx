@@ -13,7 +13,11 @@ export default function Profile() {
       if (!tu) return;
       // базовый user из БД
       const cachedU = cacheGet<any>(CACHE_KEYS.user);
-      const { data: user } = cachedU ? { data: cachedU } : await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
+      let user: any | null = cachedU || null;
+      if (!user || user.added_course == null) {
+        const fresh = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
+        user = fresh.data as any;
+      }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
       cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
       // текущий курс по users.added_course
