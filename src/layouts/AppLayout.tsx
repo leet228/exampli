@@ -44,30 +44,9 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // Онбординг теперь решается только по users.phone_number (см. boot.onboarding.phone_given)
-      const ob = ce.detail?.onboarding || null;
-      const isBrandNew = !!(window as any).__exampliNewUserCreated;
-      // сбрасываем флаг «только что создан» после чтения
-      (window as any).__exampliNewUserCreated = false;
-      const phoneGiven = ob ? !!ob.phone_given : true; // если нет данных об онбординге — не показываем онбординг
-      // Если boarding_finished=true — ничего не показывать
-      const finished = !!(ob && ob.boarding_finished);
-      const needPhone = ob ? !phoneGiven : false;
-
-      if (finished) {
-        setShowOnboarding(false);
-        setOpenCoursePicker(false);
-        return;
-      }
-
-      // Решение ТОЛЬКО по phone_number:
-      // 0) Если finished → ничего
-      // 1) Если телефон не дан → онбординг (с приветствия)
-      // 2) Иначе — ничего
-      if (finished) {
-        setShowOnboarding(false);
-        setOpenCoursePicker(false);
-      } else if (needPhone) {
+      // Правило: показываем онбординг только если у пользователя нет phone_number
+      const userHasPhone = !!ce.detail?.user?.phone_number;
+      if (!userHasPhone) {
         setOpenCoursePicker(false);
         setShowOnboarding(true);
       } else {
@@ -121,14 +100,7 @@ export default function AppLayout() {
         open={openCoursePicker}
         onPicked={async (s) => {
           await setUserSubjects([s.code]);
-          // отметим onboarding
-          try {
-            const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-            if (tgId) {
-              const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-              if (u?.id) await supabase.from('users_onboarding').update({ course_taken: true }).eq('user_id', u.id);
-            }
-          } catch {}
+          // users_onboarding удалён: ничего не обновляем
           setOpenCoursePicker(false);
           // оповестим остальных
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));

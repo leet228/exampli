@@ -11,14 +11,8 @@ export default function Onboarding({ open, onDone }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    // читаем bootData, чтобы определить стартовый шаг
-    const boot = (window as any).__exampliBoot as any | undefined;
-    const ob = boot?.onboarding || null;
-    if (ob && ob.phone_given && ob.course_taken) {
-      // онбординг не нужен — защитный случай
-      setStep(0);
-    } else if (ob && !ob.phone_given) setStep(1); // сразу телефон
-    else setStep(0);
+    // всегда стартуем с первого слайда
+    setStep(0);
   }, [open]);
 
   const next = useCallback(() => {
@@ -48,14 +42,7 @@ export default function Onboarding({ open, onDone }: Props) {
     (window as any).__exampliOnboardShown = true;
     (window as any).__exampliAfterOnboarding = true;
     // Обновим boarding_finished=true
-    try {
-      const tg = (window as any)?.Telegram?.WebApp;
-      const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
-      if (tgId) {
-        const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-        if (u?.id) await supabase.from('users_onboarding').update({ boarding_finished: true }).eq('user_id', u.id);
-      }
-    } catch {}
+    try {} catch {}
     hapticTiny();
     onDone();
   }, [onDone]);
@@ -108,16 +95,14 @@ export default function Onboarding({ open, onDone }: Props) {
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
       if (tgId) {
         await supabase.from('users').update({ phone_number: full }).eq('tg_id', String(tgId));
-        // отметим в users_onboarding: phone_given = true
-        const { data: u } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
-        if (u?.id) await supabase.from('users_onboarding').update({ phone_given: true }).eq('user_id', u.id);
+        // users_onboarding удалён
       }
     } catch {}
     // синхронизируем локальный boot-кэш, чтобы AppLayout не открыл приветствие снова
     try {
       const boot = (window as any).__exampliBoot as any | undefined;
       if (boot) {
-        boot.onboarding = { ...(boot.onboarding || {}), phone_given: true };
+        boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
         (window as any).__exampliBoot = boot;
       }
     } catch {}

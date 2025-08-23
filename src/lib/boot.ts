@@ -20,6 +20,7 @@ export type BootData = {
   stats: { xp: number; streak: number; hearts: number };
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
+  // onboarding больше не используем в логике, оставляем опционально для обратной совместимости
   onboarding?: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null;
 };
 
