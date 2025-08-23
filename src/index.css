@@ -193,6 +193,11 @@ html, body, #root { overflow-x: hidden; }
 }
 
 
+/* ====== скрыть горизонтальные полосы прокрутки в каруселях ====== */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+
 :root { color-scheme: dark; }
 html, body, #root { background-color: var(--bg); }
 

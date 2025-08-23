@@ -27,15 +27,14 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="px-1">
-        <div className="text-2xl font-extrabold">КУРСИК Plus</div>
-        <div className="text-sm text-muted mt-1">Сравни планы и выбери подходящий</div>
+      <div className="px-1 mt-[-8px]">
+        <div className="text-2xl font-extrabold">КУРСИК <span style={{background:'linear-gradient(90deg,#60a5fa,#38bdf8)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
       </div>
 
       {/* карусель тарифов */}
       <div
         ref={trackRef}
-        className="w-full overflow-x-auto"
+        className="w-full overflow-x-auto no-scrollbar"
         style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
       >
         <div className="flex gap-4 px-1" style={{ width: '100%' }}>
@@ -49,7 +48,7 @@ export default function Subscription() {
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-xl font-bold">{p.title}</div>
+                  <div className="text-xl font-bold">{p.title} <span style={{background:'linear-gradient(90deg,#60a5fa,#38bdf8)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
                   <div className="text-sm text-muted mt-0.5">
                     {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
                   </div>
