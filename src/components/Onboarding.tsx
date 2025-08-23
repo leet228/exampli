@@ -113,6 +113,14 @@ export default function Onboarding({ open, onDone }: Props) {
         if (u?.id) await supabase.from('users_onboarding').update({ phone_given: true }).eq('user_id', u.id);
       }
     } catch {}
+    // синхронизируем локальный boot-кэш, чтобы AppLayout не открыл приветствие снова
+    try {
+      const boot = (window as any).__exampliBoot as any | undefined;
+      if (boot) {
+        boot.onboarding = { ...(boot.onboarding || {}), phone_given: true };
+        (window as any).__exampliBoot = boot;
+      }
+    } catch {}
     next();
   }, [digits, next, prefix]);
 
