@@ -47,6 +47,20 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const user = await ensureUser();
   step(++i, TOTAL);
 
+  // Если работаем вне Telegram (нет пользователя), вообще не запускаем онбординг
+  if (!user?.id) {
+    const boot: BootData = {
+      user: null,
+      stats: { xp: 0, streak: 0, hearts: 5 },
+      subjects: [],
+      lessons: [],
+      onboarding: { phone_given: true, course_taken: true, boarding_finished: true },
+    };
+    (window as any).__exampliBoot = boot as any;
+    window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
+    return boot;
+  }
+
   // 2) полные данные пользователя (включая phone_number)
   let userRow: any | null = null;
   if (user?.id) {
