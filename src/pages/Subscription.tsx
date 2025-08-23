@@ -6,8 +6,8 @@ type Plan = { id: string; months: number; price: number; title: string };
 export default function Subscription() {
   const plans: Plan[] = [
     { id: 'm1', months: 1,  price: 499,  title: 'КУРСИК' },
-    { id: 'm6', months: 6,  price: 2700, title: 'КУРСИК' },
-    { id: 'm12', months: 12, price: 5000, title: 'КУРСИК' },
+    { id: 'm6', months: 6,  price: 2699, title: 'КУРСИК' },
+    { id: 'm12', months: 12, price: 4999, title: 'КУРСИК' },
   ];
 
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -105,12 +105,25 @@ export default function Subscription() {
       <div className="relative mt-2 px-1">
         {highlight && (
           <motion.div
-            className="absolute inset-0 rounded-2xl pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            style={{ boxShadow: '0 0 0 4px rgba(56,189,248,0.65)', background: 'rgba(56,189,248,0.10)' }}
+            className="absolute inset-[-6px] rounded-3xl pointer-events-none"
+            initial={{ opacity: 0, scale: 0.995 }}
+            animate={{
+              opacity: [0, 1, 1, 0],
+              scale: [0.995, 1.005, 1.0, 1.0],
+              boxShadow: [
+                '0 0 0 0px rgba(56,189,248,0.0), 0 0 0 rgba(56,189,248,0.0)',
+                '0 0 0 8px rgba(56,189,248,0.75), 0 0 28px rgba(56,189,248,0.55)',
+                '0 0 0 6px rgba(56,189,248,0.55), 0 0 22px rgba(56,189,248,0.35)',
+                '0 0 0 0px rgba(56,189,248,0.0), 0 0 0 rgba(56,189,248,0.0)'
+              ],
+              backgroundColor: [
+                'rgba(56,189,248,0.00)',
+                'rgba(56,189,248,0.16)',
+                'rgba(56,189,248,0.10)',
+                'rgba(56,189,248,0.00)'
+              ]
+            }}
+            transition={{ duration: 1.6, ease: 'easeInOut' }}
           />
         )}
         <div className="text-xl font-extrabold">Коины</div>
