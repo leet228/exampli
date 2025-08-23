@@ -81,23 +81,37 @@ export default function HUD() {
         const title = subj?.title as string | undefined;
         const code  = subj?.code  as string | undefined;
         if (title) setCourseTitle(title);
-        if (code) { setCourseCode(code); setIconOk(true); }
+        if (code) {
+          setCourseCode(code);
+          setIconOk(true);
+          try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
+        }
       } else {
-        // если в users нет added_course — подхватим локально выбранный код
-        try {
-          const stored = localStorage.getItem(ACTIVE_KEY);
-          if (stored) {
-            setCourseCode(stored);
-            setIconOk(true);
-            const { data: subj2 } = await supabase
-              .from('subjects')
-              .select('title')
-              .eq('code', stored)
-              .single();
-            const t = subj2?.title as string | undefined;
-            if (t) setCourseTitle(t);
-          }
-        } catch {}
+        // если в users нет added_course — попробуем boot-кэш, затем localStorage
+        const boot = (window as any).__exampliBoot as any | undefined;
+        const bootCode = boot?.subjects?.[0]?.code as string | undefined;
+        const bootTitle = boot?.subjects?.[0]?.title as string | undefined;
+        if (bootCode) {
+          setCourseCode(bootCode);
+          if (bootTitle) setCourseTitle(bootTitle);
+          setIconOk(true);
+          try { localStorage.setItem(ACTIVE_KEY, bootCode); } catch {}
+        } else {
+          try {
+            const stored = localStorage.getItem(ACTIVE_KEY);
+            if (stored) {
+              setCourseCode(stored);
+              setIconOk(true);
+              const { data: subj2 } = await supabase
+                .from('subjects')
+                .select('title')
+                .eq('code', stored)
+                .single();
+              const t = subj2?.title as string | undefined;
+              if (t) setCourseTitle(t);
+            }
+          } catch {}
+        }
       }
     }
   }, []);
@@ -111,7 +125,11 @@ export default function HUD() {
     const onCourseChanged = (evt: Event) => {
       const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.title) setCourseTitle(e.detail.title);
-      if (e.detail?.code) { setCourseCode(e.detail.code); setIconOk(true); }
+      if (e.detail?.code) {
+        setCourseCode(e.detail.code);
+        setIconOk(true);
+        try { localStorage.setItem('exampli:activeSubjectCode', e.detail.code); } catch {}
+      }
     };
 
     const onVisible = () => { if (!document.hidden) refresh(); };
