@@ -49,15 +49,20 @@ export default function TopicsPanel({ open, onClose }: Props) {
       const tlist = (tps as Topic[]) || [];
       setTopics(tlist);
 
-      const { data: subs } = await supabase
-        .from('subtopics')
-        .select('id, subject_id, topic_id, title, order_index')
-        .eq('subject_id', subj.id)
-        .order('topic_id', { ascending: true })
-        .order('order_index', { ascending: true });
+      const topicIds = tlist.map(t => t.id);
+      let subsData: Subtopic[] = [];
+      if (topicIds.length > 0) {
+        const { data: subs } = await supabase
+          .from('subtopics')
+          .select('id, subject_id, topic_id, title, order_index')
+          .in('topic_id', topicIds)
+          .order('topic_id', { ascending: true })
+          .order('order_index', { ascending: true });
+        subsData = (subs as Subtopic[]) || [];
+      }
 
       const map: Record<number, Subtopic[]> = {};
-      (subs as Subtopic[] || []).forEach(s => {
+      subsData.forEach(s => {
         if (!map[s.topic_id]) map[s.topic_id] = [];
         map[s.topic_id].push(s);
       });
