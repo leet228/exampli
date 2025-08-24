@@ -265,7 +265,15 @@ export default function HUD() {
       </div>
 
       {/* Верхние шторки */}
-      <TopSheet open={open === 'course'} onClose={() => setOpen(null)} anchor={anchorRef} title="Курс">
+      <TopSheet
+        open={open === 'course'}
+        onClose={() => setOpen(null)}
+        anchor={anchorRef}
+        title="Курс"
+        arrowX={anchorRef.current?.querySelector('button[aria-label="Выбрать курс"]')?.getBoundingClientRect().left
+          ? (anchorRef.current!.querySelector('button[aria-label="Выбрать курс"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Выбрать курс"]') as HTMLElement).offsetWidth / 2)
+          : undefined}
+      >
         <CoursesPanel
           onPicked={async (s: Subject) => {
             await setUserSubjects([s.code]);
@@ -276,11 +284,27 @@ export default function HUD() {
         />
       </TopSheet>
 
-      <TopSheet open={open === 'streak'} onClose={() => setOpen(null)} anchor={anchorRef} title="Стрик">
+      <TopSheet
+        open={open === 'streak'}
+        onClose={() => setOpen(null)}
+        anchor={anchorRef}
+        title="Стрик"
+        arrowX={anchorRef.current?.querySelector('button[aria-label="Стрик"]')?.getBoundingClientRect().left
+          ? (anchorRef.current!.querySelector('button[aria-label="Стрик"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Стрик"]') as HTMLElement).offsetWidth / 2)
+          : undefined}
+      >
         <StreakSheetBody />
       </TopSheet>
 
-      <TopSheet open={open === 'energy'} onClose={() => setOpen(null)} anchor={anchorRef} title="Энергия">
+      <TopSheet
+        open={open === 'energy'}
+        onClose={() => setOpen(null)}
+        anchor={anchorRef}
+        title="Энергия"
+        arrowX={anchorRef.current?.querySelector('button[aria-label="Энергия"]')?.getBoundingClientRect().left
+          ? (anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).offsetWidth / 2)
+          : undefined}
+      >
         <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 

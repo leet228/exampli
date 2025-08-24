@@ -3,322 +3,553 @@
 @tailwind utilities;
 
 /* ====== Тема ====== */
+
 :root {
-  --bg: #121e24;
-  --card: #121e24;
-  --text: #e5edff;
-  --muted: #9bb0d3;
-  --accent: #1cb0f6;
-
-  /* геометрия HUD */
-  --hud-top: calc(env(safe-area-inset-top) + 42px); /* отступ от верха Telegram */
-  --hud-h: 96px;                                    /* ВЫСОТА HUD — как просил */
-  --z-hud: 40;
-  --z-top-sheet: 70;
-  --z-bottom-sheet: 80;
+    --bg: #121e24;
+    --card: #121e24;
+    --text: #e5edff;
+    --muted: #9bb0d3;
+    --accent: #1cb0f6;
+    /* геометрия HUD */
+    --hud-top: calc(env(safe-area-inset-top) + 42px);
+    /* отступ от верха Telegram */
+    --hud-h: 96px;
+    /* ВЫСОТА HUD — как просил */
+    --z-hud: 40;
+    --z-top-sheet: 70;
+    --z-bottom-sheet: 80;
 }
 
-html, body {
-  touch-action: pan-x pan-y;
-}
-
-html, body, #root { height: 100%; }
+html,
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+    touch-action: pan-x pan-y;
 }
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
 
 /* ====== Компоненты ====== */
-.card { @apply rounded-4xl p-5 bg-[color:var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0,0,0,0.25)]; }
-.btn  { @apply rounded-3xl px-5 py-4 font-semibold active:scale-[0.98] transition; background: #0eadf7; }
-.btn-outline { @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur; background: rgba(255,255,255,0.04); }
-.badge { @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5; }
-.skill { @apply relative rounded-4xl p-4 border border-white/5 bg-white/5 backdrop-blur; }
+
+.card {
+    @apply rounded-4xl p-5 bg-[color: var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0, 0, 0, 0.25)];
+}
+
+.btn {
+    @apply rounded-3xl px-5 py-4 font-semibold active: scale-[0.98] transition;
+    background: #0eadf7;
+}
+
+.btn-outline {
+    @apply rounded-3xl px-5 py-4 font-semibold border border-white/10 backdrop-blur;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.badge {
+    @apply inline-flex items-center gap-2 rounded-2xl px-3 py-1 text-xs border border-white/10 bg-white/5;
+}
+
+.skill {
+    @apply relative rounded-4xl p-4 border border-white/5 bg-white/5 backdrop-blur;
+}
+
 
 /* ====== Анимации ====== */
-.fade-in { animation: fadeIn 400ms ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+
+.fade-in {
+    animation: fadeIn 400ms ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 
 /* ====== Безопасные зоны / HUD ====== */
-.hud-fixed{
-  position: fixed;
-  top: var(--hud-top);   /* ← обратно к безопасному отступу */
-  left: 0;
-  right: 0;
-  z-index: var(--z-hud);
-  background: var(--bg);
-  /* чтобы ::before было под контентом */
-  position: fixed;
+
+.hud-fixed {
+    position: fixed;
+    top: var(--hud-top);
+    /* ← обратно к безопасному отступу */
+    left: 0;
+    right: 0;
+    z-index: var(--z-hud);
+    background: var(--bg);
+    /* чтобы ::before было под контентом */
+    position: fixed;
 }
+
 
 /* заливка фоном от самого верха до низа HUD */
-.hud-fixed::before{
-  content:"";
-  position:absolute;
-  left:0; right:0;
-  top: calc(-1 * var(--hud-top));  /* тянем фон вверх до 0 */
-  bottom: -10px;                     /* и до нижней кромки HUD */
-  background: var(--bg);
-  z-index: -1;                      /* под контентом HUD */
+
+.hud-fixed::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(-1 * var(--hud-top));
+    /* тянем фон вверх до 0 */
+    bottom: -10px;
+    /* и до нижней кромки HUD */
+    background: var(--bg);
+    z-index: -1;
+    /* под контентом HUD */
 }
 
-.hud-stick { position: sticky; top: var(--hud-top); z-index: 40; }
+.hud-stick {
+    position: sticky;
+    top: var(--hud-top);
+    z-index: 40;
+}
+
 
 /* даём месту контенту (ниже фикс-HUD и плавающей кнопки тем) */
-.safe-top    { padding-top: calc(var(--hud-top) + var(--hud-h) + 12px); }
-.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 92px); }
+
+.safe-top {
+    padding-top: calc(var(--hud-top) + var(--hud-h) + 12px);
+}
+
+.safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 92px);
+}
+
 
 /* ====== Скролл только по вертикали ====== */
-html, body, #root { overflow-x: hidden; }
-.main-scroll { touch-action: pan-y; overscroll-behavior-x: none; }
+
+html,
+body,
+#root {
+    overflow-x: hidden;
+}
+
+.main-scroll {
+    touch-action: pan-y;
+    overscroll-behavior-x: none;
+}
+
 
 /* ====== Плавающая кнопка выбора темы ====== */
+
+
 /* позицию считаем от HUD — гарантированно ниже и кликабельна */
+
 .topics-pin {
-  position: fixed;
-  top: calc(var(--hud-top) + var(--hud-h) + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 39; /* ниже HUD (40), но выше контента */
+    position: fixed;
+    top: calc(var(--hud-top) + var(--hud-h) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 39;
+    /* ниже HUD (40), но выше контента */
 }
+
 
 /* ====== Нижняя шторка (если понадобится) ====== */
+
+
 /* Нижняя шторка */
-.sheet-backdrop{
-  position: fixed;
-  inset: 0;
-  background: #131f24;
-  backdrop-filter: blur(28px);
-  z-index: var(--z-bottom-sheet);
-}
-.sheet-panel{
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: calc(var(--z-bottom-sheet) + 1);
-  border-top-left-radius: 24px; border-top-right-radius: 24px;
-  background: var(--card);
-  border: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 -20px 60px rgba(0,0,0,.35);
-  /* почти фуллскрин, с учётом iOS динамического вьюпорта */
-  max-height: min(92dvh, 92vh);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: max(env(safe-area-inset-bottom), 12px);
-}
-.sheet-panel.full {
-  top: var(--hud-top); /* ← вместо 0 */
-  height: calc(100% - var(--hud-top));
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
+
+.sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: #131f24;
+    backdrop-filter: blur(28px);
+    z-index: var(--z-bottom-sheet);
 }
 
-.sheet-handle{
-  width: 44px; height: 5px; border-radius: 999px;
-  background: rgba(255,255,255,.16);
-  margin: 10px auto;
+.sheet-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: calc(var(--z-bottom-sheet) + 1);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    background: var(--card);
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, .35);
+    /* почти фуллскрин, с учётом iOS динамического вьюпорта */
+    max-height: min(92dvh, 92vh);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(env(safe-area-inset-bottom), 12px);
 }
+
+.sheet-panel.full {
+    top: var(--hud-top);
+    /* ← вместо 0 */
+    height: calc(100% - var(--hud-top));
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+}
+
+.sheet-handle {
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .16);
+    margin: 10px auto;
+}
+
 
 /* ====== Верхняя шторка (выпадает из HUD) ====== */
-.drop-backdrop{
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(2px);
-  z-index: var(--z-top-sheet);
+
+.drop-backdrop {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* не перекрываем HUD: начинаем ниже него */
+    top: calc(var(--hud-top) + var(--hud-h));
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(2px);
+    z-index: var(--z-top-sheet);
 }
-.drop-panel{
-  position: fixed;        /* ← важно: fixed */
-  left: 12px;
-  right: 12px;
-  z-index: calc(var(--z-top-sheet) + 1);
-  border-radius: 16px;
-  background: #121e24;  
-  border: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 20px 60px rgba(0,0,0,.35);
-  overflow: hidden;
+
+.drop-panel {
+    position: fixed;
+    /* ← важно: fixed */
+    left: 12px;
+    right: 12px;
+    z-index: calc(var(--z-top-sheet) + 1);
+    border-radius: 16px;
+    background: #121e24;
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    overflow: hidden;
 }
+
+
+/* маленькая стрелочка-указатель к HUD */
+
+.drop-panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: var(--arrow-x, 50%);
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 10px solid #121e24;
+    /* цвет панели */
+    filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, .25));
+    pointer-events: none;
+}
+
 
 /* ====== Левый сайд-панель (Темы) ====== */
-.side-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index: 48; }
+
+.side-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(2px);
+    z-index: 48;
+}
+
 .side-panel {
-  position: fixed; top: 0; bottom: 0; left: 0; width: 100%;
-  max-width: 560px;
-  background: var(--bg);
-  z-index: 49; overflow: hidden; display: flex; flex-direction: column;
-  border-right: 1px solid rgba(255,255,255,.08);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: 560px;
+    background: var(--bg);
+    z-index: 49;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(255, 255, 255, .08);
 }
+
+
 /* шапка выезжающей слева панели — ниже телеграм-кнопок */
+
 .side-panel-header {
-  padding: calc(env(safe-area-inset-top) + 64px) 16px 12px 16px; /* было +10 → стало +64 */
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  background: rgba(0,0,0,.25);
-  backdrop-filter: blur(6px);
+    padding: calc(env(safe-area-inset-top) + 64px) 16px 12px 16px;
+    /* было +10 → стало +64 */
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    background: rgba(0, 0, 0, .25);
+    backdrop-filter: blur(6px);
 }
-.side-panel-body { padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px; overflow: auto; }
+
+.side-panel-body {
+    padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px;
+    overflow: auto;
+}
+
 
 /* ====== Прогресс (энергия) ====== */
-.progress { height: 14px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.progress > div { height: 100%; background: linear-gradient(90deg,#ec4899,#a78bfa); }
+
+.progress {
+    height: 14px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.progress>div {
+    height: 100%;
+    background: linear-gradient(90deg, #ec4899, #a78bfa);
+}
+
 
 /* ===== кнопка-баннер как у Дуо (wide) ===== */
-.topics-hero{
-  position: fixed;
-  top: calc(var(--hud-top) + var(--hud-h) - 22px);
-  left: 12px;
-  right: 12px;
 
-  width: auto;
-  max-width: none;
-
-  z-index: 39;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-
-  /* визуал */
-  height: 80px;                 /* ↑ было 60px, стал выше */
-  padding: 14px 18px;           /* чуть больше внутренние отступы */
-  border-radius: 20px;
-  border: 1px solid rgba(0,0,0,.08);
-
-  background: #1cb0f6;          /* насыщенный синий (tailwind blue-600) */
-  color: #fff;
-
-  box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 -2px 0 rgba(0,0,0,.12);
-  backdrop-filter: blur(4px);
+.topics-hero {
+    position: fixed;
+    top: calc(var(--hud-top) + var(--hud-h) - 22px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    z-index: 39;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* визуал */
+    height: 80px;
+    /* ↑ было 60px, стал выше */
+    padding: 14px 18px;
+    /* чуть больше внутренние отступы */
+    border-radius: 20px;
+    border: 1px solid rgba(0, 0, 0, .08);
+    background: #1cb0f6;
+    /* насыщенный синий (tailwind blue-600) */
+    color: #fff;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .35), inset 0 -2px 0 rgba(0, 0, 0, .12);
+    backdrop-filter: blur(4px);
 }
 
 
 /* ====== скрыть горизонтальные полосы прокрутки в каруселях ====== */
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
 
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
 
-:root { color-scheme: dark; }
-html, body, #root { background-color: var(--bg); }
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
 
-body::before{
-  content:"";
-  position:fixed;
-  inset:-20vmax;            /* перекрыть резиновый bounce */
-  background:var(--bg);
-  z-index:-1;
+:root {
+    color-scheme: dark;
+}
+
+html,
+body,
+#root {
+    background-color: var(--bg);
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: -20vmax;
+    /* перекрыть резиновый bounce */
+    background: var(--bg);
+    z-index: -1;
 }
 
 
 /* полноэкранный слой под дорогу (но над фоном) */
-.decor-layer{
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2; /* ниже HUD(40) и баннера(39), но виден сквозь bg-white/5 */
+
+.decor-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    /* ниже HUD(40) и баннера(39), но виден сквозь bg-white/5 */
 }
+
 
 /* ярче + лёгкое свечение, но без перегруза GPU */
-.decor-item{
-  position: absolute;
-  color: rgba(255,255,255,.28);        /* было .14 → стало .28 */
-  text-shadow: 0 0 10px rgba(255,255,255,.10);
-  will-change: transform, opacity;
-  animation: drift 7s ease-in-out infinite;
-  filter: blur(.15px);
+
+.decor-item {
+    position: absolute;
+    color: rgba(255, 255, 255, .28);
+    /* было .14 → стало .28 */
+    text-shadow: 0 0 10px rgba(255, 255, 255, .10);
+    will-change: transform, opacity;
+    animation: drift 7s ease-in-out infinite;
+    filter: blur(.15px);
 }
 
-@keyframes drift{
-  0%   { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; } /* было .12 */
-  50%  { transform: translate3d(0, -12px, 0) rotate(3deg);   opacity:.36; } /* было .22 */
-  100% { transform: translate3d(0, 0, 0)     rotate(0deg);   opacity:.22; }
+@keyframes drift {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+        opacity: .22;
+    }
+    /* было .12 */
+    50% {
+        transform: translate3d(0, -12px, 0) rotate(3deg);
+        opacity: .36;
+    }
+    /* было .22 */
+    100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+        opacity: .22;
+    }
 }
 
-.decor small { opacity:.8; }
+.decor small {
+    opacity: .8;
+}
 
 @keyframes blink {
-  0%, 88%, 100% { transform: scaleY(1); }
-  92% { transform: scaleY(0.2); }
-  96% { transform: scaleY(1); }
+    0%,
+    88%,
+    100% {
+        transform: scaleY(1);
+    }
+    92% {
+        transform: scaleY(0.2);
+    }
+    96% {
+        transform: scaleY(1);
+    }
 }
 
+
 /* нижний HUD = та же подложка, что и фон */
+
 .bottomnav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;              /* ← прибито к самому низу */
-  background: var(--bg);  /* фон заливает всё */
-  padding-top: 2px;
-  z-index: var(--z-hud);  /* чтобы всегда был над декором, но ниже шторок */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* ← прибито к самому низу */
+    background: var(--bg);
+    /* фон заливает всё */
+    padding-top: 2px;
+    z-index: var(--z-hud);
+    /* чтобы всегда был над декором, но ниже шторок */
 }
+
 
 /* разделительная полоска теперь тоже выше */
 
+
 /* разделительная полоска — в самом верху контейнера */
-.bottomnav::before{
-  content:"";
-  position:absolute; 
-  left:0; 
-  right:0; 
-  top:0;                  /* ← линия ровно по верхней кромке bottomnav */
-  height:2px;
-  background: rgba(255,255,255,.12);
-  pointer-events:none;
+
+.bottomnav::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    /* ← линия ровно по верхней кромке bottomnav */
+    height: 2px;
+    background: rgba(255, 255, 255, .12);
+    pointer-events: none;
 }
+
 
 /* сам бар без «карточности» — фон берём из .bottomnav */
-.hud-bar{
-  background: transparent;    /* ← убираем локальный фон, он теперь у .bottomnav */
-  backdrop-filter: none;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  margin-left: 14px;
-  margin-right: 14px;         /* узкий бар: не до краёв */
+
+.hud-bar {
+    background: transparent;
+    /* ← убираем локальный фон, он теперь у .bottomnav */
+    backdrop-filter: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    margin-left: 14px;
+    margin-right: 14px;
+    /* узкий бар: не до краёв */
 }
 
-.bottomnav a .active-ring { opacity:0; }
-/* базовое состояние — скрыта */
-/* рамка активного — меньше по габаритам */
-.bottomnav a .active-ring { 
-  opacity: 0;
-  top: 6px;      /* чуть меньше по высоте */
-  bottom: 6px;   /* чуть меньше по высоте */
-  left: 8px;
-  right: 8px;
-  border-radius: 10px;
+.bottomnav a .active-ring {
+    opacity: 0;
 }
-.bottomnav a[aria-current="page"] .active-ring { opacity: 1; }
+
+
+/* базовое состояние — скрыта */
+
+
+/* рамка активного — меньше по габаритам */
+
+.bottomnav a .active-ring {
+    opacity: 0;
+    top: 6px;
+    /* чуть меньше по высоте */
+    bottom: 6px;
+    /* чуть меньше по высоте */
+    left: 8px;
+    right: 8px;
+    border-radius: 10px;
+}
+
+.bottomnav a[aria-current="page"] .active-ring {
+    opacity: 1;
+}
+
 
 /* уменьшенная рамка только для ai.svg (крупная иконка) */
+
 .bottomnav a[data-icon="ai"] .active-ring {
-  /* ~13px и ~17px в ремах (1rem = 16px) */
-  top: 0.8125rem;     /* ≈ 13px */
-  bottom: 0.8125rem;  /* ≈ 13px */
-  left: 0.9875rem;    /* ≈ 15.8px */
-  right: 0.9875rem;   /* ≈ 15.8px */
+    /* ~13px и ~17px в ремах (1rem = 16px) */
+    top: 0.8125rem;
+    /* ≈ 13px */
+    bottom: 0.8125rem;
+    /* ≈ 13px */
+    left: 0.9875rem;
+    /* ≈ 15.8px */
+    right: 0.9875rem;
+    /* ≈ 15.8px */
 }
+
 
 /* компактнее рамка только для home */
+
 .bottomnav a[data-icon="home"] .active-ring {
-  top: 8px;
-  bottom: 8px;
-  left: 10px;
-  right: 10px;
+    top: 8px;
+    bottom: 8px;
+    left: 10px;
+    right: 10px;
 }
+
 
 /* больше воздуха у краёв экрана */
-.bottomnav .hud-bar{
-  margin-left: 14px;   /* подбери 12–20px по вкусу */
-  margin-right: 14px;
+
+.bottomnav .hud-bar {
+    margin-left: 14px;
+    /* подбери 12–20px по вкусу */
+    margin-right: 14px;
 }
 
+
 /* ====== Запрет выделения текста и callout ====== */
+
 * {
-  -webkit-user-select: none; /* Safari / iOS */
-  -moz-user-select: none;    /* Firefox */
-  -ms-user-select: none;     /* IE/Edge */
-  user-select: none;         /* Современные браузеры */
-  -webkit-touch-callout: none; /* Убирает контекстное меню iOS */
+    -webkit-user-select: none;
+    /* Safari / iOS */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* IE/Edge */
+    user-select: none;
+    /* Современные браузеры */
+    -webkit-touch-callout: none;
+    /* Убирает контекстное меню iOS */
 }
