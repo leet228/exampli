@@ -1,5 +1,5 @@
 // src/components/panels/TopicsPanel.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import SidePanel from './SidePanel';
@@ -182,7 +182,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
 }
 
 function TapSafeRow({ children, onPick }: { children: React.ReactNode; onPick: () => void }) {
-  const tapRef = useState<{ y: number; t: number } | null>(null)[0] as any;
+  const tapRef = useRef<{ y: number; t: number } | null>(null);
   return (
     <button
       onMouseDown={(e) => { (e as any).preventDefault?.(); tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
