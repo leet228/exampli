@@ -270,6 +270,7 @@ export default function HUD() {
         onClose={() => setOpen(null)}
         anchor={anchorRef}
         title="Курс"
+        variant="course"
         arrowX={anchorRef.current?.querySelector('button[aria-label="Выбрать курс"]')?.getBoundingClientRect().left
           ? (anchorRef.current!.querySelector('button[aria-label="Выбрать курс"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Выбрать курс"]') as HTMLElement).offsetWidth / 2)
           : undefined}
@@ -289,6 +290,7 @@ export default function HUD() {
         onClose={() => setOpen(null)}
         anchor={anchorRef}
         title="Стрик"
+        variant="streak"
         arrowX={anchorRef.current?.querySelector('button[aria-label="Стрик"]')?.getBoundingClientRect().left
           ? (anchorRef.current!.querySelector('button[aria-label="Стрик"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Стрик"]') as HTMLElement).offsetWidth / 2)
           : undefined}
@@ -301,6 +303,7 @@ export default function HUD() {
         onClose={() => setOpen(null)}
         anchor={anchorRef}
         title="Энергия"
+        variant="energy"
         arrowX={anchorRef.current?.querySelector('button[aria-label="Энергия"]')?.getBoundingClientRect().left
           ? (anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).offsetWidth / 2)
           : undefined}
