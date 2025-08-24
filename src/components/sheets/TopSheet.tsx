@@ -41,11 +41,11 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
           />
           <motion.div
             className="drop-panel"
-            style={{ top: topOffset, willChange: 'transform', ['--arrow-x' as any]: arrowCssVar }}
-            initial={{ y: -14, opacity: 0, scale: 0.98 }}
+            style={{ top: topOffset, willChange: 'transform', ['--arrow-x' as any]: arrowCssVar, zIndex: 9999 }}
+            initial={{ y: -24, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -12, opacity: 0, scale: 0.98 }}
-            transition={{ duration: .26, ease: [0.22,1,0.36,1] }}
+            exit={{ y: -16, opacity: 0, scale: 0.98 }}
+            transition={{ duration: .4, ease: [0.22,1,0.36,1] }}
           >
             <div className="p-3 border-b border-white/10 text-center font-semibold">{title}</div>
             <div className="p-3">{children}</div>

@@ -204,7 +204,7 @@ export default function HUD() {
             {/* Курс (слева) */}
             <button
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('course'); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(prev => prev === 'course' ? null : 'course'); }}
               className="flex items-center gap-2"
               aria-label="Выбрать курс"
             >
@@ -226,7 +226,7 @@ export default function HUD() {
             {/* Стрик */}
             <button
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('streak'); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(prev => prev === 'streak' ? null : 'streak'); }}
               className="justify-self-center flex items-center gap-0 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
@@ -253,7 +253,7 @@ export default function HUD() {
             {/* Энергия (справа) */}
             <button
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen('energy'); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(prev => prev === 'energy' ? null : 'energy'); }}
               className="justify-self-end flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
