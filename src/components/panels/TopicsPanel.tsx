@@ -5,9 +5,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import SidePanel from './SidePanel';
 import { hapticTiny, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 
-type Subject   = { id: number; code: string; title: string };
-type Topic     = { id: number; subject_id: number; title: string; order_index: number };
-type Subtopic  = { id: number; subject_id: number; topic_id: number; title: string; order_index: number };
+type Subject   = { id: number | string; code: string; title: string };
+type Topic     = { id: number | string; subject_id: number | string; title: string; order_index: number };
+type Subtopic  = { id: number | string; subject_id?: number | string; topic_id: number | string; title: string; order_index: number };
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -16,8 +16,8 @@ const ACTIVE_KEY = 'exampli:activeSubjectCode';
 export default function TopicsPanel({ open, onClose }: Props) {
   const [subject, setSubject] = useState<Subject | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [subsByTopic, setSubsByTopic] = useState<Record<number, Subtopic[]>>({});
-  const [expandedTopicId, setExpandedTopicId] = useState<number | null>(null);
+  const [subsByTopic, setSubsByTopic] = useState<Record<string, Subtopic[]>>({});
+  const [expandedTopicId, setExpandedTopicId] = useState<string | number | null>(null);
   const [loading, setLoading] = useState(true);
 
   // -- helpers: активный курс из localStorage
@@ -61,10 +61,11 @@ export default function TopicsPanel({ open, onClose }: Props) {
         subsData = (subs as Subtopic[]) || [];
       }
 
-      const map: Record<number, Subtopic[]> = {};
+      const map: Record<string, Subtopic[]> = {};
       subsData.forEach(s => {
-        if (!map[s.topic_id]) map[s.topic_id] = [];
-        map[s.topic_id].push(s);
+        const key = String(s.topic_id);
+        if (!map[key]) map[key] = [];
+        map[key].push(s);
       });
       setSubsByTopic(map);
     } finally {
@@ -114,8 +115,8 @@ export default function TopicsPanel({ open, onClose }: Props) {
     return (
       <div className="space-y-3" style={{ overscrollBehaviorY: 'contain' }}>
         {topics.map(t => {
-          const opened = expandedTopicId === t.id;
-          const subs = subsByTopic[t.id] || [];
+          const opened = String(expandedTopicId) === String(t.id);
+          const subs = subsByTopic[String(t.id)] || [];
           return (
             <div key={t.id} className="rounded-2xl border border-white/10 overflow-hidden">
               {/* Тема (как на первом скрине) */}
