@@ -95,7 +95,7 @@ export default function AddCourseSheet({
                   setOpenLevels(() => (next ? { [level]: true } : {}));
                 }}
                 className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 border ${
-                  isOpen ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
+                  isOpen ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5'
                 }`}
                 aria-expanded={isOpen}
               >
@@ -118,7 +118,7 @@ export default function AddCourseSheet({
                           setPickedId(s.id);
                         }}
                         className={`w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
-                          active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'
+                          active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -147,7 +147,7 @@ export default function AddCourseSheet({
       </div>
 
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
-      <div className="fixed inset-x-0 bottom-0 z-50 bg-[color:var(--surface,#131f24)] border-t border-white/10">
+      <div className="fixed inset-x-0 bottom-0 z-50 bg-[var(--surface,#131f24)] border-t border-white/10">
         <div className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+40px)]">
           <button
             type="button"

@@ -344,7 +344,7 @@ export default function Onboarding({ open, onDone }: Props) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[65] bg-[color:var(--bg)]"
+          className="fixed inset-0 z-[65] bg-[var(--bg)]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

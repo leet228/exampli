@@ -144,7 +144,7 @@ export default function CoursesPanel(props: Props) {
               }}
               className={[
                 'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
-                active ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
+                active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
               ].join(' ')}
             >
               {/* свечащийся маркер активного */}

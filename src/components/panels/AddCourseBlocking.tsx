@@ -43,7 +43,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
               <button
                 type="button"
                 onClick={() => { const n = !isOpen; if (n) hapticSlideReveal(); else hapticSlideClose(); setOpenLevels(() => (n ? { [level]: true } : {})); }}
-                className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 border ${isOpen ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5'}`}
+                className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 border ${isOpen ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5'}`}
                 aria-expanded={isOpen}
               >
                 <span className="text-sm tracking-wide uppercase font-semibold text-white">{level}</span>
@@ -71,7 +71,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
-                            isSel ? 'border-[var(--accent)] bg-[color:var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
+                            isSel ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
                           }`}
                         >
                           <div className="flex items-center gap-3">

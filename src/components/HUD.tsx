@@ -197,7 +197,7 @@ export default function HUD() {
   return (
     <>
       {/* Верхний HUD — фон как у всей страницы */}
-      <div className="hud-fixed bg-[color:var(--bg)]">
+      <div className="hud-fixed bg-[var(--bg)]">
         <div ref={anchorRef} className="max-w-xl mx-auto px-5 py-0">
           {/* 4 равные колонки: Курс — Стрик — Коины — Энергия */}
           <div className="grid grid-cols-4 items-center">
