@@ -41,7 +41,7 @@ body {
 /* ====== Компоненты ====== */
 
 .card {
-    @apply rounded-4xl p-5 bg-[var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0, 0, 0, 0.25)];
+    @apply rounded-4xl p-5 bg-[color: var(--card)] border border-white/5 shadow-[0_6px_30px_rgba(0, 0, 0, 0.25)];
 }
 
 .btn {
