@@ -29,9 +29,10 @@ export default function CoursesPanel(props: Props) {
   const [loading, setLoading] = useState(false);
 
   // --- helpers ---
-  const readActiveFromStorage = useCallback(() => {
-    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
-  }, []);
+  // kept for potential future use; currently boot init covers active code
+  // const readActiveFromStorage = useCallback(() => {
+  //   try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+  // }, []);
   const writeActiveToStorage = useCallback((code: string) => {
     try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
   }, []);
@@ -68,17 +69,23 @@ export default function CoursesPanel(props: Props) {
     } finally {
       setLoading(false);
     }
-  }, [readActiveFromStorage]);
+  }, []);
 
-  // Когда компонент в режиме левой панели — грузим только когда она открыта
-  // Когда это контент для TopSheet — грузим сразу
+  // Прогреваем данные сразу при монтировании (в любом режиме), плюс обновляем при открытии
+  useEffect(() => { void loadUserSubjects(); }, [loadUserSubjects]);
+  useEffect(() => { if (typeof open === 'boolean' && open) void loadUserSubjects(); }, [open, loadUserSubjects]);
+
+  // Быстрый init из boot, если есть
   useEffect(() => {
-    if (typeof open === 'boolean') {
-      if (open) void loadUserSubjects();
-    } else {
-      void loadUserSubjects();
-    }
-  }, [open, loadUserSubjects]);
+    try {
+      const boot: any = (window as any).__exampliBoot;
+      const subs: Subject[] = (boot?.subjects || []) as Subject[];
+      if (subs?.length) setSubjects(subs);
+      const stored = localStorage.getItem(ACTIVE_KEY);
+      const code = stored || subs?.[0]?.code || null;
+      if (code) setActiveCode(code);
+    } catch {}
+  }, []);
 
   // Слушаем внешние события, чтобы обновиться:
   // - после добавления нового курса (subjectsChanged — если решишь диспатчить)
@@ -143,7 +150,7 @@ export default function CoursesPanel(props: Props) {
                 }
               }}
               className={[
-                'relative aspect-square rounded-2xl border flex flex-col items-center justify-center text-center px-2 transition',
+                'relative aspect-square rounded-3xl border flex flex-col items-center justify-center text-center px-3 transition',
                 active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
               ].join(' ')}
             >
@@ -152,7 +159,7 @@ export default function CoursesPanel(props: Props) {
                 {active && (
                   <motion.span
                     layoutId="subject-active-glow"
-                    className="absolute inset-0 rounded-2xl"
+                    className="absolute inset-0 rounded-3xl"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -163,9 +170,16 @@ export default function CoursesPanel(props: Props) {
               </AnimatePresence>
 
               <div className="relative z-10">
-                <div className="text-2xl mb-1">📘</div>
-                <div className="text-xs font-semibold leading-tight line-clamp-2">{s.title}</div>
-                <div className="text-[10px] text-muted mt-0.5">{s.level}</div>
+                <div className="mb-2">
+                  <img
+                    src={`/subjects/${s.code}.svg`}
+                    alt={s.title}
+                    className="w-[64px] h-[64px] object-contain"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+                <div className="text-[10px] text-muted uppercase tracking-wide">{s.level}</div>
+                <div className="text-sm font-semibold leading-tight line-clamp-2 mt-0.5">{s.title}</div>
               </div>
             </motion.button>
           );
@@ -180,11 +194,11 @@ export default function CoursesPanel(props: Props) {
             if (typeof onAddClick === 'function') onAddClick();
             else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
           }}
-          className="aspect-square rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+          className="aspect-square rounded-3xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
         >
           <div className="flex flex-col items-center">
-            <div className="text-2xl">＋</div>
-            <div className="text-[10px] text-muted mt-1">Добавить</div>
+            <div className="w-[64px] h-[64px] grid place-items-center rounded-2xl border border-white/10 text-3xl text-white/70">＋</div>
+            <div className="text-[10px] text-muted mt-2">Добавить</div>
           </div>
         </motion.button>
       </div>
