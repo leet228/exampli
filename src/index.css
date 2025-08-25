@@ -252,8 +252,8 @@ body,
     position: fixed;
     left: 0;
     right: 0;
-    height: 12px;
-    /* контейнер для линии и выреза */
+    height: 14px;
+    /* контейнер для линии и треугольника */
     z-index: calc(var(--z-top-sheet) + 3);
     /* поверх всего */
     pointer-events: none;
@@ -266,6 +266,31 @@ body,
     top: 0;
     height: 4px;
     background: #3b454e;
+}
+
+.drop-triangle {
+    position: absolute;
+    top: 4px;
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-bottom: 12px solid #3b454e;
+}
+
+.drop-triangle.course {
+    left: 28px;
+    transform: translateX(-12px);
+}
+
+.drop-triangle.streak {
+    left: 50%;
+    transform: translateX(-12px);
+}
+
+.drop-triangle.energy {
+    right: 28px;
+    transform: translateX(12px);
 }
 
 

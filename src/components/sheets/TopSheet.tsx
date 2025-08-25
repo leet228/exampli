@@ -41,38 +41,18 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
             transition={{ duration: .18, ease: [0.22,1,0.36,1] }}
           />
           {/* разделительная полоса + SVG-стрелка-вырез */}
-          {typeof window !== 'undefined' && (
-            <motion.svg
+          {(
+            <motion.div
               className="drop-divider"
-              style={{ top: topOffset - 1, position: 'fixed' }}
-              width="100%"
-              height="12"
-              viewBox={`0 0 ${window.innerWidth} 12`}
-              preserveAspectRatio="none"
+              style={{ top: topOffset - 1 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: .2 }}
             >
-              {(() => {
-                const w = window.innerWidth;
-                const lineH = 4;        // толщина линии
-                const y = 6;            // вертикаль центра линии внутри SVG (0..12)
-                const depth = 6;        // высота треугольника вверх
-                const base = 24;        // ширина основания треугольника
-                let x = Math.round(w / 2);
-                if (variant === 'course') x = 28;
-                if (variant === 'energy') x = w - 28;
-                const left = Math.max(0, x - base / 2);
-                const right = Math.min(w, x + base / 2);
-                const lineY = y - lineH / 2;
-                const triangle = `${left},${y} ${right},${y} ${x},${y - depth}`;
-                return <>
-                  <rect x={0} y={lineY} width={w} height={lineH} fill="#3b454e" />
-                  <polygon points={triangle} fill="#3b454e" />
-                </>;
-              })()}
-            </motion.svg>
+              <div className="drop-divider-line" />
+              <div className={["drop-triangle", variant ?? 'streak'].join(' ')} />
+            </motion.div>
           )}
           <motion.div
             className="drop-panel"
