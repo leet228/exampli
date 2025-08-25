@@ -252,9 +252,10 @@ body,
     position: fixed;
     left: 0;
     right: 0;
-    height: 4px;
-    /* толще линия */
-    z-index: calc(var(--z-top-sheet) + 2);
+    height: 2px;
+    /* ровная тонкая линия по всей ширине */
+    z-index: calc(var(--z-top-sheet) + 3);
+    /* поверх всего */
     pointer-events: none;
 }
 
@@ -270,14 +271,14 @@ body,
 .drop-divider.energy::after {
     content: "";
     position: absolute;
-    top: -10px;
-    /* увеличить стрелку и вынести выше */
+    top: -8px;
+    /* компактная стрелка над линией */
     width: 0;
     height: 0;
-    border-left: 12px solid transparent;
-    border-right: 12px solid transparent;
-    border-bottom: 12px solid var(--bg);
-    /* вырезаем стрелку цветом фона HUD, остаётся непрерывная полоса */
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 10px solid #3b454e;
+    /* рисуем саму стрелку тем же цветом линии */
 }
 
 
