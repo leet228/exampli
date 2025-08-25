@@ -150,18 +150,18 @@ export default function CoursesPanel(props: Props) {
               }}
               className="relative flex flex-col items-center text-center px-1"
             >
-              <div className="relative z-10 -mt-1 mb-1">
+              <div className="relative z-10 -mt-3 mb-0">
                 <div
                   className={[
                     'grid place-items-center rounded-2xl border bg-transparent',
                     active ? 'border-[var(--accent)]' : 'border-white/12',
                   ].join(' ')}
-                  style={{ width: 78, height: 68 }}
+                  style={{ width: 78, height: 56 }}
                 >
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[96px] h-[96px] object-contain"
+                    className="w-[112px] h-[112px] object-contain"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
