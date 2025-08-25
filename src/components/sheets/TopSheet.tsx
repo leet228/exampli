@@ -40,15 +40,35 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
             exit={{ opacity: 0 }}
             transition={{ duration: .18, ease: [0.22,1,0.36,1] }}
           />
-          {/* разделительная полоска со стрелкой к HUD */}
-          <motion.div
-            className={["drop-divider", variant ?? ''].join(' ')}
-            style={{ top: topOffset - 1 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: .2 }}
-          />
+          {/* разделительная полоса + SVG-стрелка-вырез */}
+          {typeof window !== 'undefined' && (
+            <motion.svg
+              className={["drop-divider", variant ?? ''].join(' ')}
+              style={{ top: topOffset - 1, position: 'fixed' }}
+              width="100%"
+              height="12"
+              viewBox={`0 0 ${window.innerWidth} 12`}
+              preserveAspectRatio="none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: .2 }}
+            >
+              {/* треугольник цветом фона — «вырезает» участок линии */}
+              {(() => {
+                const w = window.innerWidth;
+                const baseY = 2; // совпадает с border-top толщиной
+                const h = 10;    // высота стрелки
+                let x = Math.round(w / 2);
+                if (variant === 'course') x = 28;
+                if (variant === 'energy') x = w - 28;
+                const left = x - 10;
+                const right = x + 10;
+                const points = `${left},${baseY} ${right},${baseY} ${x},${baseY + h}`;
+                return <polygon points={points} fill="currentColor" style={{ color: 'var(--bg)' }} />;
+              })()}
+            </motion.svg>
+          )}
           <motion.div
             className="drop-panel"
             style={{ top: topOffset, willChange: 'clip-path', ['--arrow-x' as any]: arrowCssVar, zIndex: 9998 }}
