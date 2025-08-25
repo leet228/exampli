@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { hapticTiny } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 
@@ -138,49 +138,36 @@ export default function CoursesPanel(props: Props) {
               layout
               whileTap={{ scale: 0.98 }}
               onClick={() => {
-                hapticTiny(); // вибрация кнопки при выборе курса
+                hapticTiny();
                 setActiveCode(s.code);
                 writeActiveToStorage(s.code);
                 if (typeof onPicked === 'function') onPicked(s);
                 storeSetActiveCourse({ code: s.code, title: s.title });
-                // мгновенно записать выбранный курс в users (в фоне)
                 const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
                 if (tgId) {
                   void supabase.from('users').update({ added_course: s.id }).eq('tg_id', String(tgId));
                 }
               }}
-              className={[
-                'relative aspect-square rounded-3xl border flex flex-col items-center justify-center text-center px-3 transition',
-                active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10',
-              ].join(' ')}
+              className="relative flex flex-col items-center text-center px-1"
             >
-              {/* свечащийся маркер активного */}
-              <AnimatePresence>
-                {active && (
-                  <motion.span
-                    layoutId="subject-active-glow"
-                    className="absolute inset-0 rounded-3xl"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    style={{ boxShadow: '0 0 0 2px var(--accent), 0 10px 30px rgba(59,130,246,0.35) inset' }}
-                  />
-                )}
-              </AnimatePresence>
-
-              <div className="relative z-10">
-                <div className="mb-2">
+              <div className="relative z-10 mb-2">
+                <div
+                  className={[
+                    'grid place-items-center rounded-2xl border bg-transparent',
+                    active ? 'border-[var(--accent)]' : 'border-white/12',
+                  ].join(' ')}
+                  style={{ width: 108, height: 108 }}
+                >
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[64px] h-[64px] object-contain"
+                    className="w-[88px] h-[88px] object-contain"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
-                <div className="text-[10px] text-muted uppercase tracking-wide">{s.level}</div>
-                <div className="text-sm font-semibold leading-tight line-clamp-2 mt-0.5">{s.title}</div>
               </div>
+              <div className="text-[10px] text-muted uppercase tracking-wide -mt-1">{s.level}</div>
+              <div className="text-sm font-semibold leading-tight line-clamp-2 mt-0.5 max-w-[110px]">{s.title}</div>
             </motion.button>
           );
         })}
@@ -190,16 +177,16 @@ export default function CoursesPanel(props: Props) {
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={() => {
-            hapticTiny(); // та же вибрация на плюсик
+            hapticTiny();
             if (typeof onAddClick === 'function') onAddClick();
             else window.dispatchEvent(new CustomEvent('exampli:addCourse'));
           }}
-          className="aspect-square rounded-3xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+          className="relative flex flex-col items-center text-center px-1"
         >
-          <div className="flex flex-col items-center">
-            <div className="w-[64px] h-[64px] grid place-items-center rounded-2xl border border-white/10 text-3xl text-white/70">＋</div>
-            <div className="text-[10px] text-muted mt-2">Добавить</div>
+          <div className="w-[108px] h-[108px] grid place-items-center rounded-2xl border border-white/12">
+            <div className="text-4xl text-white/70">＋</div>
           </div>
+          <div className="text-[10px] text-muted mt-2">Добавить</div>
         </motion.button>
       </div>
     );
