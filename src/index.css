@@ -252,7 +252,8 @@ body,
     position: fixed;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 4px;
+    /* толще линия */
     z-index: calc(var(--z-top-sheet) + 2);
     pointer-events: none;
 }
@@ -269,12 +270,13 @@ body,
 .drop-divider.energy::after {
     content: "";
     position: absolute;
-    top: -8px;
+    top: -10px;
+    /* увеличить стрелку и вынести выше */
     width: 0;
     height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-bottom: 10px solid var(--bg);
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-bottom: 12px solid var(--bg);
     /* вырезаем стрелку цветом фона HUD, остаётся непрерывная полоса */
 }
 

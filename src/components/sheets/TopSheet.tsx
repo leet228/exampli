@@ -57,7 +57,9 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
             exit={{ clipPath: 'inset(0 0 100% 0 round 16px)', opacity: 1 }}
             transition={{ duration: .6, ease: [0.22,1,0.36,1] }}
           >
-            <div className="p-3 border-b border-white/10 text-center font-semibold">{title}</div>
+            {title ? (
+              <div className="p-3 border-b border-white/10 text-center font-semibold">{title}</div>
+            ) : null}
             <div className="p-3">{children}</div>
           </motion.div>
         </>
