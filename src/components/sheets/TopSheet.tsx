@@ -52,9 +52,9 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
           <motion.div
             className="drop-panel"
             style={{ top: topOffset, willChange: 'clip-path', ['--arrow-x' as any]: arrowCssVar, zIndex: 9998 }}
-            initial={{ clipPath: 'inset(0 0 100% 0 round 16px)', opacity: 1 }}
-            animate={{ clipPath: 'inset(0 0 0 0 round 16px)', opacity: 1 }}
-            exit={{ clipPath: 'inset(0 0 100% 0 round 16px)', opacity: 1 }}
+            initial={{ clipPath: 'inset(0 0 100% 0)', opacity: 1 }}
+            animate={{ clipPath: 'inset(0 0 0 0)', opacity: 1 }}
+            exit={{ clipPath: 'inset(0 0 100% 0)', opacity: 1 }}
             transition={{ duration: .6, ease: [0.22,1,0.36,1] }}
           >
             {title ? (
