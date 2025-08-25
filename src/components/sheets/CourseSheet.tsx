@@ -150,7 +150,7 @@ export default function CoursesPanel(props: Props) {
               }}
               className="relative flex flex-col items-center text-center px-1"
             >
-              <div className="relative z-10 -mt-1 mb-1">
+              <div className="relative z-10">
                 <div
                   className={[
                     'grid place-items-center rounded-2xl border bg-transparent',
@@ -161,7 +161,7 @@ export default function CoursesPanel(props: Props) {
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[112px] h-[112px] object-contain relative -translate-y-2"
+                    className="w-[112px] h-[112px] object-contain relative -translate-y-5"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
