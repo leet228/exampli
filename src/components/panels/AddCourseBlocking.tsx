@@ -62,12 +62,62 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           whileTap={{ scale: 0.97 }}
                           animate={isSel ? { scale: [1, 0.96, 1.02, 1] } : {}}
                           transition={{ duration: 0.28 }}
-                          onClick={() => {
+                          onClick={async () => {
                             setSelectedId(s.id);
                             hapticSelect();
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
                             cacheSet(CACHE_KEYS.activeCourseCode, s.code, 10 * 60_000);
+                            // Автовыбор первой темы и подтемы + запись в БД
+                            try {
+                              const { data: topics } = await supabase
+                                .from('topics')
+                                .select('id,title')
+                                .eq('subject_id', s.id)
+                                .order('order_index', { ascending: true })
+                                .limit(1);
+                              const firstTopic = (topics as any[])?.[0] || null;
+                              let firstSub: any = null;
+                              if (firstTopic?.id) {
+                                const { data: subs } = await supabase
+                                  .from('subtopics')
+                                  .select('id,title')
+                                  .eq('topic_id', firstTopic.id)
+                                  .order('order_index', { ascending: true })
+                                  .limit(1);
+                                firstSub = (subs as any[])?.[0] || null;
+                              }
+                              // persist to users
+                              try {
+                                const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                                if (tgId) {
+                                  const { data: user } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).single();
+                                  if (user?.id) {
+                                    await supabase
+                                      .from('users')
+                                      .update({ added_course: s.id, current_topic: firstTopic?.id ?? null, current_subtopic: firstSub?.id ?? null })
+                                      .eq('id', user.id);
+                                  }
+                                }
+                              } catch {}
+                              // cache local selection for immediate UI
+                              try {
+                                if (firstTopic?.id) {
+                                  localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
+                                  localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
+                                }
+                                if (firstSub?.id) {
+                                  localStorage.setItem('exampli:currentSubtopicId', String(firstSub.id));
+                                  localStorage.setItem('exampli:currentSubtopicTitle', String(firstSub.title || ''));
+                                }
+                              } catch {}
+                              // update TopicsButton immediately
+                              try {
+                                if (firstTopic?.title || firstSub?.title) {
+                                  window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title, subtopicTitle: firstSub?.title } } as any));
+                                }
+                              } catch {}
+                            } catch {}
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${

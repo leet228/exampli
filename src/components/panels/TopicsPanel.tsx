@@ -136,7 +136,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   }, [open, loadData]);
 
   // выбор подтемы → сообщаем дороге и кнопке, закрываем панель
-  const pickSubtopic = useCallback((t: Topic, st: Subtopic) => {
+  const pickSubtopic = useCallback(async (t: Topic, st: Subtopic) => {
     window.dispatchEvent(new CustomEvent('exampli:subtopicChanged', {
       detail: {
         subjectId: subject?.id,
@@ -162,7 +162,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
       const boot: any = (window as any).__exampliBoot;
       const userId = boot?.user?.id;
       if (userId) {
-        void supabase
+        await supabase
           .from('users')
           .update({ current_topic: t.id, current_subtopic: st.id })
           .eq('id', userId);

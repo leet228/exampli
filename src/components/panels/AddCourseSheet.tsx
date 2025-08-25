@@ -49,7 +49,7 @@ export default function AddCourseSheet({
 
   const save = async () => {
     if (!picked) return;
-    // запишем выбранный курс в users.added_course
+    // запишем выбранный курс в users.added_course и сразу выберем первую тему/подтему
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (tgId) {
       const { data: user } = await supabase
@@ -58,10 +58,44 @@ export default function AddCourseSheet({
         .eq('tg_id', String(tgId))
         .single();
       if (user?.id) {
+        // first topic/subtopic of this subject
+        const { data: topics } = await supabase
+          .from('topics')
+          .select('id,title')
+          .eq('subject_id', picked.id)
+          .order('order_index', { ascending: true })
+          .limit(1);
+        const firstTopic = (topics as any[])?.[0] || null;
+        let firstSub: any = null;
+        if (firstTopic?.id) {
+          const { data: subs } = await supabase
+            .from('subtopics')
+            .select('id,title')
+            .eq('topic_id', firstTopic.id)
+            .order('order_index', { ascending: true })
+            .limit(1);
+          firstSub = (subs as any[])?.[0] || null;
+        }
         await supabase
           .from('users')
-          .update({ added_course: picked.id })
+          .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null, current_subtopic: firstSub?.id ?? null })
           .eq('id', user.id);
+        // cache local selection for immediate UI
+        try {
+          if (firstTopic?.id) {
+            localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
+            localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
+          }
+          if (firstSub?.id) {
+            localStorage.setItem('exampli:currentSubtopicId', String(firstSub.id));
+            localStorage.setItem('exampli:currentSubtopicTitle', String(firstSub.title || ''));
+          }
+        } catch {}
+        try {
+          if (firstTopic?.title || firstSub?.title) {
+            window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title, subtopicTitle: firstSub?.title } } as any));
+          }
+        } catch {}
       }
     }
 
