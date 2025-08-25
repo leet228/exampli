@@ -233,12 +233,16 @@ body,
     left: 0;
     right: 0;
     z-index: calc(var(--z-top-sheet) + 1);
-    border-radius: 16px;
-    background: #121e24;
-    border: 1px solid rgba(255, 255, 255, .08);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    border-radius: 0;
+    /* острые углы */
+    background: var(--bg);
+    /* единый фон с HUD */
+    border: none;
+    /* без рамки — есть разделительная полоса */
+    box-shadow: none;
+    /* без тени */
     overflow: visible;
-    /* чтобы стрелочка была видна поверх панели */
+    /* чтобы стрелка/полоса были видны */
 }
 
 
@@ -248,19 +252,13 @@ body,
     position: fixed;
     left: 0;
     right: 0;
-    height: 14px;
+    height: 2px;
     z-index: calc(var(--z-top-sheet) + 2);
     pointer-events: none;
 }
 
-.drop-divider::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, .45), transparent);
+.drop-divider {
+    background: #3b454e;
 }
 
 
@@ -271,12 +269,13 @@ body,
 .drop-divider.energy::after {
     content: "";
     position: absolute;
-    top: -6px;
+    top: -8px;
     width: 0;
     height: 0;
     border-left: 10px solid transparent;
     border-right: 10px solid transparent;
-    border-bottom: 10px solid rgba(0, 0, 0, .55);
+    border-bottom: 10px solid #3b454e;
+    /* стрелка вверх того же цвета */
 }
 
 
@@ -299,19 +298,7 @@ body,
 /* маленькая стрелочка-указатель к HUD */
 
 .drop-panel::before {
-    content: "";
-    position: absolute;
-    top: -10px;
-    left: var(--arrow-x, 50%);
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-bottom: 10px solid #121e24;
-    /* цвет панели */
-    filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, .25));
-    pointer-events: none;
+    content: none;
 }
 
 
