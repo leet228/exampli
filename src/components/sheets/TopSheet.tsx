@@ -42,21 +42,42 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
           />
           {/* разделительная полоса + SVG-стрелка-вырез */}
           {typeof window !== 'undefined' && (
-            <motion.div
-              className={["drop-divider", variant ?? ''].join(' ')}
-              style={{ top: topOffset - 1 }}
+            <motion.svg
+              className="drop-divider"
+              style={{ top: topOffset - 1, position: 'fixed' }}
+              width="100%"
+              height="12"
+              viewBox={`0 0 ${window.innerWidth} 12`}
+              preserveAspectRatio="none"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: .2 }}
             >
-              <div className="drop-divider-line" />
-              {/* вырез-стрелка — делаем треугольник поверх линии цветом var(--bg) */}
-              <div
-                className={["drop-cut", variant ?? ''].join(' ')}
-                aria-hidden
-              />
-            </motion.div>
+              {(() => {
+                const w = window.innerWidth;
+                const y = 2;           // базовая высота линии
+                const depth = 8;        // глубина V-изгиба
+                const half = 12;        // полуширина изгиба
+                let x = Math.round(w / 2);
+                if (variant === 'course') x = 28;
+                if (variant === 'energy') x = w - 28;
+                const left = Math.max(0, x - half);
+                const right = Math.min(w, x + half);
+                const d = `M0,${y} H${left} L${x},${y + depth} L${right},${y} H${w}`;
+                return (
+                  <path
+                    d={d}
+                    stroke="#3b454e"
+                    strokeWidth={4}
+                    fill="none"
+                    strokeLinejoin="miter"
+                    strokeLinecap="butt"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                );
+              })()}
+            </motion.svg>
           )}
           <motion.div
             className="drop-panel"
