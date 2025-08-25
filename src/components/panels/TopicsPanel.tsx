@@ -12,6 +12,10 @@ type Subtopic  = { id: number | string; subject_id?: number | string; topic_id: 
 type Props = { open: boolean; onClose: () => void };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
+const CUR_TOPIC_ID_KEY = 'exampli:currentTopicId';
+const CUR_SUBTOPIC_ID_KEY = 'exampli:currentSubtopicId';
+const CUR_TOPIC_TITLE_KEY = 'exampli:currentTopicTitle';
+const CUR_SUBTOPIC_TITLE_KEY = 'exampli:currentSubtopicTitle';
 
 export default function TopicsPanel({ open, onClose }: Props) {
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -49,6 +53,23 @@ export default function TopicsPanel({ open, onClose }: Props) {
       const tlist = (tps as Topic[]) || [];
       setTopics(tlist);
 
+      // Если ранее был выбран топик — попробуем сразу развернуть его
+      try {
+        const savedTopicId = localStorage.getItem(CUR_TOPIC_ID_KEY);
+        if (savedTopicId) {
+          const exists = tlist.some(t => String(t.id) === String(savedTopicId));
+          if (exists) setExpandedTopicId(savedTopicId);
+          else {
+            // очищаем кэш, если топик не принадлежит текущему курсу
+            localStorage.removeItem(CUR_TOPIC_ID_KEY);
+            localStorage.removeItem(CUR_SUBTOPIC_ID_KEY);
+            localStorage.removeItem(CUR_TOPIC_TITLE_KEY);
+            localStorage.removeItem(CUR_SUBTOPIC_TITLE_KEY);
+            setExpandedTopicId(null);
+          }
+        }
+      } catch {}
+
       const topicIds = tlist.map(t => t.id);
       let subsData: Subtopic[] = [];
       if (topicIds.length > 0) {
@@ -68,21 +89,54 @@ export default function TopicsPanel({ open, onClose }: Props) {
         map[key].push(s);
       });
       setSubsByTopic(map);
+
+      // Попробуем восстановить сохранённый выбор из users.current_topic/current_subtopic
+      try {
+        const boot: any = (window as any).__exampliBoot;
+        const userId = boot?.user?.id;
+        if (userId) {
+          const { data: urow } = await supabase
+            .from('users')
+            .select('current_topic,current_subtopic')
+            .eq('id', userId)
+            .single();
+          const savedTopicId = (urow as any)?.current_topic ?? null;
+          const savedSubtopicId = (urow as any)?.current_subtopic ?? null;
+          if (savedTopicId) {
+            const tFound = tlist.find(tt => String(tt.id) === String(savedTopicId));
+            const stFound = subsData.find(ss => String(ss.id) === String(savedSubtopicId));
+            if (tFound && stFound) {
+              try {
+                localStorage.setItem(CUR_TOPIC_ID_KEY, String(tFound.id));
+                localStorage.setItem(CUR_SUBTOPIC_ID_KEY, String(stFound.id));
+                localStorage.setItem(CUR_TOPIC_TITLE_KEY, tFound.title);
+                localStorage.setItem(CUR_SUBTOPIC_TITLE_KEY, stFound.title);
+              } catch {}
+              try {
+                window.dispatchEvent(new CustomEvent('exampli:topicBadge', {
+                  detail: { topicTitle: tFound.title, subtopicTitle: stFound.title },
+                }));
+              } catch {}
+              setExpandedTopicId(String(tFound.id));
+            }
+          }
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
   }, [readActiveCode]);
 
-  // грузим при открытии панели (и когда сменился курс извне)
-  useEffect(() => { if (open) void loadData(); }, [open, loadData]);
+  // Грузим один раз при монтировании (прогрев панели заранее)
+  useEffect(() => { void loadData(); }, [loadData]);
   useEffect(() => {
-    const onCourseChanged = () => { if (open) void loadData(); };
+    const onCourseChanged = () => { void loadData(); };
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
   }, [open, loadData]);
 
   // выбор подтемы → сообщаем дороге и кнопке, закрываем панель
-  function pickSubtopic(t: Topic, st: Subtopic) {
+  const pickSubtopic = useCallback((t: Topic, st: Subtopic) => {
     window.dispatchEvent(new CustomEvent('exampli:subtopicChanged', {
       detail: {
         subjectId: subject?.id,
@@ -94,8 +148,28 @@ export default function TopicsPanel({ open, onClose }: Props) {
     window.dispatchEvent(new CustomEvent('exampli:topicBadge', {
       detail: { topicTitle: t.title, subtopicTitle: st.title },
     }));
+
+    // Локальный кэш для мгновенного восстановления текста кнопки
+    try {
+      localStorage.setItem(CUR_TOPIC_ID_KEY, String(t.id));
+      localStorage.setItem(CUR_SUBTOPIC_ID_KEY, String(st.id));
+      localStorage.setItem(CUR_TOPIC_TITLE_KEY, t.title);
+      localStorage.setItem(CUR_SUBTOPIC_TITLE_KEY, st.title);
+    } catch {}
+
+    // Сохраняем выбор в БД users: current_topic / current_subtopic
+    try {
+      const boot: any = (window as any).__exampliBoot;
+      const userId = boot?.user?.id;
+      if (userId) {
+        void supabase
+          .from('users')
+          .update({ current_topic: t.id, current_subtopic: st.id })
+          .eq('id', userId);
+      }
+    } catch {}
     onClose();
-  }
+  }, [onClose, subject?.id]);
 
   const body = useMemo(() => {
     if (loading) {
@@ -166,7 +240,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
         })}
       </div>
     );
-  }, [loading, subject, topics, subsByTopic, expandedTopicId]);
+  }, [loading, subject, topics, subsByTopic, expandedTopicId, pickSubtopic]);
 
   return (
     <SidePanel

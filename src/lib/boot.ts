@@ -23,6 +23,11 @@ export type BootData = {
   lessons: LessonRow[];          // уроки активного курса
   // onboarding больше не используем в логике, оставляем опционально для обратной совместимости
   onboarding?: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null;
+  // новые поля для восстановления выбранной темы/подтемы
+  current_topic_id?: string | number | null;
+  current_subtopic_id?: string | number | null;
+  current_topic_title?: string | null;
+  current_subtopic_title?: string | null;
 };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
@@ -38,7 +43,6 @@ function preloadImage(src: string) {
 
 export async function bootPreload(onProgress?: (p: number) => void): Promise<BootData> {
   const step = (i: number, n: number) => onProgress?.(Math.round((i / n) * 100));
-  const toBool = (v: any): boolean => v === true || v === 1 || v === 't' || v === 'true' || v === 'TRUE' || v === 'True';
 
   // план шагов:
   // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
@@ -69,7 +73,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   if (user?.id) {
     const { data } = await supabase
       .from('users')
-      .select('id,xp,streak,hearts,phone_number,added_course')
+      .select('id,xp,streak,hearts,phone_number,added_course,current_topic,current_subtopic')
       .eq('id', user.id)
       .single();
     userRow = data as any;
@@ -166,12 +170,28 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   await preloadImage('/kursik.svg');
   step(++i, TOTAL);
 
+  // Попробуем восстановить названия выбранных темы/подтемы
+  let currentTopicTitle: string | null = null;
+  let currentSubtopicTitle: string | null = null;
+  const currentTopicId: string | number | null = userRow?.current_topic ?? null;
+  const currentSubtopicId: string | number | null = userRow?.current_subtopic ?? null;
+  try {
+    const t = localStorage.getItem('exampli:currentTopicTitle');
+    const s = localStorage.getItem('exampli:currentSubtopicTitle');
+    if (t) currentTopicTitle = t;
+    if (s) currentSubtopicTitle = s;
+  } catch {}
+
   const boot: BootData = {
     user: (userRow ?? user) ?? null,
     stats,
     subjects: subjectsArr,
     lessons: lessonsArr,
     onboarding,
+    current_topic_id: currentTopicId,
+    current_subtopic_id: currentSubtopicId,
+    current_topic_title: currentTopicTitle,
+    current_subtopic_title: currentSubtopicTitle,
   };
 
   (window as any).__exampliBoot = boot;
