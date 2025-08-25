@@ -156,12 +156,12 @@ export default function CoursesPanel(props: Props) {
                     'grid place-items-center rounded-2xl border bg-transparent',
                     active ? 'border-[var(--accent)]' : 'border-white/12',
                   ].join(' ')}
-                  style={{ width: 108, height: 108 }}
+                  style={{ width: 96, height: 120 }}
                 >
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[88px] h-[88px] object-contain"
+                    className="w-[84px] h-[84px] object-contain"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
@@ -183,8 +183,8 @@ export default function CoursesPanel(props: Props) {
           }}
           className="relative flex flex-col items-center text-center px-1"
         >
-          <div className="w-[108px] h-[108px] grid place-items-center rounded-2xl border border-white/12">
-            <div className="text-4xl text-white/70">＋</div>
+          <div className="grid place-items-center rounded-2xl border border-white/12" style={{ width: 96, height: 120 }}>
+            <div className="text-[34px] text-white/70">＋</div>
           </div>
           <div className="text-[10px] text-muted mt-2">Добавить</div>
         </motion.button>
