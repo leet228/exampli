@@ -156,7 +156,7 @@ export default function CoursesPanel(props: Props) {
                     'grid place-items-center rounded-2xl border bg-transparent',
                     active ? 'border-[var(--accent)]' : 'border-white/12',
                   ].join(' ')}
-                  style={{ width: 96, height: 120 }}
+                  style={{ width: 78, height: 98 }}
                 >
                   <img
                     src={`/subjects/${s.code}.svg`}
@@ -183,7 +183,7 @@ export default function CoursesPanel(props: Props) {
           }}
           className="relative flex flex-col items-center text-center px-1"
         >
-          <div className="grid place-items-center rounded-2xl border border-white/12" style={{ width: 96, height: 120 }}>
+          <div className="grid place-items-center rounded-2xl border border-white/12" style={{ width: 78, height: 32 }}>
             <div className="text-[34px] text-white/70">＋</div>
           </div>
           <div className="text-[10px] text-muted mt-2">Добавить</div>
