@@ -161,13 +161,13 @@ export default function CoursesPanel(props: Props) {
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[112px] h-[112px] object-contain relative -translate-y-9"
+                    className="w-[112px] h-[112px] object-contain relative -translate-y-7"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
               </div>
-              <div className="text-[10px] text-muted uppercase tracking-wide -mt-1">{s.level}</div>
-              <div className="text-sm font-semibold leading-tight line-clamp-2 mt-0.5 max-w-[110px]">{s.title}</div>
+              <div className="text-[10px] text-muted uppercase tracking-wide mt-1">{s.level}</div>
+              <div className="text-sm font-semibold leading-tight line-clamp-2 mt-[2px] max-w-[110px]">{s.title}</div>
             </motion.button>
           );
         })}
