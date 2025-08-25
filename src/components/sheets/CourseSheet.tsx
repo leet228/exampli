@@ -150,7 +150,7 @@ export default function CoursesPanel(props: Props) {
               }}
               className="relative flex flex-col items-center text-center px-1"
             >
-              <div className="relative z-10 mb-2">
+              <div className="relative z-10 -mt-1 mb-1">
                 <div
                   className={[
                     'grid place-items-center rounded-2xl border bg-transparent',
