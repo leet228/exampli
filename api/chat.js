@@ -16,9 +16,9 @@ export default async function handler(req, res) {
             return;
         }
 
-        const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
+        const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
-            res.status(500).json({ error: 'Missing DEEPSEEK_API_KEY on the server' });
+            res.status(500).json({ error: 'Missing OPENAI_API_KEY on the server' });
             return;
         }
 
@@ -33,52 +33,15 @@ export default async function handler(req, res) {
             'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, ' +
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
-        // Upload data-URL images to public URLs (Supabase) and FLATTEN content to pure text
-        // Also collect per-message image URLs for optional Vision pre-processing (public URLs only)
-        const { textOnlyMessages, hasAnyImageUrl, imagesByIndex, hasAnyDataUrl } = await flattenMessagesWithPublicImageUrls(messages);
+        // Prepare messages for OpenAI (multimodal). If Supabase env is set, we can upload data URLs; otherwise keep data URLs inline.
+        const openAiPrepared = await buildOpenAIMessages(messages);
+        const model = process.env.OPENAI_MODEL || 'gpt-5';
+        const prepared = trimMessagesByChars([
+            { role: 'system', content: systemPrompt },
+            ...openAiPrepared
+        ], 35000);
 
-        // Optional: if images exist and OPENAI_API_KEY present, run a Vision pre-pass to summarize images
-        const openAiKey = process.env.OPENAI_API_KEY;
-        if (hasAnyImageUrl && openAiKey) {
-            try {
-                const targetIdx = findLastUserWithImages(imagesByIndex);
-                if (targetIdx !== -1) {
-                    const visionSummary = await summarizeImagesWithOpenAI({
-                        openAiKey,
-                        text: extractPlainTextFromMessage(messages[targetIdx]),
-                        imageUrls: imagesByIndex[targetIdx] || []
-                    });
-                    if (visionSummary) {
-                        const merged = [extractPlainTextFromMessage(messages[targetIdx]), `Описание изображения: ${visionSummary}`]
-                            .filter(Boolean)
-                            .join('\n\n');
-                        textOnlyMessages[targetIdx] = { role: 'user', content: merged };
-                    }
-                }
-            } catch (e) {
-                console.error('[api/chat] Vision pre-pass failed:', e);
-            }
-        }
-
-        // Model selection: prefer a vision model when images are present
-        const baseModel = process.env.DEEPSEEK_MODEL || 'deepseek-v3.1';
-        const visionModel = process.env.DEEPSEEK_VISION_MODEL || 'deepseek-vl';
-        const model = hasAnyImageUrl ? visionModel : baseModel;
-
-        const useVisionSchema = hasAnyImageUrl && /(vl|vision|janus|v3\.1)/i.test(String(model));
-        let prepared = useVisionSchema ? buildVisionMessages(messages, imagesByIndex) : textOnlyMessages;
-        // If any data URLs remain, keep only the last user message with images to avoid huge payloads
-        if (useVisionSchema && hasAnyDataUrl) {
-            const lastIdx = findLastUserWithImages(imagesByIndex);
-            const slice = [];
-            slice.push({ role: 'system', content: systemPrompt });
-            if (lastIdx !== -1) slice.push(prepared[lastIdx]);
-            prepared = slice;
-        } else {
-            prepared = trimMessagesByChars([{ role: 'system', content: systemPrompt }, ...prepared], 15000);
-        }
-
-        const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
+        const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -93,7 +56,7 @@ export default async function handler(req, res) {
 
         if (!dsResponse.ok) {
             const errorText = await safeText(dsResponse);
-            res.status(dsResponse.status).json({ error: 'DeepSeek error', detail: errorText });
+            res.status(dsResponse.status).json({ error: 'OpenAI error', detail: errorText });
             return;
         }
 
@@ -130,6 +93,51 @@ async function safeReadBody(req) {
 
 async function safeText(res) {
     try { return await res.text(); } catch { return ''; }
+}
+
+async function buildOpenAIMessages(messages) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const bucket = process.env.SUPABASE_BUCKET || 'ai-uploads';
+    const canUpload = Boolean(supabaseUrl && supabaseKey);
+    const supabase = canUpload ? createClient(supabaseUrl, supabaseKey) : null;
+
+    const out = [];
+    for (const m of messages) {
+        if (typeof m.content === 'string') {
+            out.push({ role: m.role, content: m.content });
+            continue;
+        }
+        if (!Array.isArray(m.content)) {
+            out.push({ role: m.role, content: '' });
+            continue;
+        }
+        const parts = [];
+        for (const p of m.content) {
+            if (p && p.type === 'text' && typeof p.text === 'string') {
+                parts.push({ type: 'text', text: p.text });
+            } else if (p && p.type === 'image_url' && p.image_url && typeof p.image_url.url === 'string') {
+                let url = p.image_url.url;
+                if (url.startsWith('data:') && supabase) {
+                    try {
+                        const { mime, buffer, ext } = decodeDataUrl(url);
+                        const path = `chat/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext || 'png'}`;
+                        const { error: upErr } = await supabase.storage.from(bucket).upload(path, buffer, {
+                            contentType: mime,
+                            upsert: false
+                        });
+                        if (!upErr) {
+                            const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+                            if (pub && pub.publicUrl) url = pub.publicUrl;
+                        }
+                    } catch {}
+                }
+                parts.push({ type: 'image_url', image_url: { url } });
+            }
+        }
+        out.push({ role: m.role, content: parts.length ? parts : '' });
+    }
+    return out;
 }
 
 async function flattenMessagesWithPublicImageUrls(messages) {
