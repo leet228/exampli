@@ -2,7 +2,7 @@
 // Uses Node runtime to access environment variables securely
 
 export const config = {
-	runtime: 'nodejs20.x',
+	runtime: 'nodejs',
 	maxDuration: 30,
 	memory: 1024
 };
