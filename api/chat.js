@@ -1,10 +1,8 @@
-// CommonJS serverless function for Vercel to call DeepSeek Chat Completions
-// Handles POST and OPTIONS (preflight) to avoid 405 errors
+// ESM serverless function for Vercel to call DeepSeek Chat Completions
+// Compatible with "type": "module" projects
 
-/** @type {(req: any, res: any) => Promise<void>} */
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     try {
-        // Allow preflight and advertise allowed methods
         if (req.method === 'OPTIONS') {
             res.setHeader('Allow', 'POST, OPTIONS');
             res.status(204).end();
@@ -65,7 +63,7 @@ module.exports = async function handler(req, res) {
         console.error('[api/chat] Unhandled error:', error);
         res.status(500).json({ error: 'Internal error', detail: String(error && error.message || error) });
     }
-};
+}
 
 async function safeReadBody(req) {
     if (req && req.body && typeof req.body === 'object') return req.body;
