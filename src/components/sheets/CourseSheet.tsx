@@ -9,7 +9,7 @@ import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 type Subject = { id: number; code: string; title: string; level: string };
 
 type Props =
-  // Режим ПАНЕЛИ (Home.tsx): показываем левую выезжающую панель
+  // Режим ПАНЕЛИ (Home.tsx): показываем левую выезжающую панель!
   | { open: boolean; onClose: () => void; onPicked?: (s: Subject) => void; onAddClick?: () => void }
   // Режим ВСТАВКИ в TopSheet (HUD.tsx): просто отдаём контент без контейнера
   | { open?: undefined; onClose?: undefined; onPicked?: (s: Subject) => void; onAddClick?: () => void };
