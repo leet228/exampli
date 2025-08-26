@@ -34,7 +34,7 @@ export default async function handler(req, res) {
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
         // Upload data-URL images to public URLs (Supabase) and FLATTEN content to pure text
-        // Also collect per-message image URLs for optional Vision pre-processing
+        // Also collect per-message image URLs for optional Vision pre-processing (public URLs only)
         const { textOnlyMessages, hasAnyImageUrl, imagesByIndex } = await flattenMessagesWithPublicImageUrls(messages);
 
         // Optional: if images exist and OPENAI_API_KEY present, run a Vision pre-pass to summarize images
@@ -64,6 +64,11 @@ export default async function handler(req, res) {
         // If you have a specific vision-capable variant, set DEEPSEEK_MODEL accordingly
         const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
+        const compactMessages = trimMessagesByChars([
+            { role: 'system', content: systemPrompt },
+            ...textOnlyMessages
+        ], 15000);
+
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: {
@@ -72,10 +77,7 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    ...textOnlyMessages
-                ],
+                messages: compactMessages,
                 temperature: 0.7
             })
         });
@@ -165,14 +167,15 @@ async function flattenMessagesWithPublicImageUrls(messages) {
                         }
                     } catch {}
                 }
-                if (url) {
+                // Never pass data: URLs downstream to avoid massive payloads
+                if (url && !url.startsWith('data:')) {
                     imageUrls.push(url);
                     hasAnyImageUrl = true;
                 }
             }
         }
         const textJoined = textParts.filter(Boolean).join('\n').trim();
-        const imageLines = imageUrls.map((u) => `Image: ${u}`).join('\n');
+        const imageLines = imageUrls.length ? imageUrls.map((u) => `Image: ${u}`).join('\n') : (textJoined ? '' : '[Изображение приложено]');
         const merged = [textJoined, imageLines].filter(Boolean).join('\n\n');
         results.push({ role: m.role, content: merged || '[Изображение]' });
         imagesByIndex.push(imageUrls);
@@ -225,6 +228,24 @@ async function summarizeImagesWithOpenAI({ openAiKey, text, imageUrls }) {
     } catch {
         return '';
     }
+}
+
+function trimMessagesByChars(messages, maxChars) {
+    // Keep from the end until under limit; always keep first system message if present
+    const sys = messages[0] && messages[0].role === 'system' ? messages[0] : null;
+    const rest = sys ? messages.slice(1) : messages.slice();
+    const acc = [];
+    let total = 0;
+    for (let i = rest.length - 1; i >= 0; i--) {
+        const m = rest[i];
+        const c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+        const len = (c || '').length + 20; // rough overhead
+        if (total + len > maxChars && acc.length > 0) break;
+        acc.push(m);
+        total += len;
+    }
+    acc.reverse();
+    return sys ? [sys, ...acc] : acc;
 }
 
 function decodeDataUrl(dataUrl) {
