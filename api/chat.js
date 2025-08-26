@@ -60,8 +60,9 @@ export default async function handler(req, res) {
             }
         }
 
-        // Prefer a vision-capable model when image URLs are present (model name can be overridden)
-        const model = process.env.DEEPSEEK_MODEL || (hasAnyImageUrl ? 'deepseek-vl' : 'deepseek-chat');
+        // Use DeepSeek-V3.1 by default; can override via DEEPSEEK_MODEL
+        // If you have a specific vision-capable variant, set DEEPSEEK_MODEL accordingly
+        const model = process.env.DEEPSEEK_MODEL || 'deepseek-v3.1';
 
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
