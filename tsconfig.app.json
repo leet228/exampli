@@ -1,26 +1,16 @@
 {
   "compilerOptions": {
-    "composite": true,
-
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "moduleResolution": "Bundler",
-
-    "jsx": "react-jsx",
-
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-
-    "noEmit": true,
     "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
-
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",                      // можно оставить ".", тогда импорты относительные
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts", "env.d.ts"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src"]
 }

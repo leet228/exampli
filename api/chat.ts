@@ -8,9 +8,9 @@ export default async function handler(req: any, res: any) {
 			return;
 		}
 
-		const apiKey = process.env.OPENAI_API_KEY;
+		const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
 		if (!apiKey) {
-			res.status(500).json({ error: 'Missing OPENAI_API_KEY on the server' });
+			res.status(500).json({ error: 'Missing DEEPSEEK_API_KEY on the server' });
 			return;
 		}
 
@@ -26,14 +26,14 @@ export default async function handler(req: any, res: any) {
 			'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, '
 			+ 'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
-		const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+		const openAiResponse = await fetch('https://api.deepseek.com/chat/completions', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${apiKey}`
 			},
 			body: JSON.stringify({
-				model: 'gpt-4o-mini',
+				model: 'deepseek-chat',
 				messages: [
 					{ role: 'system', content: systemPrompt },
 					...messages
@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
 
 		if (!openAiResponse.ok) {
 			const errorText = await openAiResponse.text();
-			res.status(openAiResponse.status).json({ error: 'OpenAI error', detail: errorText });
+			res.status(openAiResponse.status).json({ error: 'DeepSeek error', detail: errorText });
 			return;
 		}
 
