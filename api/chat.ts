@@ -1,8 +1,6 @@
 // Minimal Vercel Serverless Function to proxy chat requests to OpenAI
 // Uses Node runtime to access environment variables securely
 
-export const config = { runtime: 'nodejs' };
-
 export default async function handler(req: any, res: any) {
 	try {
 		if (req.method !== 'POST') {
