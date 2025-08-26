@@ -1,4 +1,14 @@
 {
+    "functions": {
+        "api/**/*.{js,ts}": {
+            "runtime": "nodejs20.x"
+        }
+    },
+    "build": {
+        "env": {
+            "NODE_OPTIONS": "--enable-source-maps"
+        }
+    },
     "rewrites": [
         { "source": "/api/(.*)", "destination": "/api/$1" },
         { "source": "/(.*)", "destination": "/index.html" }
