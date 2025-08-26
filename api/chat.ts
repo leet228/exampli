@@ -1,6 +1,8 @@
 // Minimal Vercel Serverless Function to proxy chat requests to OpenAI
 // Uses Node runtime to access environment variables securely
 
+export const config = { runtime: 'nodejs' };
+
 export default async function handler(req: any, res: any) {
 	try {
 		if (req.method !== 'POST') {
@@ -14,7 +16,8 @@ export default async function handler(req: any, res: any) {
 			return;
 		}
 
-		const { messages } = await readJsonBody(req);
+		const parsed = await safeReadBody(req);
+		const messages = parsed?.messages;
 		if (!Array.isArray(messages)) {
 			res.status(400).json({ error: 'Invalid payload: messages must be an array' });
 			return;
@@ -52,7 +55,19 @@ export default async function handler(req: any, res: any) {
 		const content = data?.choices?.[0]?.message?.content ?? '';
 		res.status(200).json({ content });
 	} catch (error: any) {
+		console.error('[api/chat] Unhandled error:', error);
 		res.status(500).json({ error: 'Internal error', detail: String(error?.message || error) });
+	}
+}
+
+async function safeReadBody(req: any): Promise<any> {
+	if (req && typeof req.body === 'object' && req.body !== null) {
+		return req.body;
+	}
+	try {
+		return await readJsonBody(req);
+	} catch {
+		return {};
 	}
 }
 
