@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
         // Upload data-URL images to public URLs (Supabase) and FLATTEN content to pure text
         // Also collect per-message image URLs for optional Vision pre-processing (public URLs only)
-        const { textOnlyMessages, hasAnyImageUrl, imagesByIndex } = await flattenMessagesWithPublicImageUrls(messages);
+        const { textOnlyMessages, hasAnyImageUrl, imagesByIndex, hasAnyDataUrl } = await flattenMessagesWithPublicImageUrls(messages);
 
         // Optional: if images exist and OPENAI_API_KEY present, run a Vision pre-pass to summarize images
         const openAiKey = process.env.OPENAI_API_KEY;
@@ -60,14 +60,23 @@ export default async function handler(req, res) {
             }
         }
 
-        // Use DeepSeek-V3.1 by default; can override via DEEPSEEK_MODEL
-        // If you have a specific vision-capable variant, set DEEPSEEK_MODEL accordingly
-        const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+        // Model selection: prefer a vision model when images are present
+        const baseModel = process.env.DEEPSEEK_MODEL || 'deepseek-v3.1';
+        const visionModel = process.env.DEEPSEEK_VISION_MODEL || 'deepseek-vl';
+        const model = hasAnyImageUrl ? visionModel : baseModel;
 
-        const compactMessages = trimMessagesByChars([
-            { role: 'system', content: systemPrompt },
-            ...textOnlyMessages
-        ], 15000);
+        const useVisionSchema = hasAnyImageUrl && /(vl|vision|janus|v3\.1)/i.test(String(model));
+        let prepared = useVisionSchema ? buildVisionMessages(messages, imagesByIndex) : textOnlyMessages;
+        // If any data URLs remain, keep only the last user message with images to avoid huge payloads
+        if (useVisionSchema && hasAnyDataUrl) {
+            const lastIdx = findLastUserWithImages(imagesByIndex);
+            const slice = [];
+            slice.push({ role: 'system', content: systemPrompt });
+            if (lastIdx !== -1) slice.push(prepared[lastIdx]);
+            prepared = slice;
+        } else {
+            prepared = trimMessagesByChars([{ role: 'system', content: systemPrompt }, ...prepared], 15000);
+        }
 
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
@@ -77,7 +86,7 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 model,
-                messages: compactMessages,
+                messages: prepared,
                 temperature: 0.7
             })
         });
