@@ -34,10 +34,33 @@ export default async function handler(req, res) {
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
         // Upload data-URL images to public URLs (Supabase) and FLATTEN content to pure text
-        // Example of flattened text: "<user text>\n\nImage: https://.../public.png"
-        const { textOnlyMessages, hasAnyImageUrl } = await flattenMessagesWithPublicImageUrls(messages);
+        // Also collect per-message image URLs for optional Vision pre-processing
+        const { textOnlyMessages, hasAnyImageUrl, imagesByIndex } = await flattenMessagesWithPublicImageUrls(messages);
 
-        // Prefer a vision-capable model when image URLs are present, but keep text-only schema
+        // Optional: if images exist and OPENAI_API_KEY present, run a Vision pre-pass to summarize images
+        const openAiKey = process.env.OPENAI_API_KEY;
+        if (hasAnyImageUrl && openAiKey) {
+            try {
+                const targetIdx = findLastUserWithImages(imagesByIndex);
+                if (targetIdx !== -1) {
+                    const visionSummary = await summarizeImagesWithOpenAI({
+                        openAiKey,
+                        text: extractPlainTextFromMessage(messages[targetIdx]),
+                        imageUrls: imagesByIndex[targetIdx] || []
+                    });
+                    if (visionSummary) {
+                        const merged = [extractPlainTextFromMessage(messages[targetIdx]), `Описание изображения: ${visionSummary}`]
+                            .filter(Boolean)
+                            .join('\n\n');
+                        textOnlyMessages[targetIdx] = { role: 'user', content: merged };
+                    }
+                }
+            } catch (e) {
+                console.error('[api/chat] Vision pre-pass failed:', e);
+            }
+        }
+
+        // Prefer a vision-capable model when image URLs are present (model name can be overridden)
         const model = process.env.DEEPSEEK_MODEL || (hasAnyImageUrl ? 'deepseek-vl' : 'deepseek-chat');
 
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
@@ -106,13 +129,16 @@ async function flattenMessagesWithPublicImageUrls(messages) {
 
     const results = [];
     let hasAnyImageUrl = false;
+    const imagesByIndex = [];
     for (const m of messages) {
         if (typeof m.content === 'string') {
             results.push({ role: m.role, content: m.content });
+            imagesByIndex.push([]);
             continue;
         }
         if (!Array.isArray(m.content)) {
             results.push({ role: m.role, content: '' });
+            imagesByIndex.push([]);
             continue;
         }
         const textParts = [];
@@ -138,7 +164,7 @@ async function flattenMessagesWithPublicImageUrls(messages) {
                         }
                     } catch {}
                 }
-                if (url && !url.startsWith('data:')) {
+                if (url) {
                     imageUrls.push(url);
                     hasAnyImageUrl = true;
                 }
@@ -148,8 +174,56 @@ async function flattenMessagesWithPublicImageUrls(messages) {
         const imageLines = imageUrls.map((u) => `Image: ${u}`).join('\n');
         const merged = [textJoined, imageLines].filter(Boolean).join('\n\n');
         results.push({ role: m.role, content: merged || '[Изображение]' });
+        imagesByIndex.push(imageUrls);
     }
-    return { textOnlyMessages: results, hasAnyImageUrl };
+    return { textOnlyMessages: results, hasAnyImageUrl, imagesByIndex };
+}
+
+function extractPlainTextFromMessage(message) {
+    if (!message) return '';
+    if (typeof message.content === 'string') return message.content;
+    if (Array.isArray(message.content)) {
+        return message.content
+            .map((p) => (p && p.type === 'text' ? p.text : ''))
+            .filter(Boolean)
+            .join('\n');
+    }
+    return '';
+}
+
+function findLastUserWithImages(imagesByIndex) {
+    for (let i = imagesByIndex.length - 1; i >= 0; i--) {
+        if (Array.isArray(imagesByIndex[i]) && imagesByIndex[i].length > 0) return i;
+    }
+    return -1;
+}
+
+async function summarizeImagesWithOpenAI({ openAiKey, text, imageUrls }) {
+    try {
+        const visionMessages = [
+            { role: 'system', content: 'Ты описываешь изображения кратко и по делу.' },
+            {
+                role: 'user',
+                content: [
+                    ...(text ? [{ type: 'text', text }] : []),
+                    ...imageUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
+                ]
+            }
+        ];
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${openAiKey}`
+            },
+            body: JSON.stringify({ model: 'gpt-4o-mini', messages: visionMessages, temperature: 0.2 })
+        });
+        if (!res.ok) return '';
+        const data = await res.json();
+        return (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    } catch {
+        return '';
+    }
 }
 
 function decodeDataUrl(dataUrl) {
