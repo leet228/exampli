@@ -33,12 +33,12 @@ export default async function handler(req, res) {
             'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, ' +
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
-        // If there are image data URLs, try to upload them to a public URL (Supabase Storage)
-        const withExternalImages = await ensureExternalImageUrls(messages);
+        // Upload data-URL images to public URLs (Supabase) and FLATTEN content to pure text
+        // Example of flattened text: "<user text>\n\nImage: https://.../public.png"
+        const { textOnlyMessages, hasAnyImageUrl } = await flattenMessagesWithPublicImageUrls(messages);
 
-        // Choose model: if images present, prefer a vision-capable model if provided
-        const hasImages = withExternalImages.some((m) => Array.isArray(m.content) && m.content.some((p) => p && p.type === 'image_url'));
-        const model = process.env.DEEPSEEK_MODEL || (hasImages ? 'deepseek-vl' : 'deepseek-chat');
+        // Prefer a vision-capable model when image URLs are present, but keep text-only schema
+        const model = process.env.DEEPSEEK_MODEL || (hasAnyImageUrl ? 'deepseek-vl' : 'deepseek-chat');
 
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
                 model,
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    ...withExternalImages
+                    ...textOnlyMessages
                 ],
                 temperature: 0.7
             })
@@ -97,7 +97,7 @@ async function safeText(res) {
     try { return await res.text(); } catch { return ''; }
 }
 
-async function ensureExternalImageUrls(messages) {
+async function flattenMessagesWithPublicImageUrls(messages) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -105,19 +105,23 @@ async function ensureExternalImageUrls(messages) {
     const supabase = canUpload ? createClient(supabaseUrl, supabaseKey) : null;
 
     const results = [];
+    let hasAnyImageUrl = false;
     for (const m of messages) {
         if (typeof m.content === 'string') {
-            results.push(m);
+            results.push({ role: m.role, content: m.content });
             continue;
         }
         if (!Array.isArray(m.content)) {
             results.push({ role: m.role, content: '' });
             continue;
         }
-        const parts = [];
+        const textParts = [];
+        const imageUrls = [];
         for (const part of m.content) {
-            if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
-                const url = part.image_url.url;
+            if (part && part.type === 'text' && typeof part.text === 'string') {
+                textParts.push(part.text);
+            } else if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+                let url = part.image_url.url;
                 if (url.startsWith('data:') && supabase) {
                     try {
                         const { mime, buffer, ext } = decodeDataUrl(url);
@@ -129,25 +133,23 @@ async function ensureExternalImageUrls(messages) {
                         if (!upErr) {
                             const { data: pub } = supabase.storage.from('ai-uploads').getPublicUrl(path);
                             if (pub && pub.publicUrl) {
-                                parts.push({ type: 'image_url', image_url: { url: pub.publicUrl } });
-                                continue;
+                                url = pub.publicUrl;
                             }
                         }
-                    } catch (e) {
-                        // fall back below
-                    }
-                    // fallback to text marker if upload failed
-                    parts.push({ type: 'text', text: '[Изображение: недоступно по URL]' });
-                } else {
-                    parts.push(part);
+                    } catch {}
                 }
-            } else if (part && part.type === 'text' && typeof part.text === 'string') {
-                parts.push(part);
+                if (url && !url.startsWith('data:')) {
+                    imageUrls.push(url);
+                    hasAnyImageUrl = true;
+                }
             }
         }
-        results.push({ role: m.role, content: parts.length ? parts : '' });
+        const textJoined = textParts.filter(Boolean).join('\n').trim();
+        const imageLines = imageUrls.map((u) => `Image: ${u}`).join('\n');
+        const merged = [textJoined, imageLines].filter(Boolean).join('\n\n');
+        results.push({ role: m.role, content: merged || '[Изображение]' });
     }
-    return results;
+    return { textOnlyMessages: results, hasAnyImageUrl };
 }
 
 function decodeDataUrl(dataUrl) {
