@@ -32,6 +32,9 @@ export default async function handler(req, res) {
             'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, ' +
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
+        // Normalize mixed content (text + image_url[]) into text-only for DeepSeek
+        const textOnlyMessages = normalizeMessagesForDeepSeek(messages);
+
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: {
@@ -42,7 +45,7 @@ export default async function handler(req, res) {
                 model: 'deepseek-chat',
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    ...messages
+                    ...textOnlyMessages
                 ],
                 temperature: 0.7
             })
@@ -87,4 +90,19 @@ async function safeReadBody(req) {
 
 async function safeText(res) {
     try { return await res.text(); } catch { return ''; }
+}
+
+function normalizeMessagesForDeepSeek(messages) {
+    return messages.map((m) => {
+        if (typeof m.content === 'string') return m;
+        if (Array.isArray(m.content)) {
+            const text = m.content.map((part) => {
+                if (part && part.type === 'text' && typeof part.text === 'string') return part.text;
+                if (part && part.type === 'image_url' && part.image_url && part.image_url.url) return '[Изображение]';
+                return '';
+            }).filter(Boolean).join('\n');
+            return { role: m.role, content: text || '[Изображение]' };
+        }
+        return { role: m.role, content: '' };
+    });
 }
