@@ -1,5 +1,6 @@
 // ESM serverless function for Vercel to call DeepSeek Chat Completions
 // Compatible with "type": "module" projects
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
     try {
@@ -32,8 +33,12 @@ export default async function handler(req, res) {
             'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, ' +
             'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
 
-        // Normalize mixed content (text + image_url[]) into text-only for DeepSeek
-        const textOnlyMessages = normalizeMessagesForDeepSeek(messages);
+        // If there are image data URLs, try to upload them to a public URL (Supabase Storage)
+        const withExternalImages = await ensureExternalImageUrls(messages);
+
+        // Choose model: if images present, prefer a vision-capable model if provided
+        const hasImages = withExternalImages.some((m) => Array.isArray(m.content) && m.content.some((p) => p && p.type === 'image_url'));
+        const model = process.env.DEEPSEEK_MODEL || (hasImages ? 'deepseek-vl' : 'deepseek-chat');
 
         const dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
@@ -42,10 +47,10 @@ export default async function handler(req, res) {
                 Authorization: `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'deepseek-chat',
+                model,
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    ...textOnlyMessages
+                    ...withExternalImages
                 ],
                 temperature: 0.7
             })
@@ -92,17 +97,65 @@ async function safeText(res) {
     try { return await res.text(); } catch { return ''; }
 }
 
-function normalizeMessagesForDeepSeek(messages) {
-    return messages.map((m) => {
-        if (typeof m.content === 'string') return m;
-        if (Array.isArray(m.content)) {
-            const text = m.content.map((part) => {
-                if (part && part.type === 'text' && typeof part.text === 'string') return part.text;
-                if (part && part.type === 'image_url' && part.image_url && part.image_url.url) return '[Изображение]';
-                return '';
-            }).filter(Boolean).join('\n');
-            return { role: m.role, content: text || '[Изображение]' };
+async function ensureExternalImageUrls(messages) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const canUpload = Boolean(supabaseUrl && supabaseKey);
+    const supabase = canUpload ? createClient(supabaseUrl, supabaseKey) : null;
+
+    const results = [];
+    for (const m of messages) {
+        if (typeof m.content === 'string') {
+            results.push(m);
+            continue;
         }
-        return { role: m.role, content: '' };
-    });
+        if (!Array.isArray(m.content)) {
+            results.push({ role: m.role, content: '' });
+            continue;
+        }
+        const parts = [];
+        for (const part of m.content) {
+            if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+                const url = part.image_url.url;
+                if (url.startsWith('data:') && supabase) {
+                    try {
+                        const { mime, buffer, ext } = decodeDataUrl(url);
+                        const path = `chat/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext || 'png'}`;
+                        const { error: upErr } = await supabase.storage.from('ai-uploads').upload(path, buffer, {
+                            contentType: mime,
+                            upsert: false
+                        });
+                        if (!upErr) {
+                            const { data: pub } = supabase.storage.from('ai-uploads').getPublicUrl(path);
+                            if (pub && pub.publicUrl) {
+                                parts.push({ type: 'image_url', image_url: { url: pub.publicUrl } });
+                                continue;
+                            }
+                        }
+                    } catch (e) {
+                        // fall back below
+                    }
+                    // fallback to text marker if upload failed
+                    parts.push({ type: 'text', text: '[Изображение: недоступно по URL]' });
+                } else {
+                    parts.push(part);
+                }
+            } else if (part && part.type === 'text' && typeof part.text === 'string') {
+                parts.push(part);
+            }
+        }
+        results.push({ role: m.role, content: parts.length ? parts : '' });
+    }
+    return results;
+}
+
+function decodeDataUrl(dataUrl) {
+    const match = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+    if (!match) throw new Error('Invalid data URL');
+    const mime = match[1];
+    const base64 = match[2];
+    const buffer = Buffer.from(base64, 'base64');
+    const ext = mime.split('/')[1] || 'png';
+    return { mime, buffer, ext };
 }
