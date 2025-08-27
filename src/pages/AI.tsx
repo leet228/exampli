@@ -288,7 +288,7 @@ function ChatBubble({ role, content }: ChatMessage) {
         className={
           isUser
             ? 'max-w-full inline-block rounded-3xl px-4 py-3 bg-white/5 border border-white/10 text-[var(--text)]'
-            : 'max-w-full inline-block px-1 py-1 text-[var(--text)]'
+            : 'max-w-full inline-block px-1 py-1 text-[var(--text)] allow-select'
         }
       >
         <RenderMessageContent content={content} role={role} />
