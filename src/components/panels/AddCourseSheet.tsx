@@ -24,6 +24,16 @@ export default function AddCourseSheet({
 
   useEffect(() => {
     if (!open) return;
+    // сперва пробуем взять из boot/cache
+    try {
+      const boot: any = (window as any).__exampliBoot;
+      const cached = boot?.subjectsAll as Subject[] | undefined;
+      if (cached && cached.length) {
+        setAll(cached);
+        setPickedId(null);
+        return;
+      }
+    } catch {}
     (async () => {
       const { data } = await supabase
         .from('subjects')

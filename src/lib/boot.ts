@@ -21,6 +21,7 @@ export type BootData = {
   stats: { xp: number; streak: number; hearts: number };
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
+  subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
   // onboarding больше не используем в логике, оставляем опционально для обратной совместимости
   onboarding?: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null;
   // новые поля для восстановления выбранной темы/подтемы
@@ -46,7 +47,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
 
   // план шагов:
   // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
-  const TOTAL = 8;
+  const TOTAL = 10;
   let i = 0;
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
@@ -170,6 +171,23 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   await preloadImage('/kursik.svg');
   step(++i, TOTAL);
 
+  // 8) Предзагрузка ВСЕХ предметов (OGE/EGE) для AddCourseSheet и прогрев их иконок
+  let subjectsAll: SubjectRow[] = [];
+  try {
+    const { data } = await supabase
+      .from('subjects')
+      .select('id,code,title,level')
+      .order('level', { ascending: true })
+      .order('title', { ascending: true });
+    subjectsAll = (data ?? []) as SubjectRow[];
+    cacheSet(CACHE_KEYS.subjectsAll, subjectsAll, 10 * 60_000);
+    // прогреем svg для карточек
+    await Promise.all(
+      subjectsAll.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))
+    );
+  } catch {}
+  step(++i, TOTAL);
+
   // Попробуем восстановить названия выбранных темы/подтемы
   let currentTopicTitle: string | null = null;
   let currentSubtopicTitle: string | null = null;
@@ -187,6 +205,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     stats,
     subjects: subjectsArr,
     lessons: lessonsArr,
+    subjectsAll,
     onboarding,
     current_topic_id: currentTopicId,
     current_subtopic_id: currentSubtopicId,

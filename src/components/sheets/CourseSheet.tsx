@@ -73,6 +73,17 @@ export default function CoursesPanel(props: Props) {
 
   // Прогреваем данные сразу при монтировании (в любом режиме), плюс обновляем при открытии
   useEffect(() => { void loadUserSubjects(); }, [loadUserSubjects]);
+  // Предзагрузка иконок предметов из boot (если прилетели)
+  useEffect(() => {
+    try {
+      const boot: any = (window as any).__exampliBoot;
+      const subs: Subject[] = (boot?.subjects || []) as Subject[];
+      subs.slice(0, 12).forEach((s) => {
+        const img = new Image();
+        img.src = `/subjects/${s.code}.svg`;
+      });
+    } catch {}
+  }, []);
   useEffect(() => { if (typeof open === 'boolean' && open) void loadUserSubjects(); }, [open, loadUserSubjects]);
 
   // Быстрый init из boot, если есть
