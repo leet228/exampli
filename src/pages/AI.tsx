@@ -20,7 +20,7 @@ export default function AI() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'Привет! Я твой личный учитель.',
+      content: 'КУРСИК AI',
     },
   ]);
   const [input, setInput] = React.useState<string>('');
@@ -154,10 +154,13 @@ export default function AI() {
           className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1"
           aria-live="polite"
         >
-          {/* приветственное сообщение наверху */}
-          {/* принудительно показываем всегда на первом экране */}
+          {/* приветственное сообщение — центр по ширине, жирный матовый белый */}
           {messages.length && messages[0]?.role === 'assistant' && (
-            <ChatBubble role="assistant" content={messages[0].content} />
+            <div className="w-full text-center">
+              <div className="inline-block px-3 py-2 text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
+                {typeof messages[0].content === 'string' ? messages[0].content : 'КУРСИК AI'}
+              </div>
+            </div>
           )}
           {messages.slice(1).map((m, idx) => (
             <ChatBubble key={idx + 1} role={m.role} content={m.content} />
@@ -233,6 +236,8 @@ export default function AI() {
 
             {/* отправка */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
               onClick={sendMessage}
               disabled={(!input.trim() && !pendingImage) || isLoading}
               aria-label="Отправить"
