@@ -18,6 +18,7 @@
     --z-hud: 40;
     --z-top-sheet: 70;
     --z-bottom-sheet: 80;
+    --ai-greet-h: 56px;
 }
 
 html,
@@ -585,7 +586,24 @@ body::before {
 /* Отступ сверху для приветствия под телеграм‑HUD */
 
 .ai-greet-pad {
-    padding-top: calc(env(safe-area-inset-top) + 56px);
+    padding-top: calc(env(safe-area-inset-top) + var(--ai-greet-h));
+}
+
+
+/* Фиксированный верхний HUD с приветствием на AI */
+
+.ai-greet-hud {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: env(safe-area-inset-top);
+    height: var(--ai-greet-h);
+    background: var(--bg);
+    border-bottom: 1px solid rgba(255, 255, 255, .1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: calc(var(--z-hud) + 1);
 }
 
 

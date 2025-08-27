@@ -149,21 +149,20 @@ export default function AI() {
   return (
     <div className="safe-bottom main-scroll">
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad">
+        {/* Фиксированный HUD приветствия поверх ленты */}
+        <div className="ai-greet-hud">
+          <div className="inline-block text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
+            {messages.length && messages[0]?.role === 'assistant' && typeof messages[0].content === 'string'
+              ? messages[0].content
+              : 'КУРСИК AI'}
+          </div>
+        </div>
+
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1"
           aria-live="polite"
         >
-          {/* Верхний HUD с приветствием: фиксируется при скролле и отделён линией */}
-          <div className="sticky top-0 z-10 bg-[var(--bg)] border-b border-white/10">
-            <div className="w-full text-center px-3 py-3">
-              <div className="inline-block text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
-                {messages.length && messages[0]?.role === 'assistant' && typeof messages[0].content === 'string'
-                  ? messages[0].content
-                  : 'КУРСИК AI'}
-              </div>
-            </div>
-          </div>
           {messages.slice(1).map((m, idx) => (
             <ChatBubble key={idx + 1} role={m.role} content={m.content} />
           ))}
