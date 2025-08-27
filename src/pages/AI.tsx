@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { hapticTiny, hapticSelect } from '../lib/haptics';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -30,6 +31,7 @@ export default function AI() {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const MAX_VISIBLE_LINES = 8;
+  const [isInputFocused, setIsInputFocused] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     // автопрокрутка вниз при новых сообщениях
@@ -50,6 +52,14 @@ export default function AI() {
     el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
   }, [input]);
 
+  // Прячу нижний HUD, когда поле ввода в фокусе
+  React.useEffect(() => {
+    const cls = 'chat-input-active';
+    if (isInputFocused) document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+    return () => document.body.classList.remove(cls);
+  }, [isInputFocused]);
+
   async function sendMessage() {
     const trimmed = input.trim();
     if (!trimmed && !pendingImage) return;
@@ -68,6 +78,8 @@ export default function AI() {
     setInput('');
     setPendingImage(null);
     setIsLoading(true);
+    // Хаптик «выстрел» после отправки
+    try { hapticTiny(); } catch {}
 
     try {
       const response = await fetch('/api/chat', {
@@ -86,6 +98,8 @@ export default function AI() {
       const data: { content?: string } = await response.json();
       const assistantReply = data.content?.trim() || 'Извини, я сейчас не смог ответить.';
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantReply }]);
+      // Хаптик «как смс пришла» на ответ бота
+      try { hapticSelect(); } catch {}
     } catch (e: any) {
       setError(e?.message ? String(e.message) : 'Не удалось получить ответ.');
     } finally {
@@ -127,7 +141,7 @@ export default function AI() {
       <div className="w-full px-3 py-4 h-full flex flex-col">
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-40"
+          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-2"
           aria-live="polite"
         >
           {messages.map((m, idx) => (
@@ -135,10 +149,11 @@ export default function AI() {
           ))}
 
           {isLoading && (
-            <div className="flex items-start gap-3 fade-in">
-              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10 flex items-center justify-center">🤖</div>
-              <div className="rounded-2xl px-4 py-3 bg-white/5 border border-white/10 text-sm text-[var(--text)]">
-                Печатаю ответ...
+            <div className="px-2">
+              <div className="inline-flex items-center gap-2 py-3">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
               </div>
             </div>
           )}
@@ -196,6 +211,8 @@ export default function AI() {
                 onKeyDown={onKeyDown}
                 spellCheck={true}
                 placeholder="Спроси что угодно"
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
               />
             </div>
 
@@ -219,9 +236,7 @@ function ChatBubble({ role, content }: ChatMessage) {
   const isUser = role === 'user';
   return (
     <div className={`w-full flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-2 px-1`}>
-      {!isUser && (
-        <div className="mt-1 w-8 h-8 rounded-full bg-white/10 border border-white/10 flex items-center justify-center">🤖</div>
-      )}
+      {/* icon removed for assistant messages */}
       <div
         className={
           isUser

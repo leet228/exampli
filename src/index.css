@@ -538,14 +538,61 @@ body::before {
 }
 
 
+/* когда активен ввод — прячем системный бар телеграма (симулируем) */
+
+.chat-input-active .safe-bottom {
+    padding-bottom: calc(max(env(safe-area-inset-bottom), 92px) - 92px);
+}
+
+
 /* ====== Фиксированный ввод чата — чуть выше нижнего HUD ====== */
 
 .ai-input-fixed {
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: calc(max(env(safe-area-inset-bottom), 92px) + 10px);
-    z-index: calc(var(--z-hud) + 1);
+    bottom: calc(max(env(safe-area-inset-bottom), 92px) + 16px);
+    z-index: calc(var(--z-hud) + 2);
+}
+
+
+/* затемнение/скрытие нижнего HUD, когда фокус в поле ввода */
+
+.chat-input-active .bottomnav {
+    display: none;
+}
+
+
+/* точки «печатает» */
+
+.typing-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 9999px;
+    background: #fff;
+    display: inline-block;
+    animation: typingJump 1s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: .15s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: .3s;
+}
+
+@keyframes typingJump {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: .85;
+    }
+    30% {
+        transform: translateY(-6px);
+        opacity: 1;
+    }
 }
 
 
