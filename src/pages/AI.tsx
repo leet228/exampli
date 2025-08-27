@@ -32,10 +32,19 @@ export default function AI() {
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const MAX_VISIBLE_LINES = 8;
   const [isInputFocused, setIsInputFocused] = React.useState<boolean>(false);
+  const isFirstMountRef = React.useRef<boolean>(true);
 
   React.useEffect(() => {
-    // автопрокрутка вниз при новых сообщениях
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (!el) return;
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      // На первом экране держим приветствие сверху
+      el.scrollTo({ top: 0 });
+      return;
+    }
+    // Далее — автопрокрутка вниз на новые сообщения/тайпинг
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, isLoading]);
 
   // авто-рост textarea до 8 строк, дальше — внутренний скролл
