@@ -138,14 +138,19 @@ export default function AI() {
 
   return (
     <div className="safe-top safe-bottom main-scroll">
-      <div className="w-full px-3 py-4 h-full flex flex-col">
+      <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col">
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-2"
+          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44"
           aria-live="polite"
         >
-          {messages.map((m, idx) => (
-            <ChatBubble key={idx} role={m.role} content={m.content} />
+          {/* приветственное сообщение наверху */}
+          {/* принудительно показываем всегда на первом экране */}
+          {messages.length && messages[0]?.role === 'assistant' && (
+            <ChatBubble role="assistant" content={messages[0].content} />
+          )}
+          {messages.slice(1).map((m, idx) => (
+            <ChatBubble key={idx + 1} role={m.role} content={m.content} />
           ))}
 
           {isLoading && (
@@ -188,7 +193,7 @@ export default function AI() {
               type="button"
               onClick={onPickImageClick}
               aria-label="Прикрепить изображение"
-              className="shrink-0 w-12 h-12 rounded-full bg-white/10 border border-white/10 text-xl text-white/90 flex items-center justify-center"
+              className="shrink-0 w-12 h-12 rounded-full bg-[#2b2b2b] border border-transparent text-xl text-white/90 flex items-center justify-center"
             >
               +
             </button>
@@ -201,7 +206,7 @@ export default function AI() {
             />
 
             {/* поле ввода — скруглённое, растёт до 8 строк */}
-            <div className="flex-1 min-w-0 rounded-full bg-white/5 border border-white/10 px-4 py-2">
+            <div className="flex-1 min-w-0 rounded-full bg-[#2b2b2b] border border-transparent px-4 py-2">
               <textarea
                 ref={textareaRef}
                 className="block w-full bg-transparent outline-none text-[var(--text)] placeholder-[var(--muted)] text-base leading-6 resize-none no-scrollbar whitespace-pre-wrap break-normal"

@@ -551,7 +551,7 @@ body::before {
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: calc(max(env(safe-area-inset-bottom), 92px) + 16px);
+    bottom: calc(max(env(safe-area-inset-bottom), 92px) + 22px);
     z-index: calc(var(--z-hud) + 2);
 }
 
