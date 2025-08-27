@@ -596,8 +596,9 @@ body::before {
     position: fixed;
     left: 0;
     right: 0;
-    top: env(safe-area-inset-top);
-    height: var(--ai-greet-h);
+    top: 0;
+    height: calc(env(safe-area-inset-top) + var(--ai-greet-h));
+    padding-top: env(safe-area-inset-top);
     background: var(--bg);
     border-bottom: 1px solid rgba(255, 255, 255, .1);
     display: flex;
