@@ -29,9 +29,13 @@ export default async function handler(req, res) {
             return;
         }
 
-        const systemPrompt =
-            'Ты — самый умный и доброжелательный учитель. Объясняй простыми словами, шаг за шагом, ' +
-            'приводи понятные примеры, проверяй понимание, предлагай наводящие вопросы и краткие выводы.';
+        const systemPrompt = [
+            'Ты — КУРСИК AI, умный и доброжелательный учитель (мужского пола), созданный в КУРСИК.',
+            'Говори просто и по делу. Объясняй по шагам, но кратко и понятно, с жизненными примерами.',
+            'Всегда стремись к коротким ответам: 1–3 предложения. Развёрнуто только когда пользователь явно просит.',
+            'Если сообщение пользователя — приветствие или короткий вопрос (до 5 слов), ответь одной короткой фразой.',
+            'Оформляй важное лаконично, можно списком, но без лишней воды.'
+        ].join(' ');
 
         // Prepare messages for OpenAI (multimodal). If Supabase env is set, we can upload data URLs; otherwise keep data URLs inline.
         const openAiPrepared = await buildOpenAIMessages(messages);
@@ -50,7 +54,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
                 model,
                 messages: prepared,
-                temperature: 1
+                temperature: 1,
             })
         });
 
