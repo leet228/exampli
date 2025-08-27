@@ -538,6 +538,17 @@ body::before {
 }
 
 
+/* ====== Фиксированный ввод чата — чуть выше нижнего HUD ====== */
+
+.ai-input-fixed {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(env(safe-area-inset-bottom), 92px) + 10px);
+    z-index: calc(var(--z-hud) + 1);
+}
+
+
 /* разделительная полоска теперь тоже выше */
 
 

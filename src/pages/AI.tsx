@@ -19,8 +19,7 @@ export default function AI() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content:
-        'Привет! Я твой умный учитель. Скажи, что хочешь понять — объясню просто и по шагам. 😊',
+      content: 'Привет! Я твой личный учитель.',
     },
   ]);
   const [input, setInput] = React.useState<string>('');
@@ -128,7 +127,7 @@ export default function AI() {
       <div className="w-full px-3 py-4 h-full flex flex-col">
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto no-scrollbar space-y-4"
+          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-40"
           aria-live="polite"
         >
           {messages.map((m, idx) => (
@@ -151,14 +150,19 @@ export default function AI() {
           </div>
         )}
 
-        {/* Ввод как на макете: слева +, по центру поле, справа круглая кнопка отправки */}
-        <div className="mt-3 px-1">
+        {/* Ввод как на макете: фиксирован над нижним HUD */}
+        <div className="ai-input-fixed">
           {pendingImage && (
-            <div className="pb-2">
-              <div className="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-2">
-                <img src={pendingImage} alt="Выбранное изображение" className="w-16 h-16 object-cover rounded-xl" />
-                <button className="text-xs text-red-300" onClick={() => setPendingImage(null)}>
-                  Убрать фото
+            <div className="mb-2">
+              <div className="relative inline-block">
+                <img src={pendingImage} alt="Выбранное изображение" className="w-20 h-20 object-cover rounded-2xl border border-white/10" />
+                <button
+                  type="button"
+                  className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-white text-black flex items-center justify-center"
+                  aria-label="Убрать фото"
+                  onClick={() => setPendingImage(null)}
+                >
+                  ×
                 </button>
               </div>
             </div>
@@ -191,7 +195,7 @@ export default function AI() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
                 spellCheck={true}
-                placeholder="Напиши сообщение… (Enter — отправить, Shift+Enter — перенос)"
+                placeholder="Спроси что угодно"
               />
             </div>
 
