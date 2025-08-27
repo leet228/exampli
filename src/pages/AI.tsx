@@ -33,6 +33,12 @@ export default function AI() {
   const MAX_VISIBLE_LINES = 8;
   const [isInputFocused, setIsInputFocused] = React.useState<boolean>(false);
   const isFirstMountRef = React.useRef<boolean>(true);
+  function focusComposer(e?: any) {
+    try {
+      if (e && (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      textareaRef.current?.focus();
+    } catch {}
+  }
 
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -201,7 +207,7 @@ export default function AI() {
               </div>
             </div>
           )}
-          <div className="flex items-end gap-2 ai-input-row">
+          <div className="flex items-end gap-2 ai-input-row" onMouseDownCapture={focusComposer} onTouchStartCapture={focusComposer}>
             {/* плюсик */}
             <button
               type="button"
