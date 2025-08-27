@@ -16,13 +16,10 @@ type ChatMessage = {
   content: MessageContent;
 };
 
+const STORAGE_KEY = 'ai_chat_cache_v1';
+
 export default function AI() {
-  const [messages, setMessages] = React.useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      content: 'КУРСИК AI',
-    },
-  ]);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState<string>('');
   const [pendingImage, setPendingImage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
@@ -35,7 +32,11 @@ export default function AI() {
   const isFirstMountRef = React.useRef<boolean>(true);
   function focusComposer(e?: any) {
     try {
-      if (e && (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      const el = (e?.target as HTMLElement) || null;
+      if (!el) { textareaRef.current?.focus(); return; }
+      // Не фокусируем textarea, если клик по кнопкам/иконкам/крестикам
+      if (el.closest('[data-no-focus]') || el.tagName === 'BUTTON' || el.closest('button')) return;
+      if (el.tagName === 'TEXTAREA') return;
       textareaRef.current?.focus();
     } catch {}
   }
@@ -52,6 +53,32 @@ export default function AI() {
     // Далее — автопрокрутка вниз на новые сообщения/тайпинг
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, isLoading]);
+
+  // Загрузка истории из sessionStorage; если пусто — стартуем с приветствия
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setMessages(parsed as ChatMessage[]);
+      }
+    } catch {}
+  }, []);
+
+  // Если история не подгрузилась — установим приветствие после монтирования
+  React.useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([{ role: 'assistant', content: 'КУРСИК AI' }]);
+    }
+  }, [messages.length]);
+
+  // Сохранение истории в sessionStorage (только содержимого диалога)
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch {}
+  }, [messages]);
 
   // авто-рост textarea до 8 строк, дальше — внутренний скролл
   React.useLayoutEffect(() => {
@@ -199,6 +226,7 @@ export default function AI() {
                 <button
                   type="button"
                   className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-white text-black flex items-center justify-center"
+                  data-no-focus
                   aria-label="Убрать фото"
                   onClick={() => setPendingImage(null)}
                 >
@@ -214,6 +242,7 @@ export default function AI() {
               onClick={onPickImageClick}
               aria-label="Прикрепить изображение"
               className="shrink-0 ai-btn rounded-full bg-[#2b2b2b] border border-transparent text-xl text-white/90 flex items-center justify-center"
+              data-no-focus
             >
               +
             </button>
@@ -249,6 +278,7 @@ export default function AI() {
               disabled={(!input.trim() && !pendingImage) || isLoading}
               aria-label="Отправить"
               className="shrink-0 ai-btn rounded-full bg-white text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              data-no-focus
             >
               ↑
             </button>
