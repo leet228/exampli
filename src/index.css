@@ -575,6 +575,20 @@ body::before {
 }
 
 
+/* При фокусе ввода — прижимаем HUD ввода ближе к клавиатуре */
+
+.chat-input-active .ai-input-fixed {
+    bottom: calc(env(safe-area-inset-bottom) + 8px);
+}
+
+
+/* Отступ сверху для приветствия под телеграм‑HUD */
+
+.ai-greet-pad {
+    padding-top: calc(env(safe-area-inset-top) + 56px);
+}
+
+
 /* затемнение/скрытие нижнего HUD, когда фокус в поле ввода */
 
 .chat-input-active .bottomnav {

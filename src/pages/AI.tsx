@@ -148,7 +148,7 @@ export default function AI() {
 
   return (
     <div className="safe-bottom main-scroll">
-      <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col">
+      <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad">
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1"
