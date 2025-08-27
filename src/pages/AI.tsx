@@ -108,9 +108,10 @@ export default function AI() {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter переносит строку; отправки на Enter больше нет
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+      // ничего не делаем — стандартный перенос строки
+      return;
     }
   }
 
@@ -137,7 +138,7 @@ export default function AI() {
   }
 
   return (
-    <div className="safe-top safe-bottom main-scroll">
+    <div className="safe-top safe-bottom main-scroll ai-top">
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col">
         <div
           ref={scrollRef}
@@ -187,13 +188,13 @@ export default function AI() {
               </div>
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 ai-input-row">
             {/* плюсик */}
             <button
               type="button"
               onClick={onPickImageClick}
               aria-label="Прикрепить изображение"
-              className="shrink-0 w-12 h-12 rounded-full bg-[#2b2b2b] border border-transparent text-xl text-white/90 flex items-center justify-center"
+              className="shrink-0 ai-btn rounded-full bg-[#2b2b2b] border border-transparent text-xl text-white/90 flex items-center justify-center"
             >
               +
             </button>
@@ -226,7 +227,7 @@ export default function AI() {
               onClick={sendMessage}
               disabled={(!input.trim() && !pendingImage) || isLoading}
               aria-label="Отправить"
-              className="shrink-0 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 ai-btn rounded-full bg-white text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ↑
             </button>

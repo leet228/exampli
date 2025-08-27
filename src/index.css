@@ -556,6 +556,18 @@ body::before {
 }
 
 
+/* Компактные размеры элементов ввода */
+
+.ai-input-row {
+    height: 44px;
+}
+
+.ai-btn {
+    width: 44px;
+    height: 44px;
+}
+
+
 /* затемнение/скрытие нижнего HUD, когда фокус в поле ввода */
 
 .chat-input-active .bottomnav {
