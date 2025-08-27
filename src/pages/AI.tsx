@@ -147,11 +147,11 @@ export default function AI() {
   }
 
   return (
-    <div className="safe-top safe-bottom main-scroll ai-top">
+    <div className="safe-bottom main-scroll">
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col">
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44"
+          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1"
           aria-live="polite"
         >
           {/* приветственное сообщение наверху */}

@@ -18,6 +18,7 @@ export default function AppLayout() {
   const showHUD = pathname === '/';
   // нижняя навигация на этих маршрутах
   const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
+  const isAI = pathname === '/ai';
 
   const [bootDone, setBootDone] = useState(false);
   const [bootData, setBootData] = useState<BootData | null>(null);
@@ -74,7 +75,7 @@ export default function AppLayout() {
   }, [bootDone]);
 
   return (
-    <div className="min-h-screen safe-top safe-bottom main-scroll">
+    <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
       {!bootDone && (
         <Splash
@@ -88,7 +89,7 @@ export default function AppLayout() {
       {/* Верхний HUD (после загрузки) */}
       {showHUD && bootDone && <HUD />}
 
-      <div id="app-container" className="max-w-xl mx-auto p-5">
+      <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
         <Outlet context={{ bootData }} />
       </div>
 

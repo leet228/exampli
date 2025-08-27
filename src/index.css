@@ -130,6 +130,13 @@ body {
     padding-top: calc(var(--hud-top) + var(--hud-h) + 12px);
 }
 
+
+/* На странице AI верхний отступ меньше: только системная область */
+
+.ai-top {
+    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+}
+
 .safe-bottom {
     padding-bottom: max(env(safe-area-inset-bottom), 92px);
 }
