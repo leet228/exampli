@@ -19,7 +19,14 @@ type ChatMessage = {
 const STORAGE_KEY = 'ai_chat_cache_v1';
 
 export default function AI() {
-  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && Array.isArray(parsed)) return parsed as ChatMessage[];
+    } catch {}
+    return [{ role: 'assistant', content: 'КУРСИК AI' }];
+  });
   const [input, setInput] = React.useState<string>('');
   const [pendingImage, setPendingImage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
@@ -54,24 +61,7 @@ export default function AI() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, isLoading]);
 
-  // Загрузка истории из sessionStorage; если пусто — стартуем с приветствия
-  React.useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setMessages(parsed as ChatMessage[]);
-      }
-    } catch {}
-  }, []);
-
-  // Если история не подгрузилась — установим приветствие после монтирования
-  React.useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([{ role: 'assistant', content: 'КУРСИК AI' }]);
-    }
-  }, [messages.length]);
+  // История диалога инициализируется лениво в useState из sessionStorage (см. STORAGE_KEY)
 
   // Сохранение истории в sessionStorage (только содержимого диалога)
   React.useEffect(() => {
