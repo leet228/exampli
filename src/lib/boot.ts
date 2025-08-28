@@ -47,7 +47,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
 
   // план шагов:
   // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
-  const TOTAL = 10;
+  const TOTAL = 11;
   let i = 0;
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
@@ -186,6 +186,20 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       subjectsAll.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))
     );
   } catch {}
+  step(++i, TOTAL);
+
+  // 9) Прогрев иконок нижней навигации и HUD
+  await Promise.all([
+    preloadImage('/stickers/home.svg'),
+    preloadImage('/stickers/quests.svg'),
+    preloadImage('/stickers/battle.svg'),
+    preloadImage('/stickers/ai.svg'),
+    preloadImage('/stickers/diamond.svg'),
+    preloadImage('/stickers/profile.svg'),
+    preloadImage('/stickers/dead_fire.svg'),
+    preloadImage('/stickers/coin_cat.svg'),
+    preloadImage('/stickers/lightning.svg'),
+  ]);
   step(++i, TOTAL);
 
   // Попробуем восстановить названия выбранных темы/подтемы
