@@ -5,11 +5,11 @@
 /* ====== Тема ====== */
 
 :root {
-    --bg: #010c1e;
+    --bg: #252B33;
     --card: #121e24;
     --text: #e5edff;
     --muted: #9bb0d3;
-    --accent: #1cb0f6;
+    --accent: #3a72ff;
     /* геометрия HUD */
     --hud-top: calc(env(safe-area-inset-top) + 42px);
     /* отступ от верха Telegram */
