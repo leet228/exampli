@@ -48,7 +48,7 @@ body {
 
 .btn {
     @apply rounded-3xl px-5 py-4 font-semibold transition;
-    background: #0eadf7;
+    background: #306bff;
 }
 
 .btn:active {
@@ -180,7 +180,7 @@ body,
 .sheet-backdrop {
     position: fixed;
     inset: 0;
-    background: #131f24;
+    background: var(--bg);
     backdrop-filter: blur(28px);
     z-index: var(--z-bottom-sheet);
 }
@@ -432,7 +432,7 @@ body,
     /* чуть больше внутренние отступы */
     border-radius: 20px;
     border: 1px solid rgba(0, 0, 0, .08);
-    background: #1cb0f6;
+    background: #306bff;
     /* насыщенный синий (tailwind blue-600) */
     color: #fff;
     box-shadow: 0 10px 28px rgba(0, 0, 0, .35), inset 0 -2px 0 rgba(0, 0, 0, .12);
