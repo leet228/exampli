@@ -25,7 +25,7 @@ export default function AI() {
       const parsed = raw ? JSON.parse(raw) : null;
       if (parsed && Array.isArray(parsed)) return parsed as ChatMessage[];
     } catch {}
-    return [{ role: 'assistant', content: 'КУРСИК AI' }];
+    return [{ role: 'assistant', content: '' }];
   });
   const [input, setInput] = React.useState<string>('');
   const [pendingImage, setPendingImage] = React.useState<string | null>(null);
