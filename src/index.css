@@ -5,11 +5,11 @@
 /* ====== Тема ====== */
 
 :root {
-    --bg: #252B33;
+    --bg: #010c1e;
     --card: #121e24;
     --text: #e5edff;
     --muted: #9bb0d3;
-    --accent: #306bff;
+    --accent: #3c73ff;
     /* геометрия HUD */
     --hud-top: calc(env(safe-area-inset-top) + 42px);
     /* отступ от верха Telegram */
@@ -48,7 +48,7 @@ body {
 
 .btn {
     @apply rounded-3xl px-5 py-4 font-semibold transition;
-    background: #306bff;
+    background: #3c73ff;
 }
 
 .btn:active {

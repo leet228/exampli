@@ -203,7 +203,12 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09]"
               >
-                <div className="w-11 h-11 rounded-2xl grid place-items-center bg-white/10 text-xl">✚</div>
+                <img
+                  src={`/topics/${t.order_index}.svg`}
+                  alt=""
+                  className="w-11 h-11 rounded-2xl bg-white/10 object-contain p-1"
+                  loading="lazy"
+                />
                 <div className="flex-1">
                   <div className="text-base font-semibold">{t.title}</div>
                   {/* прогресс можно добавить позже */}
