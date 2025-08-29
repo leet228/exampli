@@ -22,15 +22,27 @@ export async function ensureUser(): Promise<UserStats | null> {
   const { data: user } = await supabase.from('users').select('*').eq('tg_id', tgId).single();
   if (!user) {
     const tgUser = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user;
+    // определим таймзону браузера (IANA: Europe/Moscow и т.п.)
+    let timezone: string | null = null;
+    try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch {}
     const { data: created } = await supabase.from('users').insert({
       tg_id: tgId,
       username: tgUser?.username,
       first_name: tgUser?.first_name,
       last_name: tgUser?.last_name,
+      timezone,
     }).select('*').single();
     try { (window as any).__exampliNewUserCreated = true; } catch {}
     return created as any;
   }
+  // если у существующего пользователя таймзона ещё не сохранена — сохраним текущую
+  try {
+    const currentTz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+    if (!user.timezone && currentTz) {
+      await supabase.from('users').update({ timezone: currentTz }).eq('id', (user as any).id);
+      (user as any).timezone = currentTz;
+    }
+  } catch {}
   return user as any;
 }
 
