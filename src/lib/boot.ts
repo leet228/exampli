@@ -29,6 +29,9 @@ export type BootData = {
   current_subtopic_id?: string | number | null;
   current_topic_title?: string | null;
   current_subtopic_title?: string | null;
+  // предзагруженные данные для мгновенного открытия панелей
+  topicsBySubject?: Record<string, { id: number | string; subject_id: number | string; title: string; order_index: number }[]>;
+  subtopicsByTopic?: Record<string, { id: number | string; topic_id: number | string; title: string; order_index: number }[]>;
 };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
@@ -167,7 +170,40 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
   step(++i, TOTAL);
 
-  // 7) прогрев твоего svg (не обязательно)
+  // 7) Префетч тем и подтем активного курса + прогрев иконок тем
+  let topicsBySubject: Record<string, any[]> = {};
+  let subtopicsByTopic: Record<string, any[]> = {};
+  if (activeId) {
+    try {
+      const { data: topics } = await supabase
+        .from('topics')
+        .select('id, subject_id, title, order_index')
+        .eq('subject_id', activeId)
+        .order('order_index', { ascending: true });
+      const tlist = (topics as any[]) || [];
+      topicsBySubject[String(activeId)] = tlist;
+      // подтемы пачкой
+      const topicIds = tlist.map((t: any) => t.id);
+      if (topicIds.length) {
+        const { data: subs } = await supabase
+          .from('subtopics')
+          .select('id, topic_id, title, order_index')
+          .in('topic_id', topicIds)
+          .order('topic_id', { ascending: true })
+          .order('order_index', { ascending: true });
+        const slist = (subs as any[]) || [];
+        slist.forEach((s: any) => {
+          const key = String(s.topic_id);
+          (subtopicsByTopic[key] ||= []).push(s);
+        });
+      }
+      // прогрев svg иконок тем по order_index (первые 42 иконки в /topics)
+      await Promise.all(
+        tlist.slice(0, 42).map((t: any) => preloadImage(`/topics/${t.order_index}.svg`))
+      );
+    } catch {}
+  }
+  // параллельно прогреем основной лого
   await preloadImage('/kursik.svg');
   step(++i, TOTAL);
 
@@ -225,6 +261,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     current_subtopic_id: currentSubtopicId,
     current_topic_title: currentTopicTitle,
     current_subtopic_title: currentSubtopicTitle,
+    topicsBySubject,
+    subtopicsByTopic,
   };
 
   (window as any).__exampliBoot = boot;

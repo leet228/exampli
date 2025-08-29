@@ -29,28 +29,46 @@ export default function TopicsPanel({ open, onClose }: Props) {
     try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
   }, []);
 
-  // -- загрузка активного предмета + тем/подтем
+  // -- загрузка активного предмета + тем/подтем (с попыткой чтения из boot-кэша)
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const code = readActiveCode();
       if (!code) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
 
-      const { data: subj } = await supabase
-        .from('subjects')
-        .select('id, code, title')
-        .eq('code', code)
-        .single();
+      // быстрый путь: попробуем найти subject в boot
+      let subj: Subject | null = null;
+      try {
+        const boot: any = (window as any).__exampliBoot;
+        const list = (boot?.subjects || []) as Subject[];
+        subj = list.find(s => s.code === code) || null;
+      } catch {}
+      if (!subj) {
+        const resp = await supabase
+          .from('subjects')
+          .select('id, code, title')
+          .eq('code', code)
+          .single();
+        subj = (resp.data as Subject) || null;
+      }
       if (!subj?.id) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
       setSubject(subj as Subject);
 
-      const { data: tps } = await supabase
-        .from('topics')
-        .select('id, subject_id, title, order_index')
-        .eq('subject_id', subj.id)
-        .order('order_index', { ascending: true });
-
-      const tlist = (tps as Topic[]) || [];
+      // быстрый путь: темы из boot
+      let tlist: Topic[] = [];
+      try {
+        const boot: any = (window as any).__exampliBoot;
+        const pre = (boot?.topicsBySubject?.[String(subj.id)] || []) as Topic[];
+        tlist = pre;
+      } catch {}
+      if (!tlist.length) {
+        const { data: tps } = await supabase
+          .from('topics')
+          .select('id, subject_id, title, order_index')
+          .eq('subject_id', subj.id)
+          .order('order_index', { ascending: true });
+        tlist = (tps as Topic[]) || [];
+      }
       setTopics(tlist);
 
       // Если ранее был выбран топик — попробуем сразу развернуть его
@@ -70,16 +88,23 @@ export default function TopicsPanel({ open, onClose }: Props) {
         }
       } catch {}
 
-      const topicIds = tlist.map(t => t.id);
+      // быстрый путь: подтемы из boot
       let subsData: Subtopic[] = [];
-      if (topicIds.length > 0) {
-        const { data: subs } = await supabase
-          .from('subtopics')
-          .select('id, topic_id, title, order_index')
-          .in('topic_id', topicIds)
-          .order('topic_id', { ascending: true })
-          .order('order_index', { ascending: true });
-        subsData = (subs as Subtopic[]) || [];
+      try {
+        const boot: any = (window as any).__exampliBoot;
+        subsData = tlist.flatMap((t) => (boot?.subtopicsByTopic?.[String(t.id)] || []) as Subtopic[]);
+      } catch {}
+      if (!subsData.length) {
+        const topicIds = tlist.map(t => t.id);
+        if (topicIds.length > 0) {
+          const { data: subs } = await supabase
+            .from('subtopics')
+            .select('id, topic_id, title, order_index')
+            .in('topic_id', topicIds)
+            .order('topic_id', { ascending: true })
+            .order('order_index', { ascending: true });
+          subsData = (subs as Subtopic[]) || [];
+        }
       }
 
       const map: Record<string, Subtopic[]> = {};
