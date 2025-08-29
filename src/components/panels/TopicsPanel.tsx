@@ -206,7 +206,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 <img
                   src={`/topics/${t.order_index}.svg`}
                   alt=""
-                  className="w-11 h-11 rounded-2xl bg-white/10 object-contain p-1"
+                  className="w-16 h-16 rounded-2xl bg-white/10 object-contain p-1"
                   loading="lazy"
                 />
                 <div className="flex-1">
