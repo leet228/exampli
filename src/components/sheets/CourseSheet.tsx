@@ -26,7 +26,7 @@ export default function CoursesPanel(props: Props) {
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [activeCode, setActiveCode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // полностью отказались от загрузки при открытии — всё берём из boot/cache
 
   // --- helpers ---
   // kept for potential future use; currently boot init covers active code
@@ -37,42 +37,34 @@ export default function CoursesPanel(props: Props) {
     try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
   }, []);
 
-  // Загрузка выбранного курса пользователя из users.added_course
-  const loadUserSubjects = useCallback(async () => {
-    setLoading(true);
+  // Локальная инициализация из boot/cache без сетевых запросов
+  const loadFromBoot = useCallback(() => {
     try {
-      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!tgId) { setSubjects([]); return; }
-
-      // читаем из кэша, если пусто — берём из базы и пишем в кэш
-      let user: any | null = cacheGet<any>(CACHE_KEYS.user);
-      if (!user || user.added_course == null) {
-        const fresh = await supabase.from('users').select('id, added_course').eq('tg_id', String(tgId)).single();
-        user = fresh.data as any;
-        if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
+      const boot: any = (window as any).__exampliBoot;
+      let list: Subject[] = (boot?.subjects || []) as Subject[];
+      if (!list || !list.length) {
+        const user = cacheGet<any>(CACHE_KEYS.user);
+        const addedId = user?.added_course;
+        const all: Subject[] = (boot?.subjectsAll || []) as Subject[];
+        if (addedId && Array.isArray(all) && all.length) {
+          const found = all.find((s) => s.id === addedId);
+          list = found ? [found] : [];
+        }
       }
-      const addedId = (user as any)?.added_course as number | null | undefined;
-      if (!user?.id || !addedId) { setSubjects([]); setActiveCode(null); return; }
-
-      const { data } = await supabase
-        .from('subjects')
-        .select('id, code, title, level')
-        .eq('id', addedId)
-        .limit(1);
-
-      const list = (data as Subject[]) || [];
-      setSubjects(list);
-
-      // активным становится именно этот добавленный курс
-      const code = list[0]?.code || null;
-      if (code) { setActiveCode(code); cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000); }
-    } finally {
-      setLoading(false);
-    }
+      setSubjects(list || []);
+      const stored = localStorage.getItem(ACTIVE_KEY);
+      const code = stored || list?.[0]?.code || null;
+      if (code) {
+        setActiveCode(code);
+        cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
+      } else {
+        setActiveCode(null);
+      }
+    } catch {}
   }, []);
 
-  // Прогреваем данные сразу при монтировании (в любом режиме), плюс обновляем при открытии
-  useEffect(() => { void loadUserSubjects(); }, [loadUserSubjects]);
+  // Инициализация из boot при монтировании (без сети)
+  useEffect(() => { loadFromBoot(); }, [loadFromBoot]);
   // Предзагрузка иконок предметов из boot (если прилетели)
   useEffect(() => {
     try {
@@ -84,25 +76,15 @@ export default function CoursesPanel(props: Props) {
       });
     } catch {}
   }, []);
-  useEffect(() => { if (typeof open === 'boolean' && open) void loadUserSubjects(); }, [open, loadUserSubjects]);
+  // Мгновенное открытие без загрузки — никаких действий при open
 
-  // Быстрый init из boot, если есть
-  useEffect(() => {
-    try {
-      const boot: any = (window as any).__exampliBoot;
-      const subs: Subject[] = (boot?.subjects || []) as Subject[];
-      if (subs?.length) setSubjects(subs);
-      const stored = localStorage.getItem(ACTIVE_KEY);
-      const code = stored || subs?.[0]?.code || null;
-      if (code) setActiveCode(code);
-    } catch {}
-  }, []);
+  // Быстрый init уже покрыт loadFromBoot
 
   // Слушаем внешние события, чтобы обновиться:
   // - после добавления нового курса (subjectsChanged — если решишь диспатчить)
   // - после переключения/выбора курса (courseChanged — для подсветки)
   useEffect(() => {
-    const onSubjectsChanged = () => loadUserSubjects();
+    const onSubjectsChanged = () => loadFromBoot();
     const onCourseChanged = (evt: Event) => {
       const e = evt as CustomEvent<{ title?: string; code?: string }>;
       if (e.detail?.code) {
@@ -116,20 +98,10 @@ export default function CoursesPanel(props: Props) {
       window.removeEventListener('exampli:subjectsChanged', onSubjectsChanged);
       window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
     };
-  }, [loadUserSubjects, writeActiveToStorage]);
+  }, [loadFromBoot, writeActiveToStorage]);
 
   // --- UI блоки ---
   const grid = useMemo(() => {
-    if (loading) {
-      return (
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aspect-square rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
-          ))}
-        </div>
-      );
-    }
-
     if (!subjects.length) {
       return (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-muted">
@@ -201,7 +173,7 @@ export default function CoursesPanel(props: Props) {
         </motion.button>
       </div>
     );
-  }, [subjects, activeCode, loading, onPicked, onAddClick, writeActiveToStorage]);
+  }, [subjects, activeCode, onPicked, onAddClick, writeActiveToStorage]);
 
   // Режим «панели слева»
   if (typeof open === 'boolean') {
