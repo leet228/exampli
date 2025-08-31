@@ -3,11 +3,10 @@ import { cacheGet, cacheSet, CACHE_KEYS } from './cache';
 
 export type UserStats = {
   id: string;
-  xp: number;
   streak: number;
-  hearts: number; // 0..5
+  energy: number; // 0..25
+  coins: number;  // >= 0
   last_active_at: string | null;
-  next_heart_at: string | null;
 };
 
 function getTgId(): string | null {
@@ -31,6 +30,9 @@ export async function ensureUser(): Promise<UserStats | null> {
       first_name: tgUser?.first_name,
       last_name: tgUser?.last_name,
       timezone,
+      // новые поля по умолчанию
+      energy: 25,
+      coins: 500,
     }).select('*').single();
     try { (window as any).__exampliNewUserCreated = true; } catch {}
     return created as any;
@@ -46,48 +48,16 @@ export async function ensureUser(): Promise<UserStats | null> {
   return user as any;
 }
 
-export function msUntil(dateIso: string): number {
-  return new Date(dateIso).getTime() - Date.now();
-}
-
-export async function regenHeartsIfNeeded(u: UserStats): Promise<UserStats> {
-  let hearts = u.hearts ?? 0;
-  let nextAt = u.next_heart_at ? new Date(u.next_heart_at) : null;
-  const now = new Date();
-
-  // если сердец 5 — таймер не нужен
-  if (hearts >= 5) return u;
-
-  // если таймера нет — запускаем на час вперёд
-  if (!nextAt) {
-    nextAt = new Date(now.getTime() + 60 * 60 * 1000);
-  }
-
-  // начисляем по одному сердцу, пока прошли интервалы
-  while (hearts < 5 && nextAt <= now) {
-    hearts += 1;
-    nextAt = new Date(nextAt.getTime() + 60 * 60 * 1000);
-  }
-
-  if (hearts !== u.hearts || (u.next_heart_at || '') !== nextAt.toISOString()) {
-    const { data } = await supabase.from('users').update({
-      hearts,
-      next_heart_at: nextAt.toISOString(),
-    }).eq('id', u.id).select('*').single();
-    return data as any;
-  }
-  return u;
-}
-
 export async function getStats(): Promise<UserStats | null> {
   const base = await ensureUser();
   if (!base) return null;
-  return await regenHeartsIfNeeded(base as any);
+  // энергия теперь без регенерации таймером; отдаём как есть
+  return base as any;
 }
 
 export async function canStartLesson(): Promise<boolean> {
   const u = await getStats();
-  return (u?.hearts ?? 0) > 0;
+  return (u?.energy ?? 0) > 0;
 }
 
 export async function addUserSubject(subjectCode: string) {
@@ -118,10 +88,9 @@ export async function finishLesson({ correct }: { correct: boolean }) {
   if (!u) return;
   const now = new Date();
 
-  let { xp, streak, hearts, last_active_at } = u;
+  let { streak, energy, last_active_at } = u as any;
 
   if (correct) {
-    xp = (xp || 0) + 10; // фиксировано
     // стрик: +1 если сегодня первый успех и вчера был активный день, иначе 1 если большая пауза
     const last = last_active_at ? new Date(last_active_at) : null;
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -137,16 +106,10 @@ export async function finishLesson({ correct }: { correct: boolean }) {
     streak = newStreak;
     last_active_at = now.toISOString();
   } else {
-    hearts = Math.max(0, (hearts || 0) - 1);
-    // если ушли в 4 или меньше и таймер пуст — запустить на час
-    if (hearts < 5 && !u.next_heart_at) {
-      const next = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-      const { data } = await supabase.from('users').update({ next_heart_at: next }).eq('id', u.id).select('*').single();
-      Object.assign(u, data);
-    }
+    energy = Math.max(0, (energy || 0) - 1);
   }
 
-  await supabase.from('users').update({ xp, streak, hearts, last_active_at }).eq('id', u.id);
+  await supabase.from('users').update({ streak, energy, last_active_at }).eq('id', (u as any).id);
 }
 
 export async function setUserSubjects(subjectCodes: string[]) {

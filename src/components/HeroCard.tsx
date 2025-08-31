@@ -10,7 +10,7 @@ export default function HeroCard({ name }: { name: string }) {
       </div>
       <div className="mt-4 flex items-center gap-2">
         <span className="badge">🔥 Стрик: 0</span>
-        <span className="badge">⭐ XP: 0</span>
+        <span className="badge">💰 Коины: 0</span>
       </div>
     </div>
   );

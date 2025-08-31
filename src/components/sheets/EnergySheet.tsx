@@ -9,9 +9,8 @@ export default function EnergySheet({ open, onClose }: { open: boolean; onClose:
   useEffect(() => { (async () => {
     const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!id) return;
-    const { data: user } = await supabase.from('users').select('hearts').eq('tg_id', String(id)).single();
-    const hearts = user?.hearts ?? 5; // 0..5
-    setEnergy(hearts * 5); // 0..25
+    const { data: user } = await supabase.from('users').select('energy').eq('tg_id', String(id)).single();
+    setEnergy((user?.energy ?? 25) as number);
   })(); }, [open]);
 
   const percent = Math.round((energy / 25) * 100);

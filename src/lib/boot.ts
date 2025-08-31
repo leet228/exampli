@@ -18,7 +18,7 @@ export type LessonRow = {
 
 export type BootData = {
   user: any | null;
-  stats: { xp: number; streak: number; hearts: number };
+  stats: { streak: number; energy: number; coins: number };
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
   subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
@@ -62,7 +62,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   if (!user?.id) {
     const boot: BootData = {
       user: null,
-      stats: { xp: 0, streak: 0, hearts: 5 },
+      stats: { streak: 0, energy: 25, coins: 500 },
       subjects: [],
       lessons: [],
       onboarding: { phone_given: false, course_taken: false, boarding_finished: false },
@@ -77,17 +77,17 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   if (user?.id) {
     const { data } = await supabase
       .from('users')
-      .select('id,xp,streak,hearts,phone_number,added_course,current_topic,current_subtopic')
+      .select('id,streak,energy,coins,phone_number,added_course,current_topic,current_subtopic')
       .eq('id', user.id)
       .single();
     userRow = data as any;
-    if (userRow) cacheSet(CACHE_KEYS.stats, { xp: userRow.xp ?? 0, streak: userRow.streak ?? 0, hearts: userRow.hearts ?? 5 });
+    if (userRow) cacheSet(CACHE_KEYS.stats, { streak: userRow.streak ?? 0, energy: userRow.energy ?? 25, coins: userRow.coins ?? 500 });
   }
 
   const stats = {
-    xp: userRow?.xp ?? 0,
     streak: userRow?.streak ?? 0,
-    hearts: userRow?.hearts ?? 5,
+    energy: userRow?.energy ?? 25,
+    coins: userRow?.coins ?? 500,
   };
   step(++i, TOTAL);
 

@@ -56,15 +56,14 @@ export default function HUD() {
 
     const { data: user } = await supabase
       .from('users')
-      .select('id, streak, hearts')
+      .select('id, streak, energy, coins')
       .eq('tg_id', String(tgId))
       .single();
 
     if (user) {
       setStreak(user.streak ?? 0);
-      setEnergy(((user.hearts ?? 5) as number) * 5);
-      // если будет поле coins — раскомментируй:
-      // setCoins(user.coins ?? 0);
+      setEnergy((user.energy ?? 25) as number);
+      setCoins(user.coins ?? 0);
     }
 
     if (user?.id) {

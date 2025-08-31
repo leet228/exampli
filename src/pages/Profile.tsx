@@ -62,8 +62,8 @@ export default function Profile() {
 
       <div className="grid grid-cols-3 gap-3 w-full">
         <div className="card"><div className="text-sm text-muted">🔥 Стрик</div><div className="text-xl font-bold">{u?.streak ?? 0}</div></div>
-        <div className="card"><div className="text-sm text-muted">⚡ Энергия</div><div className="text-xl font-bold">{(u?.hearts ?? 5)*5}</div></div>
-        <div className="card"><div className="text-sm text-muted">⭐ XP</div><div className="text-xl font-bold">{u?.xp ?? 0}</div></div>
+        <div className="card"><div className="text-sm text-muted">⚡ Энергия</div><div className="text-xl font-bold">{u?.energy ?? 25}</div></div>
+        <div className="card"><div className="text-sm text-muted">💰 Коины</div><div className="text-xl font-bold">{u?.coins ?? 0}</div></div>
       </div>
     </div>
   );
