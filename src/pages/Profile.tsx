@@ -171,7 +171,7 @@ export default function Profile() {
                 try {
                   const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
                   if (uid) {
-                    const { error } = await supabase
+                    const { data, error } = await supabase
                       .from('user_profile')
                       .upsert({ user_id: uid, background_color: sel }, { onConflict: 'user_id' });
                     if (error) throw error;
@@ -181,6 +181,8 @@ export default function Profile() {
                       (boot.userProfile ||= {} as any).background_color = sel;
                       (window as any).__exampliBoot = boot;
                     } catch {}
+                    // кэш без TTL
+                    try { const { cacheSet, CACHE_KEYS } = await import('../lib/cache'); (cacheSet as any)(CACHE_KEYS.userProfile, { ...(cacheGet as any)(CACHE_KEYS.userProfile) || {}, background_color: sel }); } catch {}
                     setBg(sel);
                   }
                 } catch (e) { try { console.warn('save color failed', e); } catch {} }

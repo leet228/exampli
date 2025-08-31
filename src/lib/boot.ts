@@ -288,6 +288,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   (window as any).__exampliBoot = boot;
   cacheSet(CACHE_KEYS.user, boot.user);
   cacheSet(CACHE_KEYS.activeCourseCode, activeCode || '');
+  cacheSet(CACHE_KEYS.userProfile, userProfile);
 
   // диспатчим bootData (как раньше)
   window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
