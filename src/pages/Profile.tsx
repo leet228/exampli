@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 
 export default function Profile() {
@@ -7,6 +9,9 @@ export default function Profile() {
   const [bg, setBg] = useState<string>('#3280c2');
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [editing, setEditing] = useState<boolean>(false);
+  const colors = ['#3280c2', '#3a9c21', '#c37024', '#b94c45', '#8957ca', '#36a4b1', '#b64b83', '#788897'];
+  const [sel, setSel] = useState<string>('');
 
   useEffect(() => {
     (async () => {
@@ -28,6 +33,7 @@ export default function Profile() {
         if (prof?.phone_number) setPhone(String(prof.phone_number));
         if (prof?.username) setUsername(String(prof.username));
       } catch {}
+      setSel((window as any)?.__exampliBoot?.userProfile?.background_color || '#3280c2');
       cacheSet(CACHE_KEYS.user, user);
       // текущий курс по users.added_course — из boot.subjectsAll
       const addedId = (user as any)?.added_course as number | null | undefined;
@@ -68,6 +74,15 @@ export default function Profile() {
           }}
         >
           <div className="absolute inset-0" />
+          {/* Кнопка Изменить в правом верхнем углу */}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="absolute right-4 top-4 px-4 py-2 rounded-full text-[15px] font-semibold text-white/95"
+            style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)' }}
+          >
+            Изменить
+          </button>
 
           <div className="relative h-full flex flex-col items-center justify-end pb-2">
             {/* Аватарка + локальное свечение строго по кругу аватарки */}
@@ -110,17 +125,66 @@ export default function Profile() {
       </div>
 
       {/* Карточки показателей */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-xl px-1">
-        <div className="card"><div className="text-sm text-muted">🔥 Стрик</div><div className="text-xl font-bold">{u?.streak ?? 0}</div></div>
-        <div className="card"><div className="text-sm text-muted">⚡ Энергия</div><div className="text-xl font-bold">{u?.energy ?? 25}</div></div>
-        <div className="card"><div className="text-sm text-muted">💰 Коины</div><div className="text-xl font-bold">{u?.coins ?? 0}</div></div>
-      </div>
+      {!editing ? (
+        <>
+          <div className="grid grid-cols-3 gap-3 w-full max-w-xl px-1">
+            <div className="card"><div className="text-sm text-muted">🔥 Стрик</div><div className="text-xl font-bold">{u?.streak ?? 0}</div></div>
+            <div className="card"><div className="text-sm text-muted">⚡ Энергия</div><div className="text-xl font-bold">{u?.energy ?? 25}</div></div>
+            <div className="card"><div className="text-sm text-muted">💰 Коины</div><div className="text-xl font-bold">{u?.coins ?? 0}</div></div>
+          </div>
 
-      {/* Текущий курс */}
-      <div className="card w-full max-w-xl">
-        <div className="text-sm text-muted mb-1">Текущий курс</div>
-        <div className="font-semibold">{course}</div>
-      </div>
+          <div className="card w-full max-w-xl">
+            <div className="text-sm text-muted mb-1">Текущий курс</div>
+            <div className="font-semibold">{course}</div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Палитра цветов */}
+          <div className="w-full max-w-xl px-3">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+              <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+                {colors.map((c) => (
+                  <motion.button
+                    key={c}
+                    type="button"
+                    whileTap={{ scale: 0.92 }}
+                    onClick={() => { setSel(c); setBg(c); }}
+                    className="relative shrink-0"
+                    style={{ width: 44, height: 44, borderRadius: 9999, background: c, border: '1px solid rgba(255,255,255,0.18)' }}
+                  >
+                    {sel === c && (
+                      <span className="absolute inset-[-6px] rounded-full border-2" style={{ borderColor: 'rgba(255,255,255,0.9)' }} />
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Сохранить */}
+          <div className="w-full max-w-xl px-3">
+            <button
+              type="button"
+              className="btn w-full mt-4"
+              onClick={async () => {
+                try {
+                  const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
+                  if (uid) {
+                    await supabase.from('user_profile').upsert({ user_id: uid, background_color: sel }, { onConflict: 'user_id' });
+                    // обновим boot-кэш и локальный стейт
+                    try { const boot: any = (window as any).__exampliBoot || {}; (boot.userProfile ||= {} as any).background_color = sel; (window as any).__exampliBoot = boot; } catch {}
+                    setBg(sel);
+                  }
+                } catch {}
+                setEditing(false);
+              }}
+            >
+              Сохранить
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
