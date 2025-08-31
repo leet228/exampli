@@ -55,23 +55,23 @@ export default function Profile() {
           marginLeft: 'calc(50% - 50vw)',
           marginRight: 'calc(50% - 50vw)',
           // ещё выше к самому верху
-          marginTop: 'calc(-1 * (var(--hud-top) + var(--hud-h) + 24px))',
+          marginTop: 'calc(-1 * (var(--hud-top) + var(--hud-h) + 64px))',
         }}
       >
         <div
           className="relative w-full"
           style={{
-            // увеличим высоту, чтобы контент оказался ближе к нижней кромке
-            height: 300,
-            // свечение под центром аватарки, который сдвинут вниз
-            background: `radial-gradient(170px circle at 50% 220px, rgba(255,255,255,0.22), rgba(255,255,255,0) 68%), ${bg}`,
+            // ещё выше панель и ниже контент → добавим высоту
+            height: 340,
+            // центр свечения сильнее вниз, ближе к аватарке у нижней кромки
+            background: `radial-gradient(190px circle at 50% 280px, rgba(255,255,255,0.22), rgba(255,255,255,0) 70%), ${bg}`,
           }}
         >
           <div className="absolute inset-0" />
 
-          <div className="relative h-full flex flex-col items-center justify-end pb-7">
+          <div className="relative h-full flex flex-col items-center justify-end pb-12">
             {/* Аватарка без внешних колец, лёгкая рамка */}
-            <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)] mb-2">
+            <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)] mb-3">
               {u?.photo_url ? (
                 <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
