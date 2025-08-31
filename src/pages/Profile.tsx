@@ -170,21 +170,37 @@ export default function Profile() {
               onClick={async () => {
                 try {
                   const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
-                  if (uid) {
-                    const { data, error } = await supabase
+                  if (!uid) throw new Error('No user id');
+                  // сначала попробуем обновить, если профиль есть
+                  let ok = false;
+                  try {
+                    const { data: upd, error: updErr } = await supabase
                       .from('user_profile')
-                      .upsert({ user_id: uid, background_color: sel }, { onConflict: 'user_id' });
-                    if (error) throw error;
-                    // обновим boot-кэш и локальный стейт
-                    try {
-                      const boot: any = (window as any).__exampliBoot || {};
-                      (boot.userProfile ||= {} as any).background_color = sel;
-                      (window as any).__exampliBoot = boot;
-                    } catch {}
-                    // кэш без TTL
-                    try { const { cacheSet, CACHE_KEYS } = await import('../lib/cache'); (cacheSet as any)(CACHE_KEYS.userProfile, { ...(cacheGet as any)(CACHE_KEYS.userProfile) || {}, background_color: sel }); } catch {}
-                    setBg(sel);
+                      .update({ background_color: sel })
+                      .eq('user_id', uid)
+                      .select('user_id')
+                      .single();
+                    if (!updErr && upd) ok = true;
+                  } catch {}
+                  if (!ok) {
+                    const { data: ins, error: insErr } = await supabase
+                      .from('user_profile')
+                      .insert({ user_id: uid, background_color: sel })
+                      .select('user_id')
+                      .single();
+                    if (insErr) throw insErr;
                   }
+                  // обновим boot и кэш
+                  try {
+                    const boot: any = (window as any).__exampliBoot || {};
+                    (boot.userProfile ||= {} as any).background_color = sel;
+                    (window as any).__exampliBoot = boot;
+                  } catch {}
+                  try {
+                    const prev = (cacheGet as any)(CACHE_KEYS.userProfile) || {};
+                    cacheSet(CACHE_KEYS.userProfile, { ...prev, background_color: sel });
+                  } catch {}
+                  setBg(sel);
                 } catch (e) { try { console.warn('save color failed', e); } catch {} }
                 setEditing(false);
               }}
