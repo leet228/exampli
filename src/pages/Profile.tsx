@@ -54,24 +54,24 @@ export default function Profile() {
           width: '100vw',
           marginLeft: 'calc(50% - 50vw)',
           marginRight: 'calc(50% - 50vw)',
-          // поднимаем панель к самому верху экрана, перекрывая внутренние отступы контейнера
-          marginTop: 'calc(-1 * (var(--hud-top) + var(--hud-h) + 12px))',
+          // ещё выше к самому верху
+          marginTop: 'calc(-1 * (var(--hud-top) + var(--hud-h) + 24px))',
         }}
       >
         <div
           className="relative w-full"
           style={{
-            // высота панели как во втором скрине
-            height: 260,
-            // мягкое свечение вокруг предполагаемого центра аватарки + основной цвет фона из БД
-            background: `radial-gradient(160px circle at 50% 120px, rgba(255,255,255,0.22), rgba(255,255,255,0) 65%), ${bg}`,
+            // увеличим высоту, чтобы контент оказался ближе к нижней кромке
+            height: 300,
+            // свечение под центром аватарки, который сдвинут вниз
+            background: `radial-gradient(170px circle at 50% 220px, rgba(255,255,255,0.22), rgba(255,255,255,0) 68%), ${bg}`,
           }}
         >
           <div className="absolute inset-0" />
 
-          <div className="relative h-full flex flex-col items-center justify-start pt-8">
+          <div className="relative h-full flex flex-col items-center justify-end pb-7">
             {/* Аватарка без внешних колец, лёгкая рамка */}
-            <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+            <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)] mb-2">
               {u?.photo_url ? (
                 <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -82,7 +82,7 @@ export default function Profile() {
             </div>
 
             {/* Имя — ближе к строке контактов */}
-            <div className="mt-3 text-3xl font-extrabold tracking-wide text-white/95">
+            <div className="text-3xl font-extrabold tracking-wide text-white/95">
               {u?.first_name || u?.username || u?.tg_username || 'Гость'}
             </div>
 
