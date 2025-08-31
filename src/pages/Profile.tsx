@@ -7,6 +7,7 @@ export default function Profile() {
   const [u, setU] = useState<any>(null);
   const [course, setCourse] = useState<string>('Курс');
   const [bg, setBg] = useState<string>('#3280c2');
+  const [baseBg, setBaseBg] = useState<string>('#3280c2');
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [editing, setEditing] = useState<boolean>(false);
@@ -29,7 +30,7 @@ export default function Profile() {
       // профиль (фон/иконка/тел/username) из boot.userProfile
       try {
         const prof = (window as any)?.__exampliBoot?.userProfile || null;
-        if (prof?.background_color) setBg(String(prof.background_color));
+        if (prof?.background_color) { setBg(String(prof.background_color)); setBaseBg(String(prof.background_color)); }
         if (prof?.phone_number) setPhone(String(prof.phone_number));
         if (prof?.username) setUsername(String(prof.username));
       } catch {}
@@ -74,15 +75,17 @@ export default function Profile() {
           }}
         >
           <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
-          {/* Кнопка Изменить в правом верхнем углу */}
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="absolute right-4 top-36 px-2 py-1 rounded-full text-[12px] font-semibold text-white/95"
-            style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
-          >
-            Изменить
-          </button>
+          {/* Кнопка Изменить в правом верхнем углу (скрыта в режиме редактирования) */}
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="absolute right-4 top-36 px-2 py-1 rounded-full text-[12px] font-semibold text-white/95"
+              style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
+            >
+              Изменить
+            </button>
+          )}
 
           <div className="relative h-full flex flex-col items-center justify-end pb-2">
             {/* Аватарка + локальное свечение строго по кругу аватарки */}
@@ -207,9 +210,26 @@ export default function Profile() {
             >
               Сохранить
             </button>
+            {/* Телеграм BackButton — отмена изменений */}
+            <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setEditing(false); }} active={editing} />
           </div>
         </>
       )}
     </div>
   );
+}
+
+function CancelOnTelegramBack({ active, onCancel }: { active: boolean; onCancel: () => void }) {
+  useEffect(() => {
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (!tg) return;
+    if (!active) { try { tg.BackButton?.hide?.(); } catch {} return; }
+    try {
+      tg.BackButton?.show?.();
+      const handler = () => { onCancel(); };
+      tg.onEvent?.('backButtonClicked', handler);
+      return () => { try { tg.offEvent?.('backButtonClicked', handler); tg.BackButton?.hide?.(); } catch {} };
+    } catch { return; }
+  }, [active, onCancel]);
+  return null;
 }
