@@ -73,13 +73,13 @@ export default function Profile() {
             background: bg,
           }}
         >
-          <div className="absolute inset-0" />
+          <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
           {/* Кнопка Изменить в правом верхнем углу */}
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="absolute right-4 top-40 px-2 py-1 rounded-full text-[12px] font-semibold text-white/95"
-            style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)' }}
+            className="absolute right-4 top-36 px-2 py-1 rounded-full text-[12px] font-semibold text-white/95"
+            style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
           >
             Изменить
           </button>
