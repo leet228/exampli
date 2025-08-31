@@ -38,16 +38,16 @@ export async function ensureUser(): Promise<UserStats | null> {
     try {
       const uid = (created as any)?.id;
       if (uid) {
-        await supabase.from('user_profile').upsert({
+        await supabase.from('user_profile').insert({
           user_id: uid,
           first_name: tgUser?.first_name ?? null,
           username: tgUser?.username ?? null,
           phone_number: null,
           background_color: '#3280c2',
           background_icon: 'nothing',
-        }, { onConflict: 'user_id' });
+        });
       }
-    } catch {}
+    } catch (e) { try { console.warn('user_profile insert failed', e); } catch {} }
     try { (window as any).__exampliNewUserCreated = true; } catch {}
     return created as any;
   }
@@ -59,6 +59,29 @@ export async function ensureUser(): Promise<UserStats | null> {
       (user as any).timezone = currentTz;
     }
   } catch {}
+  // ensure user_profile существует для существующего пользователя
+  try {
+    const uid = (user as any)?.id;
+    if (uid) {
+      const { data: prof } = await supabase
+        .from('user_profile')
+        .select('user_id')
+        .eq('user_id', uid)
+        .maybeSingle?.();
+      const exists = (prof as any)?.user_id != null;
+      if (!exists) {
+        const tgUser = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user;
+        await supabase.from('user_profile').insert({
+          user_id: uid,
+          first_name: tgUser?.first_name ?? null,
+          username: tgUser?.username ?? null,
+          phone_number: (user as any)?.phone_number ?? null,
+          background_color: '#3280c2',
+          background_icon: 'nothing',
+        });
+      }
+    }
+  } catch (e) { try { console.warn('ensure user_profile failed', e); } catch {} }
   return user as any;
 }
 
