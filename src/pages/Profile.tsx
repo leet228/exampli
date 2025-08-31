@@ -48,7 +48,16 @@ export default function Profile() {
   return (
     <div className="flex flex-col items-center text-center gap-5">
       {/* Хиро-блок: на всю ширину экрана, без скруглений, фон = background_color + мягкое свечение от аватарки */}
-      <div className="relative left-1/2 right-1/2 -ml-[50vw] w-screen">
+      <div
+        className="relative"
+        style={{
+          width: '100vw',
+          marginLeft: 'calc(50% - 50vw)',
+          marginRight: 'calc(50% - 50vw)',
+          // поднимаем панель к самому верху экрана, перекрывая внутренние отступы контейнера
+          marginTop: 'calc(-1 * (var(--hud-top) + var(--hud-h) + 12px))',
+        }}
+      >
         <div
           className="relative w-full"
           style={{
