@@ -28,17 +28,30 @@ export default function Profile() {
         if (user) cacheSet(CACHE_KEYS.user, user);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
-      // фото: сначала native photo_url, на мобильных часто пустой — пробуем t.me userpic по username
+      // фото: надёжный фолбэк — пробуем несколько URL
       try {
-        const direct = tu.photo_url as string | undefined;
-        if (direct) setPhotoUrl(String(direct));
-        else if (tu.username) {
-          const guess = `https://t.me/i/userpic/320/${tu.username}.jpg`;
-          const probe = new Image();
-          probe.onload = () => { try { setPhotoUrl(guess); } catch {} };
-          probe.onerror = () => {};
-          probe.src = guess;
-        }
+        const uname = tu?.username as string | undefined;
+        const direct = (tu?.photo_url as string | undefined) || '';
+        const candidates = [
+          direct,
+          ...(uname ? [
+            `https://t.me/i/userpic/320/${uname}.jpg`,
+            `https://t.me/i/userpic/320/${uname}.png`,
+            `https://t.me/i/userpic/160/${uname}.jpg`,
+            `https://t.me/i/userpic/160/${uname}.png`,
+          ] : []),
+        ].filter(Boolean) as string[];
+
+        const testNext = (i: number) => {
+          if (i >= candidates.length) return;
+          const url = candidates[i] + (i > 0 ? `?v=${Date.now()}` : '');
+          const img = new Image();
+          img.onload = () => { try { setPhotoUrl(url); } catch {} };
+          img.onerror = () => testNext(i + 1);
+          img.referrerPolicy = 'no-referrer';
+          img.src = url;
+        };
+        testNext(0);
       } catch {}
       // профиль (фон/иконка/тел/username) из boot.userProfile
       try {
