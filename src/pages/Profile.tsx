@@ -140,8 +140,8 @@ export default function Profile() {
                 }}
               />
               <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-                {photoUrl ? (
-                  <img src={photoUrl} alt="" className="w-full h-full object-cover" />
+                {photoUrl || u?.photo_url ? (
+                  <img src={(photoUrl || u?.photo_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/90">
                     {initials}
