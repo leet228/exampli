@@ -63,22 +63,35 @@ export default function Profile() {
           style={{
             // ещё выше панель и ниже контент → добавим высоту
             height: 340,
-            // центр свечения сильнее вниз, ближе к аватарке у нижней кромки
-            background: `radial-gradient(190px circle at 50% 280px, rgba(255,255,255,0.22), rgba(255,255,255,0) 70%), ${bg}`,
+            // фон — чистый цвет из профиля, без общего свечения
+            background: bg,
           }}
         >
           <div className="absolute inset-0" />
 
           <div className="relative h-full flex flex-col items-center justify-end pb-2">
-            {/* Аватарка без внешних колец, лёгкая рамка */}
-            <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)] mb-3">
-              {u?.photo_url ? (
-                <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/90">
-                  {initials}
-                </div>
-              )}
+            {/* Аватарка + локальное свечение строго по кругу аватарки */}
+            <div className="relative mb-3">
+              {/* свечение: круг больше аватарки, мягкая прозрачность */}
+              <div
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{
+                  width: 220,
+                  height: 220,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(closest-side, rgba(255,255,255,0.22), rgba(255,255,255,0) 72%)',
+                  zIndex: 0,
+                }}
+              />
+              <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+                {u?.photo_url ? (
+                  <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/90">
+                    {initials}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Имя — ближе к строке контактов */}
