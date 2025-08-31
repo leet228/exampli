@@ -78,7 +78,7 @@ export default function Profile() {
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="absolute right-4 top-28 px-3 py-1.5 rounded-full text-[13px] font-semibold text-white/95"
+            className="absolute right-4 top-40 px-2 py-1 rounded-full text-[12px] font-semibold text-white/95"
             style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)' }}
           >
             Изменить
