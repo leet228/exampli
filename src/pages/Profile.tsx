@@ -11,21 +11,23 @@ export default function Profile() {
       const tg = (window as any)?.Telegram?.WebApp;
       const tu = tg?.initDataUnsafe?.user;
       if (!tu) return;
-      // базовый user из БД
-      // читаем из кэша, если пусто — берём из базы и пишем в кэш
+      // читаем только из кэша/boot, без обращения к БД
       let user: any | null = cacheGet<any>(CACHE_KEYS.user);
       if (!user || user.added_course == null) {
-        const fresh = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
-        user = fresh.data as any;
+        const bootUser = (window as any)?.__exampliBoot?.user || null;
+        user = bootUser || user;
         if (user) cacheSet(CACHE_KEYS.user, user);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
       cacheSet(CACHE_KEYS.user, user);
-      // текущий курс по users.added_course
+      // текущий курс по users.added_course — из boot.subjectsAll
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (addedId) {
-        const { data: s } = await supabase.from('subjects').select('title').eq('id', addedId).single();
-        if (s?.title) setCourse(s.title as string);
+        try {
+          const list = (window as any)?.__exampliBoot?.subjectsAll as any[] | undefined;
+          const found = list?.find?.((s) => Number(s.id) === Number(addedId));
+          if (found?.title) setCourse(String(found.title));
+        } catch {}
       }
     })();
   }, []);

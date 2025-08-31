@@ -34,6 +34,15 @@ export default function HUD() {
 
   const loadUserSnapshot = useCallback(async () => {
     const ACTIVE_KEY = 'exampli:activeSubjectCode';
+    // быстрый путь: попробуем взять статы из кэша (boot положил их туда)
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      if (cs) {
+        setStreak(cs.streak ?? 0);
+        setEnergy(cs.energy ?? 25);
+        setCoins(cs.coins ?? 0);
+      }
+    } catch {}
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!tgId) {
       // офф-телеграм режим: попробуем взять код из localStorage
@@ -342,12 +351,10 @@ export default function HUD() {
 function StreakSheetBody() {
   const [streak, setStreak] = useState(0);
   useEffect(() => {
-    (async () => {
-      const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!id) return;
-      const { data: u } = await supabase.from('users').select('streak').eq('tg_id', String(id)).single();
-      setStreak(u?.streak ?? 0);
-    })();
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      setStreak(cs?.streak ?? 0);
+    } catch {}
   }, []);
   const days = Array.from({ length: 30 }, (_, i) => i + 1);
   return (

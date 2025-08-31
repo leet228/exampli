@@ -6,12 +6,18 @@ import { hapticTiny } from '../../lib/haptics';
 export default function EnergySheet({ open, onClose }: { open: boolean; onClose: () => void }){
   const [energy, setEnergy] = useState(25);
 
-  useEffect(() => { (async () => {
-    const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (!id) return;
-    const { data: user } = await supabase.from('users').select('energy').eq('tg_id', String(id)).single();
-    setEnergy((user?.energy ?? 25) as number);
-  })(); }, [open]);
+  useEffect(() => {
+    try {
+      const cs = (window as any)?.__exampliBoot?.user || null;
+      // приоритет: CACHE_KEYS.stats, затем boot.user
+      const cached = (window as any)?.localStorage ? null : null;
+      const statsRaw = (() => { try { return localStorage.getItem('exampli:' + 'stats'); } catch { return null; } })();
+      const stats = statsRaw ? JSON.parse(statsRaw) : null;
+      if (stats?.v?.energy != null) { setEnergy(Number(stats.v.energy)); return; }
+      if (cs?.energy != null) { setEnergy(Number(cs.energy)); return; }
+      setEnergy(25);
+    } catch { setEnergy(25); }
+  }, [open]);
 
   const percent = Math.round((energy / 25) * 100);
 
