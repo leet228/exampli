@@ -142,19 +142,19 @@ export default function Profile() {
         <>
           {/* Палитра цветов */}
           <div className="w-full max-w-xl px-3">
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-              <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 overflow-hidden">
+              <div className="grid grid-cols-8 gap-2 place-items-center">
                 {colors.map((c) => (
                   <motion.button
                     key={c}
                     type="button"
-                    whileTap={{ scale: 0.92 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => { setSel(c); setBg(c); }}
-                    className="relative shrink-0"
-                    style={{ width: 44, height: 44, borderRadius: 9999, background: c, border: '1px solid rgba(255,255,255,0.18)' }}
+                    className="relative"
+                    style={{ width: 28, height: 28, borderRadius: 9999, background: c, border: '1px solid rgba(255,255,255,0.18)' }}
                   >
                     {sel === c && (
-                      <span className="absolute inset-[-6px] rounded-full border-2" style={{ borderColor: 'rgba(255,255,255,0.9)' }} />
+                      <span className="absolute inset-[-4px] rounded-full border-2" style={{ borderColor: 'rgba(255,255,255,0.95)' }} />
                     )}
                   </motion.button>
                 ))}
@@ -171,12 +171,19 @@ export default function Profile() {
                 try {
                   const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
                   if (uid) {
-                    await supabase.from('user_profile').upsert({ user_id: uid, background_color: sel }, { onConflict: 'user_id' });
+                    const { error } = await supabase
+                      .from('user_profile')
+                      .upsert({ user_id: uid, background_color: sel }, { onConflict: 'user_id' });
+                    if (error) throw error;
                     // обновим boot-кэш и локальный стейт
-                    try { const boot: any = (window as any).__exampliBoot || {}; (boot.userProfile ||= {} as any).background_color = sel; (window as any).__exampliBoot = boot; } catch {}
+                    try {
+                      const boot: any = (window as any).__exampliBoot || {};
+                      (boot.userProfile ||= {} as any).background_color = sel;
+                      (window as any).__exampliBoot = boot;
+                    } catch {}
                     setBg(sel);
                   }
-                } catch {}
+                } catch (e) { try { console.warn('save color failed', e); } catch {} }
                 setEditing(false);
               }}
             >
