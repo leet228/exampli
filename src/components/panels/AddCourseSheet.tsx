@@ -117,9 +117,8 @@ export default function AddCourseSheet({
     // обновим кеш пользователя (added_course обновился)
     try {
       const prev = JSON.parse(localStorage.getItem('exampli:' + 'user') || '{}');
-      const tgId2: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      // записываем только те поля, что нужны потребителям
-      localStorage.setItem('exampli:' + 'user', JSON.stringify({ v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, e: Date.now() + 5*60_000 }));
+      // бессрочная запись без поля e
+      localStorage.setItem('exampli:' + 'user', JSON.stringify({ v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, e: null }));
     } catch {}
   };
 

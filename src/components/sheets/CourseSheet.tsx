@@ -56,7 +56,7 @@ export default function CoursesPanel(props: Props) {
       const code = stored || list?.[0]?.code || null;
       if (code) {
         setActiveCode(code);
-        cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
+        cacheSet(CACHE_KEYS.activeCourseCode, code);
       } else {
         setActiveCode(null);
       }

@@ -55,7 +55,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
   const user = await ensureUser();
-  if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
+  if (user) cacheSet(CACHE_KEYS.user, user);
   step(++i, TOTAL);
 
   // Если работаем вне Telegram (нет пользователя) — считаем, что это новый пользователь: показываем онбординг
@@ -81,7 +81,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       .eq('id', user.id)
       .single();
     userRow = data as any;
-    if (userRow) cacheSet(CACHE_KEYS.stats, { xp: userRow.xp ?? 0, streak: userRow.streak ?? 0, hearts: userRow.hearts ?? 5 }, 60_000);
+    if (userRow) cacheSet(CACHE_KEYS.stats, { xp: userRow.xp ?? 0, streak: userRow.streak ?? 0, hearts: userRow.hearts ?? 5 });
   }
 
   const stats = {
@@ -146,7 +146,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     activeId = first.id;
     activeTitle = first.title;
     try { localStorage.setItem(ACTIVE_KEY, activeCode); } catch {}
-    cacheSet(CACHE_KEYS.activeCourseCode, activeCode, 10 * 60_000);
+    cacheSet(CACHE_KEYS.activeCourseCode, activeCode);
   }
   step(++i, TOTAL);
 
@@ -160,7 +160,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       .order('order_index', { ascending: true })
       .limit(12);
     const lessonsData: any[] = (resp.data as any[]) ?? [];
-    cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData, 5 * 60_000);
+    cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData);
 
     lessonsArr = (lessonsData ?? []).map((l: any) => ({
       id: l.id,
@@ -216,7 +216,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       .order('level', { ascending: true })
       .order('title', { ascending: true });
     subjectsAll = (data ?? []) as SubjectRow[];
-    cacheSet(CACHE_KEYS.subjectsAll, subjectsAll, 10 * 60_000);
+    cacheSet(CACHE_KEYS.subjectsAll, subjectsAll);
     // прогреем svg для карточек
     await Promise.all(
       subjectsAll.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))
@@ -266,8 +266,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   };
 
   (window as any).__exampliBoot = boot;
-  cacheSet(CACHE_KEYS.user, boot.user, 5 * 60_000);
-  cacheSet(CACHE_KEYS.activeCourseCode, activeCode || '', 10 * 60_000);
+  cacheSet(CACHE_KEYS.user, boot.user);
+  cacheSet(CACHE_KEYS.activeCourseCode, activeCode || '');
 
   // диспатчим bootData (как раньше)
   window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));

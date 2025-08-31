@@ -17,10 +17,10 @@ export default function Profile() {
       if (!user || user.added_course == null) {
         const fresh = await supabase.from('users').select('*').eq('tg_id', String(tu.id)).single();
         user = fresh.data as any;
-        if (user) cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
+        if (user) cacheSet(CACHE_KEYS.user, user);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
-      cacheSet(CACHE_KEYS.user, user, 5 * 60_000);
+      cacheSet(CACHE_KEYS.user, user);
       // текущий курс по users.added_course
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (addedId) {

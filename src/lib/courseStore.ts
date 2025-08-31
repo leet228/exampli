@@ -46,7 +46,7 @@ export function setActiveCourse(next: { code: string; title?: string }) {
   // persist snapshot
   safeSetItem(KEY_CODE, code);
   safeSetItem(KEY_TITLE, title);
-  cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
+  cacheSet(CACHE_KEYS.activeCourseCode, code);
 
   // warm icon
   preloadIcon(code);

@@ -92,7 +92,7 @@ export default function HUD() {
           setCourseCode(code);
           setIconOk(true);
           try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
-          cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
+          cacheSet(CACHE_KEYS.activeCourseCode, code);
         }
       } else {
         // если в users нет added_course — попробуем boot-кэш, затем localStorage
@@ -154,7 +154,7 @@ export default function HUD() {
         setCourseCode(e.detail.code);
         setIconOk(true);
         try { localStorage.setItem('exampli:activeSubjectCode', e.detail.code); } catch {}
-        cacheSet(CACHE_KEYS.activeCourseCode, e.detail.code, 10 * 60_000);
+        cacheSet(CACHE_KEYS.activeCourseCode, e.detail.code);
       }
     };
 

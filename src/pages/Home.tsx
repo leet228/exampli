@@ -30,7 +30,7 @@ export default function Home() {
   }, []);
   const writeActiveToStorage = useCallback((code: string) => {
     try { localStorage.setItem(ACTIVE_KEY, code); } catch {}
-    cacheSet(CACHE_KEYS.activeCourseCode, code, 10 * 60_000);
+    cacheSet(CACHE_KEYS.activeCourseCode, code);
   }, []);
 
   // ======== ensureActiveCourse: определяем активный курс (code + title) =========
@@ -120,7 +120,7 @@ export default function Home() {
       }));
 
       setItems(mapped);
-      if (code) cacheSet(CACHE_KEYS.lessonsByCode(code), data as any[], 5 * 60_000);
+      if (code) cacheSet(CACHE_KEYS.lessonsByCode(code), data as any[]);
       if (!courseTitle && subj?.title) setCourseTitle(subj.title as string);
     } finally {
       setLoading(false);

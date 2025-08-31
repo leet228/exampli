@@ -67,7 +67,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             hapticSelect();
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
-                            cacheSet(CACHE_KEYS.activeCourseCode, s.code, 10 * 60_000);
+                            cacheSet(CACHE_KEYS.activeCourseCode, s.code);
                             // Автовыбор первой темы и подтемы + запись в БД
                             try {
                               const { data: topics } = await supabase
