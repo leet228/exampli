@@ -470,6 +470,11 @@ body::before {
     z-index: -1;
 }
 
+/* На странице профиля — тянуть фон панели выше верха экрана */
+body.profile-overscroll::before {
+    background: var(--profile-bg, var(--bg));
+}
+
 
 /* полноэкранный слой под дорогу (но над фоном) */
 

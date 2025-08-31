@@ -48,6 +48,18 @@ export default function Profile() {
     })();
   }, []);
 
+  // тянем фон панели выше экрана при скролле: меняем body::before цвет
+  useEffect(() => {
+    try {
+      document.body.classList.add('profile-overscroll');
+      document.documentElement.style.setProperty('--profile-bg', bg);
+      return () => {
+        document.body.classList.remove('profile-overscroll');
+        document.documentElement.style.removeProperty('--profile-bg');
+      };
+    } catch { return; }
+  }, [bg]);
+
   const initials = (u?.first_name || 'U').slice(0,1).toUpperCase();
   const maskedPhone = phone ? phone : '';
   const atUsername = username ? `@${username}` : '';
