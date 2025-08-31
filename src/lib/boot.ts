@@ -19,6 +19,7 @@ export type LessonRow = {
 export type BootData = {
   user: any | null;
   stats: { streak: number; energy: number; coins: number };
+  userProfile?: { background_color?: string | null; background_icon?: string | null; phone_number?: string | null; first_name?: string | null; username?: string | null } | null;
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
   subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
@@ -63,6 +64,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     const boot: BootData = {
       user: null,
       stats: { streak: 0, energy: 25, coins: 500 },
+      userProfile: { background_color: '#3280c2', background_icon: 'nothing', phone_number: null, first_name: null, username: null },
       subjects: [],
       lessons: [],
       onboarding: { phone_given: false, course_taken: false, boarding_finished: false },
@@ -89,6 +91,23 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     energy: userRow?.energy ?? 25,
     coins: userRow?.coins ?? 500,
   };
+  step(++i, TOTAL);
+
+  // 2c) профиль пользователя (цвет/иконка/телефон/имя)
+  let userProfile: BootData['userProfile'] = null;
+  try {
+    if (userRow?.id) {
+      const { data: prof } = await supabase
+        .from('user_profile')
+        .select('background_color, background_icon, phone_number, first_name, username')
+        .eq('user_id', userRow.id)
+        .single();
+      userProfile = (prof as any) || null;
+    }
+  } catch {}
+  if (!userProfile) {
+    userProfile = { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow?.phone_number ?? null, first_name: null, username: null };
+  }
   step(++i, TOTAL);
 
   // 2b) онбординг теперь вычисляем только по phone_number в users
@@ -253,6 +272,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const boot: BootData = {
     user: (userRow ?? user) ?? null,
     stats,
+    userProfile,
     subjects: subjectsArr,
     lessons: lessonsArr,
     subjectsAll,
