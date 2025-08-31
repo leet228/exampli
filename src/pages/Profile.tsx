@@ -10,6 +10,7 @@ export default function Profile() {
   const [baseBg, setBaseBg] = useState<string>('#3280c2');
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<boolean>(false);
   const colors = ['#3280c2', '#3a9c21', '#c37024', '#b94c45', '#8957ca', '#36a4b1', '#b64b83', '#788897'];
   const [sel, setSel] = useState<string>('');
@@ -27,6 +28,18 @@ export default function Profile() {
         if (user) cacheSet(CACHE_KEYS.user, user);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
+      // фото: сначала native photo_url, на мобильных часто пустой — пробуем t.me userpic по username
+      try {
+        const direct = tu.photo_url as string | undefined;
+        if (direct) setPhotoUrl(String(direct));
+        else if (tu.username) {
+          const guess = `https://t.me/i/userpic/320/${tu.username}.jpg`;
+          const probe = new Image();
+          probe.onload = () => { try { setPhotoUrl(guess); } catch {} };
+          probe.onerror = () => {};
+          probe.src = guess;
+        }
+      } catch {}
       // профиль (фон/иконка/тел/username) из boot.userProfile
       try {
         const prof = (window as any)?.__exampliBoot?.userProfile || null;
@@ -114,8 +127,8 @@ export default function Profile() {
                 }}
               />
               <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-                {u?.photo_url ? (
-                  <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/90">
                     {initials}
