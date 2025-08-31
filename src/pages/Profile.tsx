@@ -69,7 +69,7 @@ export default function Profile() {
         >
           <div className="absolute inset-0" />
 
-          <div className="relative h-full flex flex-col items-center justify-end pb-12">
+          <div className="relative h-full flex flex-col items-center justify-end pb-2">
             {/* Аватарка без внешних колец, лёгкая рамка */}
             <div className="w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.25)] mb-3">
               {u?.photo_url ? (
