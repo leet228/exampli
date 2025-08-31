@@ -34,6 +34,20 @@ export async function ensureUser(): Promise<UserStats | null> {
       energy: 25,
       coins: 500,
     }).select('*').single();
+    // создать профиль пользователя с дефолтами
+    try {
+      const uid = (created as any)?.id;
+      if (uid) {
+        await supabase.from('user_profile').upsert({
+          user_id: uid,
+          first_name: tgUser?.first_name ?? null,
+          username: tgUser?.username ?? null,
+          phone_number: null,
+          background_color: '#3280c2',
+          background_icon: 'nothing',
+        }, { onConflict: 'user_id' });
+      }
+    } catch {}
     try { (window as any).__exampliNewUserCreated = true; } catch {}
     return created as any;
   }

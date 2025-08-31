@@ -47,6 +47,12 @@ export default function Onboarding({ open, onDone }: Props) {
               .single();
             if (user?.id) {
               await supabase.from('users').update({ phone_number: String(phone) }).eq('id', user.id);
+              try {
+                await supabase.from('user_profile').upsert({
+                  user_id: user.id,
+                  phone_number: String(phone),
+                }, { onConflict: 'user_id' });
+              } catch {}
             }
           } catch {}
         }
@@ -132,6 +138,12 @@ export default function Onboarding({ open, onDone }: Props) {
           .single();
         if (user?.id) {
           await supabase.from('users').update({ phone_number: full }).eq('id', user.id);
+          try {
+            await supabase.from('user_profile').upsert({
+              user_id: user.id,
+              phone_number: full,
+            }, { onConflict: 'user_id' });
+          } catch {}
         }
       }
     } catch {}
