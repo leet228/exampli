@@ -37,6 +37,16 @@ export default function Profile() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<boolean>(false);
   const colors = ['#3280c2', '#3a9c21', '#c37024', '#b94c45', '#8957ca', '#36a4b1', '#b64b83', '#788897'];
+  const gradientPairs: Array<[string, string]> = [
+    ['#73d5ee','#508dcc'],
+    ['#a6cf59','#3c9656'],
+    ['#e7a93c','#cf7344'],
+    ['#f8906b','#ca555e'],
+    ['#e57bdf','#9662ce'],
+    ['#77ddc5','#3a97c0'],
+    ['#f08d90','#c44f83'],
+    ['#acb6c2','#6b7783'],
+  ];
   const [sel, setSel] = useState<string>('');
 
   useEffect(() => {
@@ -251,6 +261,29 @@ export default function Profile() {
                     )}
                   </motion.button>
                 ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Градиенты: кружочки пополам; при выборе — плавный градиент на фоне */}
+          <div className="w-full max-w-xl px-3 mt-3">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 overflow-hidden">
+              <div className="grid grid-cols-8 gap-2 place-items-center">
+                {gradientPairs.map(([top, bottom]) => {
+                  const previewSplit = `linear-gradient(180deg, ${top} 0%, ${top} 50%, ${bottom} 50%, ${bottom} 100%)`;
+                  const valueGrad = `linear-gradient(135deg, ${top} 0%, ${bottom} 100%)`;
+                  const active = sel === valueGrad;
+                  return (
+                    <motion.button
+                      key={`${top}-${bottom}`}
+                      type="button"
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => { setSel(valueGrad); setBg(valueGrad); }}
+                      className="relative"
+                      style={{ width: 28, height: 28, borderRadius: 9999, background: previewSplit, border: active ? '2px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.18)' }}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
