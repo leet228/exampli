@@ -12,31 +12,22 @@ export default function Profile() {
   const [tempBgIcon, setTempBgIcon] = useState<string>('bg_icon_cat');
   const [iconsOpen, setIconsOpen] = useState<boolean>(false);
   const iconsCloud = useMemo(() => {
-    // детерминированный генератор на основе выбранной иконки
-    const seedStr = String(tempBgIcon || 'seed');
-    let h = 2166136261;
-    for (let i = 0; i < seedStr.length; i++) {
-      h ^= seedStr.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    function rnd() {
-      // простое LCG
-      h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909);
-      const t = ((h ^= h >>> 16) >>> 0) / 4294967295;
-      return t;
-    }
-    const count = 18; // много маленьких значков
+    // Симметричная раскладка 18 иконок: 5 рядов (4,3,4,3,4)
+    const rows: { y: number; xs: number[] }[] = [
+      { y: 18, xs: [16, 38, 62, 84] },
+      { y: 34, xs: [26, 50, 74] },
+      { y: 50, xs: [16, 38, 62, 84] },
+      { y: 66, xs: [26, 50, 74] },
+      { y: 82, xs: [16, 38, 62, 84] },
+    ];
     const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
-    for (let i = 0; i < count; i++) {
-      const x = 4 + rnd() * 92; // 4..96%
-      const y = 6 + rnd() * 86; // 6..92%
-      const s = 0.55 + rnd() * 0.6; // масштаб 0.55..1.15 от 24px
-      const r = -15 + rnd() * 30;   // -15..15 deg
-      const o = 0.18 + rnd() * 0.18; // 0.18..0.36
-      items.push({ x, y, s, r, o });
-    }
+    rows.forEach((row) => {
+      row.xs.forEach((x) => {
+        items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 });
+      });
+    });
     return items;
-  }, [tempBgIcon]);
+  }, []);
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
