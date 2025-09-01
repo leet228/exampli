@@ -248,7 +248,7 @@ export default function Profile() {
                 ) : (
                   <div className="w-16 h-16 grid place-items-center text-2xl">🧩</div>
                 )}
-                <div className="text-sm text-muted" style={{ marginTop: -2 }}>Курс</div>
+                <div className="text-sm text-muted" style={{ marginTop: -6 }}>Курс</div>
               </div>
               <div className="px-0 py-1 flex justify-center justify-self-end">
                 <div className="ml-auto flex flex-col items-center justify-center">
