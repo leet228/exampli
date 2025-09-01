@@ -44,7 +44,7 @@ export async function ensureUser(): Promise<UserStats | null> {
           username: tgUser?.username ?? null,
           phone_number: null,
           background_color: '#3280c2',
-          background_icon: 'nothing',
+          background_icon: 'bg_icon_cat',
         });
       }
     } catch (e) { try { console.warn('user_profile insert failed', e); } catch {} }
@@ -77,7 +77,7 @@ export async function ensureUser(): Promise<UserStats | null> {
           username: tgUser?.username ?? null,
           phone_number: (user as any)?.phone_number ?? null,
           background_color: '#3280c2',
-          background_icon: 'nothing',
+          background_icon: 'bg_icon_cat',
         });
       }
     }

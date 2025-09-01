@@ -8,6 +8,9 @@ export default function Profile() {
   const [course, setCourse] = useState<string>('Курс');
   const [bg, setBg] = useState<string>('#3280c2');
   const [baseBg, setBaseBg] = useState<string>('#3280c2');
+  const [bgIcon, setBgIcon] = useState<string>('bg_icon_cat');
+  const [tempBgIcon, setTempBgIcon] = useState<string>('bg_icon_cat');
+  const [iconsOpen, setIconsOpen] = useState<boolean>(false);
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -57,6 +60,7 @@ export default function Profile() {
       try {
         const prof = (window as any)?.__exampliBoot?.userProfile || null;
         if (prof?.background_color) { setBg(String(prof.background_color)); setBaseBg(String(prof.background_color)); }
+        if (prof?.background_icon) { setBgIcon(String(prof.background_icon)); setTempBgIcon(String(prof.background_icon)); }
         if (prof?.phone_number) setPhone(String(prof.phone_number));
         if (prof?.username) setUsername(String(prof.username));
       } catch {}
@@ -79,9 +83,11 @@ export default function Profile() {
     try {
       document.body.classList.add('profile-overscroll');
       document.documentElement.style.setProperty('--profile-bg', bg);
+      document.documentElement.style.setProperty('--profile-bg-icon', `url(/profile_icons/${tempBgIcon}.svg)`);
       return () => {
         document.body.classList.remove('profile-overscroll');
         document.documentElement.style.removeProperty('--profile-bg');
+        document.documentElement.style.removeProperty('--profile-bg-icon');
       };
     } catch { return; }
   }, [bg]);
@@ -112,6 +118,21 @@ export default function Profile() {
             background: bg,
           }}
         >
+          {/* декоративный слой повторяющихся иконок с затуханием к краям */}
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `var(--profile-bg-icon)` ,
+              backgroundRepeat: 'repeat',
+              backgroundSize: '72px 72px',
+              backgroundPosition: 'center',
+              maskImage: 'radial-gradient(90% 80% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.0) 100%)',
+              WebkitMaskImage: 'radial-gradient(90% 80% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.0) 100%)',
+              opacity: 0.28,
+              filter: 'blur(.15px)'
+            }}
+          />
           <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
           {/* Кнопка Изменить в правом верхнем углу (скрыта в режиме редактирования) */}
           {!editing && (
@@ -203,6 +224,45 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* Выбор иконок профиля */}
+          <div className="w-full max-w-xl px-3">
+            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+              {/* кнопка-заголовок как в примере */}
+              <button
+                type="button"
+                onClick={() => setIconsOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: iconsOpen ? '1px solid rgba(255,255,255,0.10)' : '1px solid transparent' }}
+              >
+                <div className="text-left">
+                  <div className="text-sm font-semibold">Иконки профиля</div>
+                  <div className="text-xs text-white/70">Укрась фон повторяющимися значками</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src={`/profile_icons/${tempBgIcon}.svg`} alt="" className="w-7 h-7 rounded-md" />
+                  <span className="text-white/70">▾</span>
+                </div>
+              </button>
+
+              {/* выпадающая панель с иконками */}
+              {iconsOpen && (
+                <div className="px-3 pb-3 pt-2 grid grid-cols-6 gap-2">
+                  {['bg_icon_cat'].map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setTempBgIcon(key)}
+                      className={`rounded-xl border ${tempBgIcon===key? 'border-white/60 bg-white/10' : 'border-white/10 bg-white/5'}`}
+                      style={{ padding: 8 }}
+                    >
+                      <img src={`/profile_icons/${key}.svg`} alt="" className="w-10 h-10" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Сохранить */}
           <div className="w-full max-w-xl px-3">
             <button
@@ -217,7 +277,7 @@ export default function Profile() {
                   try {
                     const { data: upd, error: updErr } = await supabase
                       .from('user_profile')
-                      .update({ background_color: sel })
+                      .update({ background_color: sel, background_icon: tempBgIcon })
                       .eq('user_id', uid)
                       .select('user_id')
                       .single();
@@ -226,7 +286,7 @@ export default function Profile() {
                   if (!ok) {
                     const { data: ins, error: insErr } = await supabase
                       .from('user_profile')
-                      .insert({ user_id: uid, background_color: sel })
+                      .insert({ user_id: uid, background_color: sel, background_icon: tempBgIcon })
                       .select('user_id')
                       .single();
                     if (insErr) throw insErr;
@@ -235,13 +295,15 @@ export default function Profile() {
                   try {
                     const boot: any = (window as any).__exampliBoot || {};
                     (boot.userProfile ||= {} as any).background_color = sel;
+                    (boot.userProfile ||= {} as any).background_icon = tempBgIcon;
                     (window as any).__exampliBoot = boot;
                   } catch {}
                   try {
                     const prev = (cacheGet as any)(CACHE_KEYS.userProfile) || {};
-                    cacheSet(CACHE_KEYS.userProfile, { ...prev, background_color: sel });
+                    cacheSet(CACHE_KEYS.userProfile, { ...prev, background_color: sel, background_icon: tempBgIcon });
                   } catch {}
                   setBg(sel);
+                  setBgIcon(tempBgIcon);
                 } catch (e) { try { console.warn('save color failed', e); } catch {} }
                 setEditing(false);
               }}
@@ -249,7 +311,7 @@ export default function Profile() {
               Сохранить
             </button>
             {/* Телеграм BackButton — отмена изменений */}
-            <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setEditing(false); }} active={editing} />
+            <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setTempBgIcon(bgIcon); setEditing(false); }} active={editing} />
           </div>
         </>
       )}
