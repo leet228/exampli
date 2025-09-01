@@ -102,10 +102,17 @@ export default function Profile() {
       const addedId = (user as any)?.added_course as number | null | undefined;
       if (addedId) {
         try {
-          const list = (window as any)?.__exampliBoot?.subjectsAll as any[] | undefined;
-          const found = list?.find?.((s) => Number(s.id) === Number(addedId));
+          const boot: any = (window as any)?.__exampliBoot || {};
+          const listAll: any[] | undefined = boot?.subjectsAll;
+          const listUser: any[] | undefined = boot?.subjects;
+          let found = listAll?.find?.((s: any) => Number(s.id) === Number(addedId));
+          if (!found && Array.isArray(listUser)) found = listUser.find?.((s: any) => Number(s.id) === Number(addedId));
           if (found?.title) setCourse(String(found.title));
           if (found?.code) setCourseCode(String(found.code));
+          if (!found) {
+            const codeLs = (() => { try { return localStorage.getItem('exampli:activeSubjectCode'); } catch { return null; } })();
+            if (codeLs) setCourseCode(codeLs);
+          }
         } catch {}
       }
     })();
@@ -232,23 +239,23 @@ export default function Profile() {
       {/* Карточки/метрики ниже хиро */}
       {!editing ? (
         <>
-          {/* Верхняя строка: слева курс, справа друзья */}
+          {/* Верхняя строка: слева курс, справа друзья (без рамок/карт) */}
           <div className="w-full max-w-xl px-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3 text-left">
+              <div className="px-1 py-1 flex items-center gap-3 text-left">
                 {courseCode ? (
                   <img src={`/subjects/${courseCode}.svg`} alt="Курс" className="w-9 h-9 object-contain" />
                 ) : (
-                  <div className="w-9 h-9 grid place-items-center text-lg bg-white/10 rounded-xl">🧩</div>
+                  <div className="w-9 h-9 grid place-items-center text-lg">🧩</div>
                 )}
                 <div className="min-w-0">
                   <div className="text-xl font-extrabold truncate">{course || 'Курс'}</div>
                   <div className="text-sm text-muted">Курс</div>
                 </div>
               </div>
-              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center justify-between">
-                <div className="text-2xl font-extrabold tabular-nums">0</div>
-                <div className="text-sm text-muted">друзья</div>
+              <div className="px-1 py-1 flex flex-col items-end justify-center">
+                <div className="text-2xl font-extrabold tabular-nums leading-tight">0</div>
+                <div className="text-sm text-muted leading-tight">друзья</div>
               </div>
             </div>
           </div>
@@ -265,13 +272,13 @@ export default function Profile() {
           <div className="w-full max-w-xl px-3 mt-3">
             <div className="text-xs tracking-wide uppercase text-muted mb-2">Обзор</div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3">
-                <img src="/stickers/fire.svg" alt="Стрик" className="w-7 h-7" />
+              <div className="px-1 py-1 flex items-center gap-3">
+                <img src="/stickers/fire.svg" alt="Стрик" className="w-12 h-12" />
                 <div className="text-2xl font-extrabold tabular-nums">{u?.streak ?? 0}</div>
                 <div className="text-base">{(u?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
               </div>
-              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3 justify-end">
-                <img src="/stickers/coin_cat.svg" alt="coins" className="w-7 h-7" />
+              <div className="px-1 py-1 flex items-center gap-3 justify-end">
+                <img src="/stickers/coin_cat.svg" alt="coins" className="w-12 h-12" />
                 <div className="text-2xl font-extrabold tabular-nums">{u?.coins ?? 0}</div>
                 <div className="text-base">coin</div>
               </div>
