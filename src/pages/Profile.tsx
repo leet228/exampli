@@ -242,7 +242,7 @@ export default function Profile() {
           {/* Верхняя строка: слева курс, справа друзья (без рамок/карт) */}
           <div className="w-full max-w-xl px-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="px-0 py-1 flex flex-col items-start justify-center text-left">
+              <div className="px-0 py-1 flex flex-col items-center justify-center text-center justify-self-end">
                 {courseCode ? (
                   <img src={`/subjects/${courseCode}.svg`} alt="Курс" className="w-16 h-16 object-contain" />
                 ) : (
@@ -250,8 +250,8 @@ export default function Profile() {
                 )}
                 <div className="text-sm text-muted mt-1">Курс</div>
               </div>
-              <div className="px-0 py-1 flex justify-center">
-                <div className="ml-auto flex flex-col items-center justify-center">
+              <div className="px-0 py-1 flex justify-center justify-self-start">
+                <div className="ml-auto flex flex-col items-center justify-center -mt-1">
                   <div className="text-2xl font-extrabold tabular-nums leading-tight">0</div>
                   <div className="text-sm text-muted leading-tight">друзья</div>
                 </div>
