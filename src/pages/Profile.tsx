@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
@@ -11,6 +11,32 @@ export default function Profile() {
   const [bgIcon, setBgIcon] = useState<string>('bg_icon_cat');
   const [tempBgIcon, setTempBgIcon] = useState<string>('bg_icon_cat');
   const [iconsOpen, setIconsOpen] = useState<boolean>(false);
+  const iconsCloud = useMemo(() => {
+    // детерминированный генератор на основе выбранной иконки
+    const seedStr = String(tempBgIcon || 'seed');
+    let h = 2166136261;
+    for (let i = 0; i < seedStr.length; i++) {
+      h ^= seedStr.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    function rnd() {
+      // простое LCG
+      h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909);
+      const t = ((h ^= h >>> 16) >>> 0) / 4294967295;
+      return t;
+    }
+    const count = 18; // много маленьких значков
+    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const x = 4 + rnd() * 92; // 4..96%
+      const y = 6 + rnd() * 86; // 6..92%
+      const s = 0.55 + rnd() * 0.6; // масштаб 0.55..1.15 от 24px
+      const r = -15 + rnd() * 30;   // -15..15 deg
+      const o = 0.18 + rnd() * 0.18; // 0.18..0.36
+      items.push({ x, y, s, r, o });
+    }
+    return items;
+  }, [tempBgIcon]);
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -83,11 +109,9 @@ export default function Profile() {
     try {
       document.body.classList.add('profile-overscroll');
       document.documentElement.style.setProperty('--profile-bg', bg);
-      document.documentElement.style.setProperty('--profile-bg-icon', `url(/profile_icons/${tempBgIcon}.svg)`);
       return () => {
         document.body.classList.remove('profile-overscroll');
         document.documentElement.style.removeProperty('--profile-bg');
-        document.documentElement.style.removeProperty('--profile-bg-icon');
       };
     } catch { return; }
   }, [bg]);
@@ -118,21 +142,33 @@ export default function Profile() {
             background: bg,
           }}
         >
-          {/* декоративный слой повторяющихся иконок с затуханием к краям */}
+          {/* декоративный слой: много маленьких иконок, разбросанные по полю с сильным затуханием к краям */}
           <div
             aria-hidden
             className="absolute inset-0 pointer-events-none"
             style={{
-              backgroundImage: `var(--profile-bg-icon)` ,
-              backgroundRepeat: 'repeat',
-              backgroundSize: '72px 72px',
-              backgroundPosition: 'center',
-              maskImage: 'radial-gradient(90% 80% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.0) 100%)',
-              WebkitMaskImage: 'radial-gradient(90% 80% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.0) 100%)',
-              opacity: 0.28,
-              filter: 'blur(.15px)'
+              maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)',
+              WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)'
             }}
-          />
+          >
+            {iconsCloud.map((it, i) => (
+              <img
+                key={i}
+                src={`/profile_icons/${tempBgIcon}.svg`}
+                alt=""
+                style={{
+                  position: 'absolute',
+                  left: `${it.x}%`,
+                  top: `${it.y}%`,
+                  width: `${24 * it.s}px`,
+                  height: `${24 * it.s}px`,
+                  opacity: it.o,
+                  transform: `translate(-50%, -50%) rotate(${it.r}deg)`,
+                  filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))'
+                }}
+              />
+            ))}
+          </div>
           <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
           {/* Кнопка Изменить в правом верхнем углу (скрыта в режиме редактирования) */}
           {!editing && (
