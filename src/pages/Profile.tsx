@@ -242,7 +242,7 @@ export default function Profile() {
           {/* Верхняя строка: слева курс, справа друзья (без рамок/карт) */}
           <div className="w-full max-w-xl px-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
+              <div className="px-0 py-1 flex flex-col items-start justify-center text-left">
                 {courseCode ? (
                   <img src={`/subjects/${courseCode}.svg`} alt="Курс" className="w-16 h-16 object-contain" />
                 ) : (
@@ -250,9 +250,11 @@ export default function Profile() {
                 )}
                 <div className="text-sm text-muted mt-1">Курс</div>
               </div>
-              <div className="px-1 py-1 flex flex-col items-end justify-center">
-                <div className="text-2xl font-extrabold tabular-nums leading-tight">0</div>
-                <div className="text-sm text-muted leading-tight">друзья</div>
+              <div className="px-0 py-1 flex justify-center">
+                <div className="ml-auto flex flex-col items-center justify-center">
+                  <div className="text-2xl font-extrabold tabular-nums leading-tight">0</div>
+                  <div className="text-sm text-muted leading-tight">друзья</div>
+                </div>
               </div>
             </div>
           </div>
@@ -275,7 +277,7 @@ export default function Profile() {
                 <div className="text-base">{(u?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
               </div>
               <div className="px-1 py-1 flex items-center gap-3 justify-end">
-                <img src="/stickers/coin_cat.svg" alt="coins" className="w-12 h-12" />
+                <img src="/stickers/coin_cat.svg" alt="coins" className="w-10 h-10" />
                 <div className="text-2xl font-extrabold tabular-nums">{u?.coins ?? 0}</div>
                 <div className="text-base">coin</div>
               </div>
