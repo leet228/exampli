@@ -6,6 +6,7 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 export default function Profile() {
   const [u, setU] = useState<any>(null);
   const [course, setCourse] = useState<string>('Курс');
+  const [courseCode, setCourseCode] = useState<string | null>(null);
   const [bg, setBg] = useState<string>('#3280c2');
   const [baseBg, setBaseBg] = useState<string>('#3280c2');
   const [bgIcon, setBgIcon] = useState<string>('bg_icon_cat');
@@ -104,6 +105,7 @@ export default function Profile() {
           const list = (window as any)?.__exampliBoot?.subjectsAll as any[] | undefined;
           const found = list?.find?.((s) => Number(s.id) === Number(addedId));
           if (found?.title) setCourse(String(found.title));
+          if (found?.code) setCourseCode(String(found.code));
         } catch {}
       }
     })();
@@ -227,18 +229,53 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Карточки показателей */}
+      {/* Карточки/метрики ниже хиро */}
       {!editing ? (
         <>
-          <div className="grid grid-cols-3 gap-3 w-full max-w-xl px-1">
-            <div className="card"><div className="text-sm text-muted">🔥 Стрик</div><div className="text-xl font-bold">{u?.streak ?? 0}</div></div>
-            <div className="card"><div className="text-sm text-muted">⚡ Энергия</div><div className="text-xl font-bold">{u?.energy ?? 25}</div></div>
-            <div className="card"><div className="text-sm text-muted">💰 Коины</div><div className="text-xl font-bold">{u?.coins ?? 0}</div></div>
+          {/* Верхняя строка: слева курс, справа друзья */}
+          <div className="w-full max-w-xl px-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3 text-left">
+                {courseCode ? (
+                  <img src={`/subjects/${courseCode}.svg`} alt="Курс" className="w-9 h-9 object-contain" />
+                ) : (
+                  <div className="w-9 h-9 grid place-items-center text-lg bg-white/10 rounded-xl">🧩</div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-xl font-extrabold truncate">{course || 'Курс'}</div>
+                  <div className="text-sm text-muted">Курс</div>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center justify-between">
+                <div className="text-2xl font-extrabold tabular-nums">0</div>
+                <div className="text-sm text-muted">друзья</div>
+              </div>
+            </div>
           </div>
 
-          <div className="card w-full max-w-xl">
-            <div className="text-sm text-muted mb-1">Текущий курс</div>
-            <div className="font-semibold">{course}</div>
+          {/* Кнопка «Добавить друзей» */}
+          <div className="w-full max-w-xl px-3">
+            <button type="button" className="w-full rounded-3xl px-4 py-4 bg-white/5 border border-white/10 flex items-center justify-center gap-2 font-semibold">
+              <span className="text-lg">👤＋</span>
+              <span>Добавить друзей</span>
+            </button>
+          </div>
+
+          {/* Обзор */}
+          <div className="w-full max-w-xl px-3 mt-3">
+            <div className="text-xs tracking-wide uppercase text-muted mb-2">Обзор</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3">
+                <img src="/stickers/fire.svg" alt="Стрик" className="w-7 h-7" />
+                <div className="text-2xl font-extrabold tabular-nums">{u?.streak ?? 0}</div>
+                <div className="text-base">{(u?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
+              </div>
+              <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3 justify-end">
+                <img src="/stickers/coin_cat.svg" alt="coins" className="w-7 h-7" />
+                <div className="text-2xl font-extrabold tabular-nums">{u?.coins ?? 0}</div>
+                <div className="text-base">coin</div>
+              </div>
+            </div>
           </div>
         </>
       ) : (
