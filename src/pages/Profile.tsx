@@ -243,9 +243,10 @@ export default function Profile() {
         </>
       ) : (
         <>
-          {/* Палитра цветов */}
+          {/* Палитра цветов + градиенты в одной панели */}
           <div className="w-full max-w-xl px-3">
             <div className="rounded-2xl bg-white/5 border border-white/10 p-3 overflow-hidden">
+              {/* сплошные цвета */}
               <div className="grid grid-cols-8 gap-2 place-items-center">
                 {colors.map((c) => (
                   <motion.button
@@ -262,13 +263,8 @@ export default function Profile() {
                   </motion.button>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Градиенты: кружочки пополам; при выборе — плавный градиент на фоне */}
-          <div className="w-full max-w-xl px-3 mt-3">
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 overflow-hidden">
-              <div className="grid grid-cols-8 gap-2 place-items-center">
+              {/* градиенты */}
+              <div className="mt-2 grid grid-cols-8 gap-2 place-items-center">
                 {gradientPairs.map(([top, bottom]) => {
                   const previewSplit = `linear-gradient(180deg, ${top} 0%, ${top} 50%, ${bottom} 50%, ${bottom} 100%)`;
                   const valueGrad = `linear-gradient(135deg, ${top} 0%, ${bottom} 100%)`;
@@ -300,7 +296,6 @@ export default function Profile() {
               >
                 <div className="text-left">
                   <div className="text-sm font-semibold">Иконки профиля</div>
-                  <div className="text-xs text-white/70">Укрась фон повторяющимися значками</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src={`/profile_icons/${tempBgIcon}.svg`} alt="" className="w-7 h-7 rounded-md" />
