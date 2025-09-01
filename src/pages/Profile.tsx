@@ -132,10 +132,10 @@ export default function Profile() {
               <div
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
                 style={{
-                  width: 220,
-                  height: 220,
+                  width: 300,
+                  height: 300,
                   borderRadius: '50%',
-                  background: 'radial-gradient(closest-side, rgba(255,255,255,0.22), rgba(255,255,255,0) 72%)',
+                  background: 'radial-gradient(closest-side, rgba(255,255,255,0.32), rgba(255,255,255,0) 80%)',
                   zIndex: 0,
                 }}
               />
