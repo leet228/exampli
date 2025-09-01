@@ -12,13 +12,16 @@ export default function Profile() {
   const [tempBgIcon, setTempBgIcon] = useState<string>('bg_icon_cat');
   const [iconsOpen, setIconsOpen] = useState<boolean>(false);
   const iconsCloud = useMemo(() => {
-    // Симметричная раскладка 18 иконок: 5 рядов (4,3,4,3,4)
+    // Симметричная раскладка 18 иконок: ряды 2,3,2,4,2,3,2
+    // Центральный ряд (4) имеет «дырку» по центру, чтобы не наезжать на аватар
     const rows: { y: number; xs: number[] }[] = [
-      { y: 18, xs: [16, 38, 62, 84] },
-      { y: 34, xs: [26, 50, 74] },
-      { y: 50, xs: [16, 38, 62, 84] },
-      { y: 66, xs: [26, 50, 74] },
-      { y: 82, xs: [16, 38, 62, 84] },
+      { y: 16, xs: [28, 72] },            // 2
+      { y: 30, xs: [18, 50, 82] },        // 3 (выше аватарки — центр допустим)
+      { y: 44, xs: [28, 72] },            // 2
+      { y: 58, xs: [14, 34, 66, 86] },    // 4 (без иконки у центра)
+      { y: 72, xs: [28, 72] },            // 2
+      { y: 86, xs: [18, 50, 82] },        // 3
+      { y: 92, xs: [28, 72] },            // 2
     ];
     const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
     rows.forEach((row) => {
