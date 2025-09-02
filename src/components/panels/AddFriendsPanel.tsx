@@ -195,7 +195,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="fixed left-6 bottom-[90px] px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-center whitespace-nowrap"
+              className="fixed left-10 bottom-[90px] px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-center whitespace-nowrap"
               style={{ pointerEvents: 'none' }}
             >
               {toast}
