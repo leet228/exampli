@@ -27,6 +27,19 @@ export default function FriendsPanel({ open, onClose }: Props) {
     if (!myId) return;
     setLoadingInv(true);
     try {
+      // 1) Пробуем безопасный RPC (обходит RLS)
+      const rpc = await supabase.rpc('rpc_friend_incoming', { caller: myId } as any);
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        const arr = (rpc.data as any[]).map((r) => ({
+          other_id: r.other_id || r.friend_id || r.a_id || r.b_id,
+          first_name: r.first_name ?? null,
+          username: r.username ?? null,
+        }));
+        setInvites(arr.filter(x => x.other_id && x.other_id !== myId));
+        return;
+      }
+      // 2) Фолбэк на прямой select (если RLS выключен или настроен)
+      if (rpc.error) { try { console.warn('rpc_friend_incoming failed', rpc.error); } catch {} }
       const { data: links, error } = await supabase
         .from('friend_links')
         .select('a_id,b_id,requester_id,status')
@@ -34,7 +47,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
         .neq('requester_id', myId)
         .or(`a_id.eq.${myId},b_id.eq.${myId}`)
         .limit(50);
-      if (error || !Array.isArray(links)) { setInvites([]); return; }
+      if (error || !Array.isArray(links)) { if (error) { try { console.warn('select friend_links failed', error); } catch {} } setInvites([]); return; }
       const ids = Array.from(new Set((links as any[]).map(l => (l.a_id === myId ? l.b_id : l.a_id)).filter(Boolean)));
       if (!ids.length) { setInvites([]); return; }
       const { data: profs } = await supabase
