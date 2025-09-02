@@ -114,6 +114,23 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   } catch {}
   step(++i, TOTAL);
 
+  // 2e) список друзей для кэша и boot
+  try {
+    const r = await supabase.rpc('rpc_friend_list', { caller: userRow?.id } as any);
+    if (!r.error && Array.isArray(r.data)) {
+      const list = (r.data as any[]).map(p => ({
+        user_id: p.user_id || p.friend_id,
+        first_name: p.first_name ?? null,
+        username: p.username ?? null,
+        background_color: p.background_color ?? null,
+        background_icon: p.background_icon ?? null,
+      }));
+      cacheSet(CACHE_KEYS.friendsList, list);
+      try { (window as any).__exampliBootFriends = list; } catch {}
+    }
+  } catch {}
+  step(++i, TOTAL);
+
   // 2c) профиль пользователя (цвет/иконка/телефон/имя)
   let userProfile: BootData['userProfile'] = null;
   try {
@@ -295,6 +312,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     stats,
     userProfile,
     friendsCount: friendsCountBoot ?? undefined,
+    // список друзей покладём рядом в window и кэш, чтобы не раздувать boot сильно
     subjects: subjectsArr,
     lessons: lessonsArr,
     subjectsAll,

@@ -43,6 +43,7 @@ export const CACHE_KEYS = {
   subjectsAll: 'subjects_all',
   userProfile: 'user_profile',
   friendsCount: 'friends_count',
+  friendsList: 'friends_list',
   subjectByCode: (code: string) => `subject_code:${code}`,
   lessonsByCode: (code: string) => `lessons_code:${code}`,
 };

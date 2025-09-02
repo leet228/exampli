@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSlideReveal, hapticSlideClose, hapticSelect } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 
 type Props = {
   open: boolean;
@@ -16,7 +17,15 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }, []);
   const [loadingInv, setLoadingInv] = useState<boolean>(false);
   const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null }>>([]);
-  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null }>>([]);
+  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null }>>(() => {
+    try {
+      const fromBoot = (window as any)?.__exampliBootFriends as any[] | undefined;
+      if (Array.isArray(fromBoot) && fromBoot.length) return fromBoot as any;
+      const cached = cacheGet<any[]>(CACHE_KEYS.friendsList);
+      if (Array.isArray(cached)) return cached as any;
+    } catch {}
+    return [];
+  });
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
 
   useEffect(() => {
@@ -135,6 +144,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
         };
       });
       setFriends(rows);
+      try { cacheSet(CACHE_KEYS.friendsList, rows); (window as any).__exampliBootFriends = rows; } catch {}
     } finally { setLoadingFriends(false); }
   }
 
