@@ -53,6 +53,7 @@ export default function Profile() {
   const [sel, setSel] = useState<string>('');
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
   const [addFriendsOpen, setAddFriendsOpen] = useState<boolean>(false);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
 
   useEffect(() => {
     (async () => {
@@ -120,6 +121,30 @@ export default function Profile() {
         } catch {}
       }
     })();
+  }, []);
+
+  // загрузка количества друзей
+  useEffect(() => {
+    async function loadFriendsCount() {
+      try {
+        const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
+        if (!uid) return;
+        const { count } = await supabase
+          .from('friend_links')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'accepted')
+          .or(`a_id.eq.${uid},b_id.eq.${uid}`);
+        setFriendsCount(count || 0);
+      } catch {}
+    }
+    void loadFriendsCount();
+  }, [u]);
+
+  // подписка на локальные изменения количества друзей
+  useEffect(() => {
+    const handler = (e: any) => { try { setFriendsCount(Math.max(0, Number(e?.detail?.count) || 0)); } catch {} };
+    try { window.addEventListener('exampli:friendsChanged', handler as any); } catch {}
+    return () => { try { window.removeEventListener('exampli:friendsChanged', handler as any); } catch {} };
   }, []);
 
   // тянем фон панели выше экрана при скролле: меняем body::before цвет
@@ -261,7 +286,7 @@ export default function Profile() {
                   className="ml-auto flex flex-col items-center justify-center active:opacity-80"
                   style={{ cursor: 'pointer' }}
                 >
-                  <div className="text-2xl font-extrabold tabular-nums leading-tight">0</div>
+                  <div className="text-2xl font-extrabold tabular-nums leading-tight">{friendsCount}</div>
                   <div className="text-sm text-muted leading-tight mt-1">друзья</div>
                 </button>
               </div>
