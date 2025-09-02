@@ -18,34 +18,41 @@ export async function ensureUser(): Promise<UserStats | null> {
   const tgId = getTgId();
   if (!tgId) return null;
   // найдём пользователя
-  const { data: user } = await supabase.from('users').select('*').eq('tg_id', tgId).single();
+  const { data: user, error: selErr } = await supabase.from('users').select('*').eq('tg_id', tgId).maybeSingle();
+  if (selErr) { try { console.error('[ensureUser] select users error', selErr); } catch {} }
   if (!user) {
     const tgUser = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user;
     // определим таймзону браузера (IANA: Europe/Moscow и т.п.)
     let timezone: string | null = null;
     try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch {}
-    const { data: created } = await supabase.from('users').insert({
-      tg_id: tgId,
-      username: tgUser?.username,
-      first_name: tgUser?.first_name,
-      last_name: tgUser?.last_name,
-      timezone,
-      // новые поля по умолчанию
-      energy: 25,
-      coins: 500,
-    }).select('*').single();
+    // upsert по tg_id — безопаснее при повторных заходах/гонках
+    const { data: created, error: insErr } = await supabase
+      .from('users')
+      .upsert({
+        tg_id: tgId,
+        username: tgUser?.username,
+        first_name: tgUser?.first_name,
+        last_name: tgUser?.last_name,
+        timezone,
+        // дефолты при первом создании
+        energy: 25,
+        coins: 500,
+      }, { onConflict: 'tg_id' })
+      .select('*')
+      .single();
+    if (insErr) { try { console.error('[ensureUser] upsert users error', insErr); } catch {} }
     // создать профиль пользователя с дефолтами
     try {
       const uid = (created as any)?.id;
       if (uid) {
-        await supabase.from('user_profile').insert({
+        await supabase.from('user_profile').upsert({
           user_id: uid,
           first_name: tgUser?.first_name ?? null,
           username: tgUser?.username ?? null,
           phone_number: null,
           background_color: '#3280c2',
           background_icon: 'bg_icon_cat',
-        });
+        }, { onConflict: 'user_id' });
       }
     } catch (e) { try { console.warn('user_profile insert failed', e); } catch {} }
     try { (window as any).__exampliNewUserCreated = true; } catch {}
