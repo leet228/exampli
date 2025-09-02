@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import BottomSheet from '../sheets/BottomSheet';
 import { supabase } from '../../lib/supabase';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { hapticSelect } from '../../lib/haptics';
 
 type Props = { open: boolean; onClose: () => void };
@@ -16,7 +17,16 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<Array<{ user_id: string; first_name: string | null; username: string | null }>>([]);
   const [pending, setPending] = useState<Record<string, 'pending' | 'accepted'>>({});
-  const [statusById, setStatusById] = useState<Record<string, 'friend'>>({});
+  const [statusById, setStatusById] = useState<Record<string, 'friend'>>(() => {
+    try {
+      const list = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
+      const m: Record<string, 'friend'> = {};
+      list.forEach((f: any) => { if (f?.user_id) m[f.user_id] = 'friend'; });
+      const sent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
+      Object.keys(sent).forEach(k => { if (sent[k]) m[k] = 'friend'; });
+      return m;
+    } catch { return {}; }
+  });
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,7 +66,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               .eq('b_id', myId)
               .in('a_id', ids);
             const all = ([] as any[]).concat(l1.data || [], l2.data || []);
-            const map: Record<string, 'friend'> = {};
+            const map: Record<string, 'friend'> = { ...statusById };
             all.forEach((ln: any) => {
               const other = ln.a_id === myId ? ln.b_id : ln.a_id;
               if (!other) return;
@@ -85,6 +95,11 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       }
       if (error) { console.warn('friend_request failed', error); throw error; }
       setStatusById(s => ({ ...s, [targetId]: 'friend' }));
+      try {
+        const sent = (cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {});
+        sent[targetId] = true;
+        cacheSet(CACHE_KEYS.friendsPendingSent, sent);
+      } catch {}
       setSearchOpen(false);
       setToast('Приглашение отправлено');
       setTimeout(() => setToast(null), 1800);
@@ -170,7 +185,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="fixed left-1/2 -translate-x-1/2 bottom-[90px] px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-sm"
+              className="fixed left-1/2 -translate-x-1/2 bottom-[90px] px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-center"
               style={{ pointerEvents: 'none' }}
             >
               {toast}

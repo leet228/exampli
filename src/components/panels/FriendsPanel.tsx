@@ -84,6 +84,12 @@ export default function FriendsPanel({ open, onClose }: Props) {
       if (!error) {
         setInvites(list => list.filter(x => x.other_id !== otherId));
         await loadFriends();
+        // кэш исходящих pending очистим для этого пользователя
+        try {
+          const sent = (cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {});
+          delete (sent as any)[otherId];
+          cacheSet(CACHE_KEYS.friendsPendingSent, sent);
+        } catch {}
       }
     } catch {}
   }
