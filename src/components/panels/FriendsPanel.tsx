@@ -47,8 +47,8 @@ export default function FriendsPanel({ open, onClose }: Props) {
           )}
         </AnimatePresence>
 
-        {/* Список друзей — сразу под кнопкой/панелью приглашений, собственный скролл */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-3" style={{ minHeight: 200, maxHeight: '50dvh', overflow: 'auto' }}>
+        {/* Список друзей — сразу под кнопкой/панелью приглашений, собственный скролл (без обводки/фона) */}
+        <div className="no-scrollbar" style={{ minHeight: 200, maxHeight: '50dvh', overflow: 'auto' }}>
           {/* TODO: список друзей */}
           <div className="text-sm text-white/70 mb-2">Здесь будут друзья</div>
           <div className="flex flex-col gap-2">
