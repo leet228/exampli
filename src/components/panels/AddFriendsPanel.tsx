@@ -89,7 +89,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         </button>
 
         {/* Шторка поиска снизу */}
-        <BottomSheet open={searchOpen} onClose={() => setSearchOpen(false)} title="Поиск по имени">
+        <BottomSheet open={searchOpen} onClose={() => setSearchOpen(false)} title="Поиск по имени" minHeightVh={70}>
           <div className="px-1 py-1">
             <input
               value={q}

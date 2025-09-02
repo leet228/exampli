@@ -9,9 +9,10 @@ type BottomSheetProps = {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  minHeightVh?: number; // минимальная высота шторки в процентах экрана (например, 65)
 };
 
-export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+export default function BottomSheet({ open, onClose, title, children, minHeightVh }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   // Не трогаем Telegram BackButton здесь, чтобы не гасить его у родительской полноэкранной панели
 
@@ -57,7 +58,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             onDragEnd={(_, info) => {
               if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
             }}
-            style={{ zIndex: 101 }}
+            style={{ zIndex: 101, minHeight: typeof minHeightVh === 'number' ? `${Math.max(0, Math.min(100, minHeightVh))}dvh` : undefined }}
           >
             {title ? (
               <div className="px-5 pt-3 pb-2 border-b border-white/10">
