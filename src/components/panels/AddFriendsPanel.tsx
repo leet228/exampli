@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import BottomSheet from '../sheets/BottomSheet';
 import { supabase } from '../../lib/supabase';
@@ -16,6 +16,8 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<Array<{ user_id: string; first_name: string | null; username: string | null }>>([]);
   const [pending, setPending] = useState<Record<string, 'pending' | 'accepted'>>({});
+  const [statusById, setStatusById] = useState<Record<string, 'friend'>>({});
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) { setSearchOpen(false); setQ(''); setRows([]); setPending({}); }
@@ -39,6 +41,32 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       if (!error && Array.isArray(data)) {
         const filtered = data.filter(r => r.user_id && r.user_id !== myId);
         setRows(filtered as any);
+        // загрузим статусы для этих пользователей
+        try {
+          const ids = filtered.map(r => r.user_id) as string[];
+          if (ids.length) {
+            const l1 = await supabase
+              .from('friend_links')
+              .select('a_id,b_id,status,requester_id')
+              .eq('a_id', myId)
+              .in('b_id', ids);
+            const l2 = await supabase
+              .from('friend_links')
+              .select('a_id,b_id,status,requester_id')
+              .eq('b_id', myId)
+              .in('a_id', ids);
+            const all = ([] as any[]).concat(l1.data || [], l2.data || []);
+            const map: Record<string, 'friend'> = {};
+            all.forEach((ln: any) => {
+              const other = ln.a_id === myId ? ln.b_id : ln.a_id;
+              if (!other) return;
+              if (ln.status === 'accepted' || ln.status === 'pending') map[other] = 'friend';
+            });
+            setStatusById(map);
+          } else {
+            setStatusById({});
+          }
+        } catch {}
       } else {
         setRows([]);
       }
@@ -56,6 +84,10 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         error = r2.error;
       }
       if (error) { console.warn('friend_request failed', error); throw error; }
+      setStatusById(s => ({ ...s, [targetId]: 'friend' }));
+      setSearchOpen(false);
+      setToast('Приглашение отправлено');
+      setTimeout(() => setToast(null), 1800);
     } catch {
       setPending(p => { const cp = { ...p }; delete cp[targetId]; return cp; });
     }
@@ -114,8 +146,8 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
                     </div>
                   </div>
                   <div>
-                    {pending[r.user_id] === 'pending' ? (
-                      <div className="text-sm text-white/60">Отправлено</div>
+                    {pending[r.user_id] === 'pending' || statusById[r.user_id] === 'friend' ? (
+                      <div className="text-sm text-white/60">Друг</div>
                     ) : (
                       <button
                         type="button"
@@ -131,6 +163,20 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
             </div>
           </div>
         </BottomSheet>
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="fixed left-1/2 -translate-x-1/2 bottom-[90px] px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-sm"
+              style={{ pointerEvents: 'none' }}
+            >
+              {toast}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </FullScreenSheet>
   );
