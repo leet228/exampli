@@ -136,9 +136,15 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     let sentMap: Record<string, boolean> = {};
     // 2f.1 читаем из базы все мои исходящие pending через RPC (обходит RLS)
     if (userRow?.id) {
-      const r = await supabase.rpc('rpc_friend_pending_sent', { caller: userRow.id } as any);
+      // берём исходящие pending и заодно подтверждённые, чтобы очистить локальный pending
+      const r = await supabase.rpc('rpc_friend_status_list', { caller: userRow.id, others: null } as any);
       if (!r.error && Array.isArray(r.data)) {
-        (r.data as any[]).forEach((row) => { const id = (row as any)?.other_id; if (id) sentMap[id] = true; });
+        (r.data as any[]).forEach((row) => {
+          const id = (row as any)?.other_id;
+          const st = String((row as any)?.status || '').toLowerCase();
+          if (!id) return;
+          if (st === 'pending') sentMap[id] = true;
+        });
       }
     }
     // 2f.2 мерджим с локальным кэшем (чтобы не терять локальные отметки)

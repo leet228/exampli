@@ -58,14 +58,31 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       if (!error && Array.isArray(data)) {
         const filtered = data.filter(r => r.user_id && r.user_id !== myId);
         setRows(filtered as any);
-        // обновим статусы из кэша (accepted) и локальные pending
+        // обновим статусы из кэша и серверные статусы (через RPC, если доступен)
         try {
           const list = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
           const m: Record<string, 'friend'> = {};
           list.forEach((f: any) => { if (f?.user_id) m[f.user_id] = 'friend'; });
+          let sent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
+          // пробуем RPC, чтобы снять устаревшие pending и отметить accepted
+          const ids = filtered.map(r => r.user_id) as string[];
+          if (ids.length) {
+            const resp = await supabase.rpc('rpc_friend_status_list', { caller: myId, others: ids } as any);
+            if (!resp.error && Array.isArray(resp.data)) {
+              const nextSent: Record<string, boolean> = { ...sent };
+              (resp.data as any[]).forEach((row) => {
+                const oid = (row as any)?.other_id;
+                const st = String((row as any)?.status || '').toLowerCase();
+                if (!oid) return;
+                if (st === 'accepted') { m[oid] = 'friend'; delete nextSent[oid]; }
+                else if (st === 'pending') { nextSent[oid] = true; }
+              });
+              sent = nextSent;
+            }
+          }
           setStatusById(m);
-          const sent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
           setPendingLocal(sent);
+          cacheSet(CACHE_KEYS.friendsPendingSent, sent);
         } catch {}
       } else {
         setRows([]);
