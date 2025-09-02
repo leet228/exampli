@@ -758,6 +758,7 @@ body.profile-overscroll::before {
     /* Современные браузеры */
     -webkit-touch-callout: none;
     /* Убирает контекстное меню iOS */
+    touch-action: manipulation;
 }
 
 
