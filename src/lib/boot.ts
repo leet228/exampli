@@ -1,7 +1,7 @@
 // src/lib/boot.ts
 import { supabase } from './supabase';
 import { ensureUser } from './userState';
-import { cacheSet, CACHE_KEYS } from './cache';
+import { cacheSet, cacheGet, CACHE_KEYS } from './cache';
 
 export type SubjectRow = {
   id: number;
@@ -130,6 +130,25 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     }
   } catch {}
   step(++i, TOTAL);
+
+  // 2f) pending отправленные мной — восстановим из локального кэша в boot
+  try {
+    let sentMap: Record<string, boolean> = {};
+    // 2f.1 читаем из базы все мои исходящие pending через RPC (обходит RLS)
+    if (userRow?.id) {
+      const r = await supabase.rpc('rpc_friend_pending_sent', { caller: userRow.id } as any);
+      if (!r.error && Array.isArray(r.data)) {
+        (r.data as any[]).forEach((row) => { const id = (row as any)?.other_id; if (id) sentMap[id] = true; });
+      }
+    }
+    // 2f.2 мерджим с локальным кэшем (чтобы не терять локальные отметки)
+    try {
+      const localSent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
+      sentMap = { ...localSent, ...sentMap };
+    } catch {}
+    cacheSet(CACHE_KEYS.friendsPendingSent, sentMap);
+    (window as any).__exampliBootFriendsPending = sentMap;
+  } catch {}
 
   // 2c) профиль пользователя (цвет/иконка/телефон/имя)
   let userProfile: BootData['userProfile'] = null;

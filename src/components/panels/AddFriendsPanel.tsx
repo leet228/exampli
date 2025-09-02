@@ -22,9 +22,16 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       const list = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
       const m: Record<string, 'friend'> = {};
       list.forEach((f: any) => { if (f?.user_id) m[f.user_id] = 'friend'; });
-      const sent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
-      Object.keys(sent).forEach(k => { if (sent[k]) m[k] = 'friend'; });
       return m;
+    } catch { return {}; }
+  });
+  const [pendingLocal, setPendingLocal] = useState<Record<string, boolean>>(() => {
+    try {
+      const cached = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent);
+      if (cached && typeof cached === 'object') return cached;
+      const bootP = (window as any)?.__exampliBootFriendsPending;
+      if (bootP && typeof bootP === 'object') return bootP as Record<string, boolean>;
+      return {};
     } catch { return {}; }
   });
   const [toast, setToast] = useState<string | null>(null);
@@ -51,31 +58,14 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       if (!error && Array.isArray(data)) {
         const filtered = data.filter(r => r.user_id && r.user_id !== myId);
         setRows(filtered as any);
-        // загрузим статусы для этих пользователей
+        // обновим статусы из кэша (accepted) и локальные pending
         try {
-          const ids = filtered.map(r => r.user_id) as string[];
-          if (ids.length) {
-            const l1 = await supabase
-              .from('friend_links')
-              .select('a_id,b_id,status,requester_id')
-              .eq('a_id', myId)
-              .in('b_id', ids);
-            const l2 = await supabase
-              .from('friend_links')
-              .select('a_id,b_id,status,requester_id')
-              .eq('b_id', myId)
-              .in('a_id', ids);
-            const all = ([] as any[]).concat(l1.data || [], l2.data || []);
-            const map: Record<string, 'friend'> = { ...statusById };
-            all.forEach((ln: any) => {
-              const other = ln.a_id === myId ? ln.b_id : ln.a_id;
-              if (!other) return;
-              if (ln.status === 'accepted' || ln.status === 'pending') map[other] = 'friend';
-            });
-            setStatusById(map);
-          } else {
-            setStatusById({});
-          }
+          const list = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
+          const m: Record<string, 'friend'> = {};
+          list.forEach((f: any) => { if (f?.user_id) m[f.user_id] = 'friend'; });
+          setStatusById(m);
+          const sent = cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {};
+          setPendingLocal(sent);
         } catch {}
       } else {
         setRows([]);
@@ -99,6 +89,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         const sent = (cacheGet<Record<string, boolean>>(CACHE_KEYS.friendsPendingSent) || {});
         sent[targetId] = true;
         cacheSet(CACHE_KEYS.friendsPendingSent, sent);
+        setPendingLocal(sent);
       } catch {}
       setSearchOpen(false);
       setToast('Приглашение отправлено');
@@ -161,7 +152,9 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
                     </div>
                   </div>
                   <div>
-                    {pending[r.user_id] === 'pending' || statusById[r.user_id] === 'friend' ? (
+                    {pending[r.user_id] === 'pending' || pendingLocal[r.user_id] ? (
+                      <div className="text-sm text-white/60">Отправлено</div>
+                    ) : statusById[r.user_id] === 'friend' ? (
                       <div className="text-sm text-white/60">Друг</div>
                     ) : (
                       <button
@@ -185,7 +178,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="fixed left-1/2 -translate-x-1/2 bottom-[90px] px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-center"
+              className="fixed left-1/2 -translate-x-1/2 bottom-[90px] px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-center whitespace-nowrap"
               style={{ pointerEvents: 'none' }}
             >
               {toast}
