@@ -92,6 +92,22 @@ export default function FriendsPanel({ open, onClose }: Props) {
     if (!myId) return;
     setLoadingFriends(true);
     try {
+      // 1) Пытаемся получить через RPC, чтобы RLS не мешал
+      const rpc = await supabase.rpc('rpc_friend_list', { caller: myId } as any);
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        const rows = (rpc.data as any[]).map((p) => ({
+          user_id: p.user_id || p.friend_id,
+          first_name: p.first_name ?? null,
+          username: p.username ?? null,
+          background_color: p.background_color ?? null,
+          background_icon: p.background_icon ?? null,
+        }));
+        setFriends(rows.filter(r => r.user_id));
+        try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: rows.length } })); } catch {}
+        return;
+      }
+      if (rpc.error) { try { console.warn('rpc_friend_list failed', rpc.error); } catch {} }
+      // 2) Фолбэк на прямой select (если RLS выключен)
       const { data: links, error } = await supabase
         .from('friend_links')
         .select('a_id,b_id,status')
