@@ -51,7 +51,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
 
   // план шагов:
   // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
-  const TOTAL = 11;
+  const TOTAL = 12;
   let i = 0;
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
@@ -91,6 +91,17 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     energy: userRow?.energy ?? 25,
     coins: userRow?.coins ?? 500,
   };
+  step(++i, TOTAL);
+
+  // 2d) количество друзей — кэшируем без TTL
+  try {
+    const { count } = await supabase
+      .from('friend_links')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`a_id.eq.${userRow?.id},b_id.eq.${userRow?.id}`);
+    cacheSet(CACHE_KEYS.friendsCount, Number(count || 0));
+  } catch {}
   step(++i, TOTAL);
 
   // 2c) профиль пользователя (цвет/иконка/телефон/имя)

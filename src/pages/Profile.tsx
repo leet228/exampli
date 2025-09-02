@@ -53,7 +53,9 @@ export default function Profile() {
   const [sel, setSel] = useState<string>('');
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
   const [addFriendsOpen, setAddFriendsOpen] = useState<boolean>(false);
-  const [friendsCount, setFriendsCount] = useState<number>(0);
+  const [friendsCount, setFriendsCount] = useState<number>(() => {
+    try { return Number(cacheGet<number>(CACHE_KEYS.friendsCount) || 0); } catch { return 0; }
+  });
 
   useEffect(() => {
     (async () => {
@@ -134,7 +136,9 @@ export default function Profile() {
           .select('id', { count: 'exact', head: true })
           .eq('status', 'accepted')
           .or(`a_id.eq.${uid},b_id.eq.${uid}`);
-        setFriendsCount(count || 0);
+        const next = count || 0;
+        setFriendsCount(next);
+        try { cacheSet(CACHE_KEYS.friendsCount, next); } catch {}
       } catch {}
     }
     void loadFriendsCount();
@@ -142,7 +146,13 @@ export default function Profile() {
 
   // подписка на локальные изменения количества друзей
   useEffect(() => {
-    const handler = (e: any) => { try { setFriendsCount(Math.max(0, Number(e?.detail?.count) || 0)); } catch {} };
+    const handler = (e: any) => {
+      try {
+        const next = Math.max(0, Number(e?.detail?.count) || 0);
+        setFriendsCount(next);
+        cacheSet(CACHE_KEYS.friendsCount, next);
+      } catch {}
+    };
     try { window.addEventListener('exampli:friendsChanged', handler as any); } catch {}
     return () => { try { window.removeEventListener('exampli:friendsChanged', handler as any); } catch {} };
   }, []);
