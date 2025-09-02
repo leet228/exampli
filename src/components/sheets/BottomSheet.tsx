@@ -13,23 +13,7 @@ type BottomSheetProps = {
 
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  // Telegram BackButton
-  useEffect(() => {
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (!tg) return;
-    if (open) {
-      tg.BackButton?.show?.();
-      const handler = () => { 
-        hapticTiny();        // ← вибрация как у обычной кнопки
-        onClose(); 
-      };
-      tg.BackButton?.onClick?.(handler);
-      return () => {
-        try { tg.BackButton?.offClick?.(handler); } catch {}
-        tg.BackButton?.hide?.();
-      };
-    }
-  }, [open, onClose]);
+  // Не трогаем Telegram BackButton здесь, чтобы не гасить его у родительской полноэкранной панели
 
   // Лочим фон, чтобы не прокручивался за шторкой
   useEffect(() => {
@@ -56,6 +40,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            style={{ zIndex: 100 }}
           />
           <motion.div
             className="sheet-panel"
@@ -72,6 +57,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             onDragEnd={(_, info) => {
               if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
             }}
+            style={{ zIndex: 101 }}
           >
             {title ? (
               <div className="px-5 pt-3 pb-2 border-b border-white/10">
