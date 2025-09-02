@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
+import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 
 export default function Profile() {
@@ -51,6 +52,7 @@ export default function Profile() {
   ];
   const [sel, setSel] = useState<string>('');
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
+  const [addFriendsOpen, setAddFriendsOpen] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
@@ -268,7 +270,7 @@ export default function Profile() {
 
           {/* Кнопка «Добавить друзей» */}
           <div className="w-full max-w-xl px-3">
-            <button type="button" className="w-full rounded-3xl px-4 py-4 bg-white/5 border border-white/10 flex items-center justify-center gap-2 font-semibold">
+            <button type="button" onClick={() => setAddFriendsOpen(true)} className="w-full rounded-3xl px-4 py-4 bg-white/5 border border-white/10 flex items-center justify-center gap-2 font-semibold">
               <span className="text-lg">👤＋</span>
               <span>Добавить друзей</span>
             </button>
@@ -426,6 +428,8 @@ export default function Profile() {
       )}
       {/* Панель друзей как отдельный полноэкранный компонент */}
       <FriendsPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} />
+      {/* Панель добавления друзей */}
+      <AddFriendsPanel open={addFriendsOpen} onClose={() => setAddFriendsOpen(false)} />
     </div>
   );
 }
