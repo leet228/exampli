@@ -55,9 +55,11 @@ export default function Profile() {
   const [addFriendsOpen, setAddFriendsOpen] = useState<boolean>(false);
   const [friendsCount, setFriendsCount] = useState<number>(() => {
     try {
+      const cached = cacheGet<number>(CACHE_KEYS.friendsCount);
+      if (typeof cached === 'number') return Number(cached);
       const bootCount = (window as any)?.__exampliBoot?.friendsCount;
       if (typeof bootCount === 'number') return bootCount;
-      return Number(cacheGet<number>(CACHE_KEYS.friendsCount) || 0);
+      return 0;
     } catch { return 0; }
   });
 
@@ -139,6 +141,11 @@ export default function Profile() {
         const next = Math.max(0, Number(e?.detail?.count) || 0);
         setFriendsCount(next);
         cacheSet(CACHE_KEYS.friendsCount, next);
+        try {
+          const boot: any = (window as any).__exampliBoot || {};
+          boot.friendsCount = next;
+          (window as any).__exampliBoot = boot;
+        } catch {}
       } catch {}
     };
     try { window.addEventListener('exampli:friendsChanged', handler as any); } catch {}
