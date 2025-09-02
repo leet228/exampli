@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import FriendsPanel from '../components/panels/FriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 
 export default function Profile() {
@@ -50,7 +51,6 @@ export default function Profile() {
   ];
   const [sel, setSel] = useState<string>('');
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
-  const [invitesOpen, setInvitesOpen] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
@@ -424,58 +424,8 @@ export default function Profile() {
           </div>
         </>
       )}
-      {/* Правый выезжающий ящик Друзья */}
-      <motion.div
-        initial={false}
-        animate={{ x: friendsOpen ? 0 : '100%' }}
-        transition={{ type: 'tween', duration: 0.25 }}
-        className="fixed top-0 right-0 bottom-0"
-        style={{ width: '88vw', maxWidth: 520, zIndex: 50, pointerEvents: friendsOpen ? 'auto' : 'none' }}
-      >
-        <div className="relative h-full border-l border-white/10 bg-[#0b0f14]/95 backdrop-blur-md text-left" style={{ boxShadow: '-8px 0 24px rgba(0,0,0,0.35)' }}>
-          {/* Внутренний отступ под HUD/статус */}
-          <div className="w-full" style={{ paddingTop: 'calc(var(--hud-top) + var(--hud-h) + 8px)' }}>
-            {/* Шапка панели */}
-            <div className="px-4 pb-2">
-              <div className="text-xl font-extrabold">Друзья</div>
-            </div>
-            {/* Кнопка Приглашения */}
-            <div className="px-3">
-              <button
-                type="button"
-                onClick={() => setInvitesOpen(v => !v)}
-                className="w-full flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
-              >
-                <div className="text-sm font-semibold">Приглашения</div>
-                <span className="text-white/80" style={{ transform: invitesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 160ms ease' }}>▾</span>
-              </button>
-            </div>
-            {/* Выпадающая панель приглашений: на половину экрана */}
-            <motion.div
-              initial={false}
-              animate={{ height: invitesOpen ? '50vh' : 0, opacity: invitesOpen ? 1 : 0 }}
-              transition={{ type: 'tween', duration: 0.24 }}
-              className="overflow-hidden px-3"
-              style={{ willChange: 'height' }}
-            >
-              <div className="mt-2 h-full rounded-2xl bg-white/5 border border-white/10 p-4">
-                <div className="text-sm text-white/80">Здесь будут приглашения</div>
-              </div>
-            </motion.div>
-            {/* Контент друзей ниже панели приглашений */}
-            <div className="px-3 mt-3 pb-6">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 min-h-[40vh]">
-                <div className="text-white/70 text-sm">Здесь будут друзья</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-      {/* Телеграм BackButton — закрывает панель друзей */}
-      <CancelOnTelegramBack
-        active={friendsOpen}
-        onCancel={() => { setFriendsOpen(false); setInvitesOpen(false); }}
-      />
+      {/* Панель друзей как отдельный полноэкранный компонент */}
+      <FriendsPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} />
     </div>
   );
 }
