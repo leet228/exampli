@@ -54,7 +54,11 @@ export default function Profile() {
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
   const [addFriendsOpen, setAddFriendsOpen] = useState<boolean>(false);
   const [friendsCount, setFriendsCount] = useState<number>(() => {
-    try { return Number(cacheGet<number>(CACHE_KEYS.friendsCount) || 0); } catch { return 0; }
+    try {
+      const bootCount = (window as any)?.__exampliBoot?.friendsCount;
+      if (typeof bootCount === 'number') return bootCount;
+      return Number(cacheGet<number>(CACHE_KEYS.friendsCount) || 0);
+    } catch { return 0; }
   });
 
   useEffect(() => {
@@ -126,23 +130,7 @@ export default function Profile() {
   }, []);
 
   // загрузка количества друзей
-  useEffect(() => {
-    async function loadFriendsCount() {
-      try {
-        const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
-        if (!uid) return;
-        const { count } = await supabase
-          .from('friend_links')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'accepted')
-          .or(`a_id.eq.${uid},b_id.eq.${uid}`);
-        const next = count || 0;
-        setFriendsCount(next);
-        try { cacheSet(CACHE_KEYS.friendsCount, next); } catch {}
-      } catch {}
-    }
-    void loadFriendsCount();
-  }, [u]);
+  // обновляем friendsCount только по событиям/boot; сетевой пересчёт не делаем
 
   // подписка на локальные изменения количества друзей
   useEffect(() => {

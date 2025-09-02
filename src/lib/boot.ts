@@ -20,6 +20,7 @@ export type BootData = {
   user: any | null;
   stats: { streak: number; energy: number; coins: number };
   userProfile?: { background_color?: string | null; background_icon?: string | null; phone_number?: string | null; first_name?: string | null; username?: string | null } | null;
+  friendsCount?: number;           // количество друзей
   subjects: SubjectRow[];        // все добавленные курсы пользователя
   lessons: LessonRow[];          // уроки активного курса
   subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
@@ -94,13 +95,22 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   step(++i, TOTAL);
 
   // 2d) количество друзей — кэшируем без TTL
+  let friendsCountBoot: number | null = null;
   try {
-    const { count } = await supabase
-      .from('friend_links')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'accepted')
-      .or(`a_id.eq.${userRow?.id},b_id.eq.${userRow?.id}`);
-    cacheSet(CACHE_KEYS.friendsCount, Number(count || 0));
+    // сначала через RPC (обходит RLS)
+    const rpc = await supabase.rpc('rpc_friend_count', { caller: userRow?.id } as any);
+    if (!rpc.error) {
+      friendsCountBoot = Number(rpc.data || 0);
+      cacheSet(CACHE_KEYS.friendsCount, friendsCountBoot);
+    } else {
+      const { count } = await supabase
+        .from('friend_links')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'accepted')
+        .or(`a_id.eq.${userRow?.id},b_id.eq.${userRow?.id}`);
+      friendsCountBoot = Number(count || 0);
+      cacheSet(CACHE_KEYS.friendsCount, friendsCountBoot);
+    }
   } catch {}
   step(++i, TOTAL);
 
@@ -284,6 +294,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     user: (userRow ?? user) ?? null,
     stats,
     userProfile,
+    friendsCount: friendsCountBoot ?? undefined,
     subjects: subjectsArr,
     lessons: lessonsArr,
     subjectsAll,
