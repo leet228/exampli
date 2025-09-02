@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import FullScreenSheet from '../sheets/FullScreenSheet';
+import BottomSheet from '../sheets/BottomSheet';
 import { supabase } from '../../lib/supabase';
 
 type Props = { open: boolean; onClose: () => void };
@@ -23,11 +24,16 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
     if (!term) { setRows([]); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('user_profile')
-        .select('user_id, first_name, username')
-        .or(`username.ilike.%${term}%,first_name.ilike.%${term}%`)
-        .limit(20);
+      const usernameOnly = term.startsWith('@');
+      const clean = term.replace(/^@+/, '');
+      const q = clean || term;
+      let req = supabase.from('user_profile').select('user_id, first_name, username');
+      if (usernameOnly) {
+        req = req.ilike('username', `%${q}%`);
+      } else {
+        req = req.or(`username.ilike.%${q}%,first_name.ilike.%${q}%`);
+      }
+      const { data, error } = await req.limit(20);
       if (!error && Array.isArray(data)) {
         const filtered = data.filter(r => r.user_id && r.user_id !== myId);
         setRows(filtered as any);
@@ -79,9 +85,9 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
           </div>
         </button>
 
-        {/* Блок поиска */}
-        {searchOpen && (
-          <div className="mt-2 rounded-2xl bg-white/5 border border-white/10 p-3">
+        {/* Шторка поиска снизу */}
+        <BottomSheet open={searchOpen} onClose={() => setSearchOpen(false)} title="Поиск по имени">
+          <div className="px-1 py-1">
             <input
               value={q}
               onChange={(e) => { setQ(e.target.value); void runSearch(e.target.value); }}
@@ -121,7 +127,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               ))}
             </div>
           </div>
-        )}
+        </BottomSheet>
       </div>
     </FullScreenSheet>
   );
