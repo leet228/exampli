@@ -40,8 +40,14 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
   async function sendRequest(targetId: string) {
     try {
       setPending(p => ({ ...p, [targetId]: 'pending' }));
-      const { error } = await supabase.rpc('rpc_friend_request', { target: targetId });
-      if (error) throw error;
+      // Пытаемся вызвать новую сигнатуру (caller, target). Если её нет – откат к старой
+      let { error } = await supabase.rpc('rpc_friend_request', { caller: myId, target: targetId } as any);
+      if (error) {
+        // fallback к старой (только target)
+        const r2 = await supabase.rpc('rpc_friend_request', { target: targetId } as any);
+        error = r2.error;
+      }
+      if (error) { console.warn('friend_request failed', error); throw error; }
     } catch {
       setPending(p => { const cp = { ...p }; delete cp[targetId]; return cp; });
     }
