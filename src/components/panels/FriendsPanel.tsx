@@ -16,12 +16,15 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }, []);
   const [loadingInv, setLoadingInv] = useState<boolean>(false);
   const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null }>>([]);
+  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null }>>([]);
+  const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
 
   useEffect(() => {
     if (!open) { setInvitesOpen(false); setInvites([]); }
   }, [open]);
 
   useEffect(() => { if (open && invitesOpen) void loadInvites(); }, [open, invitesOpen]);
+  useEffect(() => { if (open) void loadFriends(); }, [open]);
 
   async function loadInvites() {
     if (!myId) return;
@@ -69,7 +72,10 @@ export default function FriendsPanel({ open, onClose }: Props) {
       // двухпараметровая сигнатура (caller, other_id) → fallback в одно-арг
       let { error } = await supabase.rpc('rpc_friend_accept', { other_id: otherId, caller: myId } as any);
       if (error) { const r2 = await supabase.rpc('rpc_friend_accept', { other_id: otherId } as any); error = r2.error; }
-      if (!error) setInvites(list => list.filter(x => x.other_id !== otherId));
+      if (!error) {
+        setInvites(list => list.filter(x => x.other_id !== otherId));
+        await loadFriends();
+      }
     } catch {}
   }
 
@@ -80,6 +86,40 @@ export default function FriendsPanel({ open, onClose }: Props) {
       if (error) { const r2 = await supabase.rpc('rpc_friend_remove', { other_id: otherId } as any); error = r2.error; }
       if (!error) setInvites(list => list.filter(x => x.other_id !== otherId));
     } catch {}
+  }
+
+  async function loadFriends() {
+    if (!myId) return;
+    setLoadingFriends(true);
+    try {
+      const { data: links, error } = await supabase
+        .from('friend_links')
+        .select('a_id,b_id,status')
+        .eq('status', 'accepted')
+        .or(`a_id.eq.${myId},b_id.eq.${myId}`)
+        .limit(200);
+      if (error || !Array.isArray(links)) { setFriends([]); return; }
+      const ids = Array.from(new Set((links as any[]).map(l => (l.a_id === myId ? l.b_id : l.a_id)).filter(Boolean)));
+      // публикуем счётчик для профиля
+      try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: ids.length } })); } catch {}
+      if (!ids.length) { setFriends([]); return; }
+      const { data: profs } = await supabase
+        .from('user_profile')
+        .select('user_id, first_name, username, background_color, background_icon')
+        .in('user_id', ids as string[]);
+      const byId = new Map<string, any>((profs || []).map(p => [p.user_id, p]));
+      const rows = ids.map(id => {
+        const p = byId.get(id) || {};
+        return {
+          user_id: id,
+          first_name: p.first_name ?? null,
+          username: p.username ?? null,
+          background_color: p.background_color ?? null,
+          background_icon: p.background_icon ?? null,
+        };
+      });
+      setFriends(rows);
+    } finally { setLoadingFriends(false); }
   }
 
   return (
@@ -149,7 +189,25 @@ export default function FriendsPanel({ open, onClose }: Props) {
 
         {/* Список друзей — без контейнера с собственным скроллом: скроллится вся панель */}
         <div className="text-base font-bold text-white mb-2">Друзья</div>
-        <div className="flex flex-col gap-2" />
+        {loadingFriends && <div className="text-sm text-white/70">Загрузка…</div>}
+        <div className="flex flex-col gap-2">
+          {friends.map((f) => (
+            <div key={f.user_id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+              <div className="relative w-16 h-14 rounded-xl overflow-hidden border border-white/10" style={{ background: f.background_color || '#1d2837' }}>
+                {f.background_icon && (
+                  <img src={`/profile_icons/${f.background_icon}.svg`} alt="" className="absolute right-1 bottom-1 w-5 h-5 opacity-80" />
+                )}
+                <div className="absolute left-1 top-1 w-7 h-7 rounded-full bg-black/30 grid place-items-center text-xs font-bold border border-white/20">
+                  {(f.first_name || f.username || '?').slice(0,1).toUpperCase()}
+                </div>
+              </div>
+              <div className="flex flex-col text-left">
+                <div className="font-semibold">{f.first_name || 'Без имени'}</div>
+                {f.username && <div className="text-sm text-white/70">@{f.username}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </FullScreenSheet>
   );
