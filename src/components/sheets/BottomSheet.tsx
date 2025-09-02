@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { hapticTiny } from '../../lib/haptics';
@@ -12,6 +12,7 @@ type BottomSheetProps = {
 };
 
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   // Telegram BackButton
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -51,7 +52,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
         <>
           <motion.div
             className="sheet-backdrop"
-            onClick={onClose}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -60,10 +61,17 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             className="sheet-panel"
             role="dialog"
             aria-modal="true"
+            ref={panelRef}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+            onClick={(e) => e.stopPropagation()}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
+            }}
           >
             {title ? (
               <div className="px-5 pt-3 pb-2 border-b border-white/10">
