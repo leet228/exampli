@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
@@ -62,6 +62,45 @@ export default function Profile() {
       return 0;
     } catch { return 0; }
   });
+  const [qrOpen, setQrOpen] = useState<boolean>(false);
+  const [qrImgUrl, setQrImgUrl] = useState<string>('');
+  const [qrLoading, setQrLoading] = useState<boolean>(false);
+
+  async function openQrInvite() {
+    try {
+      setQrLoading(true);
+      setQrImgUrl('');
+      const myId: string | undefined = (() => {
+        try { return (u?.id as string) || (window as any)?.__exampliBoot?.user?.id; } catch { return undefined; }
+      })();
+      // создаём инвайт токен
+      let token: string | null = null;
+      try {
+        let r = await supabase.rpc('rpc_invite_create', { caller: myId } as any);
+        if (r.error) r = await supabase.rpc('rpc_invite_create', {} as any);
+        const d: any = r.data;
+        if (typeof d === 'string') token = d;
+        else if (Array.isArray(d) && d.length && d[0]?.token) token = String(d[0].token);
+        else if (d?.token) token = String(d.token);
+      } catch {}
+      if (!token) throw new Error('no token');
+      let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+      if (bot && bot.startsWith('@')) bot = bot.slice(1);
+      const paramEnv = String((import.meta as any).env?.VITE_TG_INVITE_PARAM || '').trim().toLowerCase();
+      const param = (paramEnv === 'start' || paramEnv === 'startattach') ? paramEnv : 'startapp';
+      const inviteUrl = bot
+        ? `https://t.me/${bot}?${param}=${encodeURIComponent(token)}`
+        : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
+      // генерируем QR через публичный сервис (без зависимостей)
+      const qr = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(inviteUrl)}`;
+      setQrImgUrl(qr);
+      setQrOpen(true);
+    } catch {
+      // игнорируем тихо
+    } finally {
+      setQrLoading(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -227,6 +266,17 @@ export default function Profile() {
               style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
             >
               Изменить
+            </button>
+          )}
+          {/* Кнопка QR слева от аватарки на том же уровне */}
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => { void openQrInvite(); }}
+              className="absolute left-4 top-36 p-2 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
+            >
+              <img src="/friends/qr.svg" alt="QR" className="w-6 h-6" />
             </button>
           )}
 
@@ -460,6 +510,50 @@ export default function Profile() {
       <FriendsPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} />
       {/* Панель добавления друзей */}
       <AddFriendsPanel open={addFriendsOpen} onClose={() => setAddFriendsOpen(false)} />
+
+      {/* QR Overlay */}
+      <AnimatePresence>
+        {qrOpen && (
+          <motion.div
+            className="fixed inset-0 z-[50]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setQrOpen(false)}
+          >
+            <div className="w-full h-full flex items-center justify-center p-6">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                className="relative bg-white rounded-2xl shadow-2xl"
+                style={{ width: 320, height: 320 }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                {/* QR картинка */}
+                {qrImgUrl && (
+                  <img src={qrImgUrl} alt="QR" className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
+                )}
+                {/* Аватар в центре */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-xl overflow-hidden border border-black/10 shadow">
+                  {photoUrl || u?.photo_url ? (
+                    <img src={(photoUrl || u?.photo_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-xl font-bold">
+                      {initials}
+                    </div>
+                  )}
+                </div>
+                {qrLoading && (
+                  <div className="absolute inset-0 grid place-items-center text-black/60">Генерация…</div>
+                )}
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
