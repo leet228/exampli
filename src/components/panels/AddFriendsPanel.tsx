@@ -35,6 +35,36 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
     } catch { return {}; }
   });
   const [toast, setToast] = useState<string | null>(null);
+  async function onShareInvite() {
+    try {
+      // создаём инвайт
+      const me = myId as string | undefined;
+      let token: string | null = null;
+      try {
+        // пробуем RPC с caller
+        let r = await supabase.rpc('rpc_invite_create', { caller: me } as any);
+        if (r.error || !r.data?.token) {
+          // фолбэк — без caller
+          r = await supabase.rpc('rpc_invite_create', {} as any);
+        }
+        token = (r as any)?.data?.token || null;
+      } catch {}
+      if (!token) throw new Error('no token');
+      const bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+      const inviteUrl = bot
+        ? `https://t.me/${bot}?startapp=${encodeURIComponent(token)}`
+        : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent('Добавляйся в друзья!')}`;
+      const tg = (window as any)?.Telegram?.WebApp;
+      if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+      else window.open(shareUrl, '_blank');
+      setToast('Ссылка для приглашения открыта');
+      setTimeout(() => setToast(null), 1800);
+    } catch {
+      setToast('Не удалось создать приглашение');
+      setTimeout(() => setToast(null), 1800);
+    }
+  }
 
   useEffect(() => {
     if (!open) { setSearchOpen(false); setQ(''); setRows([]); setPending({}); }
@@ -133,15 +163,17 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         </motion.button>
 
         {/* Поделиться ссылкой */}
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.98 }}
+          onClick={() => { try { hapticSelect(); } catch {} void onShareInvite(); }}
           className="w-full flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
         >
           <img src="/friends/plane.svg" alt="Поделиться" className="w-10 h-10" />
           <div className="text-left">
             <div className="text-base font-semibold">Поделиться ссылкой</div>
           </div>
-        </button>
+        </motion.button>
 
         {/* Шторка поиска снизу */}
         <BottomSheet open={searchOpen} onClose={() => setSearchOpen(false)} title="Поиск по имени" minHeightVh={70}>
