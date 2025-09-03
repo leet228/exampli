@@ -59,7 +59,8 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       // - по умолчанию 'start' (откроет чат с ботом и отправит /start)
       // - можно переключить через VITE_TG_INVITE_PARAM=startapp|startattach при необходимости
       const paramEnv = String((import.meta as any).env?.VITE_TG_INVITE_PARAM || '').trim().toLowerCase();
-      const param = paramEnv === 'startapp' || paramEnv === 'startattach' ? paramEnv : 'start';
+      // По умолчанию снова открываем сразу WebApp (startapp). Можно переопределить через env
+      const param = (paramEnv === 'start' || paramEnv === 'startattach') ? paramEnv : 'startapp';
       const inviteUrl = bot
         ? `https://t.me/${bot}?${param}=${encodeURIComponent(token)}`
         : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
