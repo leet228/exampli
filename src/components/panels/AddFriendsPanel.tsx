@@ -55,8 +55,10 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       if (!token) throw new Error('no token');
       let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
       if (bot && bot.startsWith('@')) bot = bot.slice(1);
+      // Предпочитаем startattach: открывает чат с ботом и сразу поднимает WebApp из меню вложений
+      // Фолбэк на старые клиенты — обычный startapp
       const inviteUrl = bot
-        ? `https://t.me/${bot}?startapp=${encodeURIComponent(token)}`
+        ? `https://t.me/${bot}?startattach=${encodeURIComponent(token)}`
         : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent('Добавляйся в друзья!')}`;
       const tg = (window as any)?.Telegram?.WebApp;
