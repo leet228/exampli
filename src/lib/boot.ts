@@ -112,20 +112,47 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       } catch {}
     }
     if (inviteToken && userRow?.id) {
+      try { console.log('[boot] invite token detected:', inviteToken, 'caller:', userRow.id); } catch {}
       // 1) Пытаемся принять инвайт «по ссылке». Эта ветка НЕ использует локальный pending.
       let acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken, caller: userRow.id } as any);
-      if (acc.error) { acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken } as any); }
+      try {
+        if (acc.error) {
+          console.warn('[boot] rpc_invite_accept(caller) error:', acc.error);
+        } else {
+          console.log('[boot] rpc_invite_accept(caller) ok:', acc.data);
+        }
+      } catch {}
+      if (acc.error) {
+        const fallback = await supabase.rpc('rpc_invite_accept', { invite: inviteToken } as any);
+        try {
+          if (fallback.error) {
+            console.warn('[boot] rpc_invite_accept(no-caller) error:', fallback.error);
+          } else {
+            console.log('[boot] rpc_invite_accept(no-caller) ok:', fallback.data);
+          }
+        } catch {}
+        acc = fallback;
+      }
 
       // 2) На всякий случай добьём входящие pending (если RPC оставил pending у второй стороны)
       try {
         const st = await supabase.rpc('rpc_friend_status_list', { caller: userRow.id, others: null } as any);
+        try {
+          if (st.error) console.warn('[boot] rpc_friend_status_list error:', st.error);
+          else console.log('[boot] rpc_friend_status_list ok, rows:', st.data);
+        } catch {}
         if (!st.error && Array.isArray(st.data)) {
           for (const row of (st.data as any[])) {
             const oid = (row as any)?.other_id as string | undefined;
             const status = String((row as any)?.status || '').toLowerCase();
             if (!oid) continue;
             if (status === 'pending') {
-              await supabase.rpc('rpc_friend_accept', { other_id: oid, caller: userRow.id } as any);
+              try { console.log('[boot] rpc_friend_accept other_id:', oid); } catch {}
+              const acc2 = await supabase.rpc('rpc_friend_accept', { other_id: oid, caller: userRow.id } as any);
+              try {
+                if (acc2.error) console.warn('[boot] rpc_friend_accept error:', acc2.error);
+                else console.log('[boot] rpc_friend_accept ok');
+              } catch {}
             }
           }
         }
@@ -147,6 +174,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
           }));
           cacheSet(CACHE_KEYS.friendsList, list);
           try { (window as any).__exampliBootFriends = list; } catch {}
+          try { console.log('[boot] refreshed friends list, count:', list.length); } catch {}
         }
         if (!countR.error) {
           const cnt = Number(countR.data || 0);
@@ -154,6 +182,9 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
           try { (window as any).__exampliBoot = { ...(window as any).__exampliBoot, friendsCount: cnt }; } catch {}
           // Сообщим остальным компонентам, что друзья изменились
           try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: Number(countR.data || 0) } } as any)); } catch {}
+          try { console.log('[boot] refreshed friends count:', cnt); } catch {}
+        } else {
+          try { console.warn('[boot] rpc_friend_count error:', countR.error); } catch {}
         }
       } catch {}
     }
