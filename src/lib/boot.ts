@@ -94,7 +94,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   };
   step(++i, TOTAL);
 
-  // 2a) Обработка инвайта из Telegram start_param или ?invite=
+  // 2a) Обработка ИНВАЙТА ПО ССЫЛКЕ (friend_invites) — отдельная ветка от обычных pending
   try {
     let inviteToken: string | null = null;
     // Telegram WebApp start_param
@@ -112,22 +112,50 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       } catch {}
     }
     if (inviteToken && userRow?.id) {
-      // принять инвайт (создаст связь pending/accepted в зависимости от логики RPC)
+      // 1) Пытаемся принять инвайт «по ссылке». Эта ветка НЕ использует локальный pending.
       let acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken, caller: userRow.id } as any);
       if (acc.error) { acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken } as any); }
-      // Если после этого есть входящая pending — попытаемся принять автоматически
-      const st = await supabase.rpc('rpc_friend_status_list', { caller: userRow.id, others: null } as any);
-      if (!st.error && Array.isArray(st.data)) {
-        for (const row of (st.data as any[])) {
-          const oid = (row as any)?.other_id as string | undefined;
-          const status = String((row as any)?.status || '').toLowerCase();
-          if (!oid) continue;
-          if (status === 'pending') {
-            // примем; rpc сама проверит направление
-            await supabase.rpc('rpc_friend_accept', { other_id: oid, caller: userRow.id } as any);
+
+      // 2) На всякий случай добьём входящие pending (если RPC оставил pending у второй стороны)
+      try {
+        const st = await supabase.rpc('rpc_friend_status_list', { caller: userRow.id, others: null } as any);
+        if (!st.error && Array.isArray(st.data)) {
+          for (const row of (st.data as any[])) {
+            const oid = (row as any)?.other_id as string | undefined;
+            const status = String((row as any)?.status || '').toLowerCase();
+            if (!oid) continue;
+            if (status === 'pending') {
+              await supabase.rpc('rpc_friend_accept', { other_id: oid, caller: userRow.id } as any);
+            }
           }
         }
-      }
+      } catch {}
+
+      // 3) Обновим кэши друзей и счётчик сразу (без ожидания следующих шагов)
+      try {
+        const [listR, countR] = await Promise.all([
+          supabase.rpc('rpc_friend_list', { caller: userRow.id } as any),
+          supabase.rpc('rpc_friend_count', { caller: userRow.id } as any),
+        ]);
+        if (!listR.error && Array.isArray(listR.data)) {
+          const list = (listR.data as any[]).map(p => ({
+            user_id: p.user_id || p.friend_id,
+            first_name: p.first_name ?? null,
+            username: p.username ?? null,
+            background_color: p.background_color ?? null,
+            background_icon: p.background_icon ?? null,
+          }));
+          cacheSet(CACHE_KEYS.friendsList, list);
+          try { (window as any).__exampliBootFriends = list; } catch {}
+        }
+        if (!countR.error) {
+          const cnt = Number(countR.data || 0);
+          cacheSet(CACHE_KEYS.friendsCount, cnt);
+          try { (window as any).__exampliBoot = { ...(window as any).__exampliBoot, friendsCount: cnt }; } catch {}
+          // Сообщим остальным компонентам, что друзья изменились
+          try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: Number(countR.data || 0) } } as any)); } catch {}
+        }
+      } catch {}
     }
   } catch {}
   step(++i, TOTAL);
