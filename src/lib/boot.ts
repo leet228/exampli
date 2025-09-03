@@ -51,8 +51,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   const step = (i: number, n: number) => onProgress?.(Math.round((i / n) * 100));
 
   // план шагов:
-  // 1 user, 2 stats, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
-  const TOTAL = 12;
+  // 1 user, 2 stats, 2a invite, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
+  const TOTAL = 13;
   let i = 0;
 
   // 1) пользователь (ensureUser создаёт пользователя при необходимости)
@@ -92,6 +92,44 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     energy: userRow?.energy ?? 25,
     coins: userRow?.coins ?? 500,
   };
+  step(++i, TOTAL);
+
+  // 2a) Обработка инвайта из Telegram start_param или ?invite=
+  try {
+    let inviteToken: string | null = null;
+    // Telegram WebApp start_param
+    try { inviteToken = String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.start_param || '') || null; } catch {}
+    // Fallback: параметр ?invite=
+    if (!inviteToken) {
+      try {
+        const url = new URL(window.location.href);
+        const p = url.searchParams.get('invite');
+        if (p) {
+          inviteToken = p;
+          // очистим URL без перезагрузки
+          try { url.searchParams.delete('invite'); window.history.replaceState({}, '', url.toString()); } catch {}
+        }
+      } catch {}
+    }
+    if (inviteToken && userRow?.id) {
+      // принять инвайт (создаст связь pending/accepted в зависимости от логики RPC)
+      let acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken, caller: userRow.id } as any);
+      if (acc.error) { acc = await supabase.rpc('rpc_invite_accept', { invite: inviteToken } as any); }
+      // Если после этого есть входящая pending — попытаемся принять автоматически
+      const st = await supabase.rpc('rpc_friend_status_list', { caller: userRow.id, others: null } as any);
+      if (!st.error && Array.isArray(st.data)) {
+        for (const row of (st.data as any[])) {
+          const oid = (row as any)?.other_id as string | undefined;
+          const status = String((row as any)?.status || '').toLowerCase();
+          if (!oid) continue;
+          if (status === 'pending') {
+            // примем; rpc сама проверит направление
+            await supabase.rpc('rpc_friend_accept', { other_id: oid, caller: userRow.id } as any);
+          }
+        }
+      }
+    }
+  } catch {}
   step(++i, TOTAL);
 
   // 2d) количество друзей — кэшируем без TTL
