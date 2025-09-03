@@ -43,24 +43,30 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       try {
         // пробуем RPC с caller
         let r = await supabase.rpc('rpc_invite_create', { caller: me } as any);
-        if (r.error || !r.data?.token) {
+        if (r.error) {
           // фолбэк — без caller
           r = await supabase.rpc('rpc_invite_create', {} as any);
         }
-        token = (r as any)?.data?.token || null;
+        const d: any = r.data;
+        if (typeof d === 'string') token = d;
+        else if (Array.isArray(d) && d.length && d[0]?.token) token = String(d[0].token);
+        else if (d?.token) token = String(d.token);
       } catch {}
       if (!token) throw new Error('no token');
-      const bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+      let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+      if (bot && bot.startsWith('@')) bot = bot.slice(1);
       const inviteUrl = bot
         ? `https://t.me/${bot}?startapp=${encodeURIComponent(token)}`
         : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent('Добавляйся в друзья!')}`;
       const tg = (window as any)?.Telegram?.WebApp;
       if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+      else if (navigator?.share) { try { await (navigator as any).share({ title: 'Приглашение', text: 'Добавляйся в друзья!', url: inviteUrl }); } catch {} }
       else window.open(shareUrl, '_blank');
       setToast('Ссылка для приглашения открыта');
       setTimeout(() => setToast(null), 1800);
     } catch {
+      try { console.error('invite create failed'); } catch {}
       setToast('Не удалось создать приглашение');
       setTimeout(() => setToast(null), 1800);
     }
