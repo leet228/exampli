@@ -273,10 +273,10 @@ export default function Profile() {
             <button
               type="button"
               onClick={() => { void openQrInvite(); }}
-              className="absolute left-4 top-36 p-2 rounded-full"
+              className="absolute left-4 top-36 px-2 py-1 rounded-full text-[12px]"
               style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.18)', zIndex: 2, pointerEvents: 'auto' }}
             >
-              <img src="/friends/qr.svg" alt="QR" className="w-6 h-6" />
+              <img src="/friends/qr.svg" alt="QR" className="w-4 h-4" />
             </button>
           )}
 
