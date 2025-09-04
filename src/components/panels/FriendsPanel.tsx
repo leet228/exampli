@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSlideReveal, hapticSlideClose, hapticSelect } from '../../lib/haptics';
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export default function FriendsPanel({ open, onClose }: Props) {
+  const navigate = useNavigate();
   const [invitesOpen, setInvitesOpen] = useState<boolean>(false);
   const myId = useMemo(() => {
     try { return (window as any)?.__exampliBoot?.user?.id as string | undefined; } catch { return undefined; }
@@ -301,6 +303,13 @@ export default function FriendsPanel({ open, onClose }: Props) {
     setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
   }
 
+  function onFriendClick(f: { user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }) {
+    try { hapticSelect(); } catch {}
+    try { (window as any)?.Telegram?.WebApp?.BackButton?.hide?.(); } catch {}
+    onClose();
+    navigate('/profile');
+  }
+
   return (
     <>
     <FullScreenSheet open={open} onClose={() => { setInvitesOpen(false); onClose(); }} title="Друзья">
@@ -393,7 +402,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
             const initials = (f.first_name || f.username || '?').slice(0,1).toUpperCase();
             const iconKey = f.background_icon || 'bg_icon_cat';
             return (
-              <button type="button" onClick={() => void openFriendProfile(f)} key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden text-left active:opacity-90">
+              <button type="button" onClick={() => onFriendClick(f)} key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden text-left active:opacity-90">
                 <div
                   className="relative w-full"
                   style={{ height: 140, background: f.background_color || '#1d2837' }}
