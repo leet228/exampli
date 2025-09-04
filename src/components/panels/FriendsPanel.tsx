@@ -257,8 +257,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
           )}
         </AnimatePresence>
 
-        {/* Список друзей — без контейнера с собственным скроллом: скроллится вся панель */}
-        <div className="text-base font-bold text-white mb-2">Друзья</div>
+        {/* Список друзей — без заголовка, скроллится вся панель */}
         {loadingFriends && <div className="text-sm text-white/70">Загрузка…</div>}
         <div className="flex flex-col gap-3">
           {friends.map((f) => {
