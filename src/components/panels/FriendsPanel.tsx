@@ -318,10 +318,13 @@ export default function FriendsPanel({ open, onClose }: Props) {
     <FullScreenSheet open={open} onClose={() => { setInvitesOpen(false); onClose(); }} title="Друзья">
       <div className="relative flex flex-col gap-3" style={{ minHeight: '60vh' }}>
         {/* Кнопка «Приглашения» */}
-        <button
-          type="button"
+        <PressButton
           onClick={() => setInvitesOpen(v => { if (!v) { try { hapticSlideReveal(); } catch {} } else { try { hapticSlideClose(); } catch {} } return !v; })}
-          className="relative w-full flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
+          className="relative w-full flex items-center justify-center rounded-2xl px-4 py-3"
+          baseColor="#2a3944"
+          background="rgba(255,255,255,0.05)"
+          borderColor="rgba(255,255,255,0.10)"
+          textColor="#ffffff"
         >
           <div className="text-sm font-bold text-white">Приглашения</div>
           {/* красный бейдж с количеством */}
@@ -337,7 +340,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
             } catch { return null; }
           })()}
           <span className="absolute right-4 text-white/80" style={{ transform: invitesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 160ms ease' }}>▾</span>
-        </button>
+        </PressButton>
 
         {/* Выпадающая панель приглашений — компактная, собственный скролл */}
         <AnimatePresence initial={false}>
@@ -374,20 +377,20 @@ export default function FriendsPanel({ open, onClose }: Props) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
+                          <PressButton
                             onClick={() => void accept(r.other_id)}
-                            className="px-3 py-1 rounded-lg bg-green-600/70 text-white text-sm font-semibold active:opacity-80"
+                            className="px-3 py-1 rounded-lg text-white text-sm font-semibold"
+                            baseColor="#16a34a"
                           >
                             ✓
-                          </button>
-                          <button
-                            type="button"
+                          </PressButton>
+                          <PressButton
                             onClick={() => void decline(r.other_id)}
-                            className="px-3 py-1 rounded-lg bg-red-600/70 text-white text-sm font-semibold active:opacity-80"
+                            className="px-3 py-1 rounded-lg text-white text-sm font-semibold"
+                            baseColor="#dc2626"
                           >
                             ✕
-                          </button>
+                          </PressButton>
                         </div>
                       </div>
                     );
@@ -544,3 +547,51 @@ export default function FriendsPanel({ open, onClose }: Props) {
   );
 }
 
+function PressButton({
+  className = '',
+  baseColor,
+  background,
+  borderColor,
+  textColor,
+  onClick,
+  children,
+}: {
+  className?: string;
+  baseColor: string; // основной цвет для тени
+  background?: string;
+  borderColor?: string;
+  textColor?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const shadowHeight = 6;
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
+  const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={onClick}
+      className={className}
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
+      transition={{ duration: 0 }}
+      style={{
+        background: background || baseColor,
+        color: textColor || '#fff',
+        border: `1px solid ${borderColor || 'rgba(0,0,0,0.08)'}`,
+      }}
+    >
+      {children}
+    </motion.button>
+  );
+}
