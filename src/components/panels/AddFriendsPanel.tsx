@@ -182,30 +182,28 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
     <FullScreenSheet open={open} onClose={onClose} title="Найди друзей">
       <div className="flex flex-col gap-3">
         {/* Поиск по имени */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
+        <PressButton
           onClick={() => { try { hapticSelect(); } catch {} setSearchOpen(true); }}
-          className="w-full flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
+          className="w-full flex items-center gap-3 rounded-2xl px-4 py-3"
+          baseColor="#3c73ff"
         >
           <img src="/friends/loupe.svg" alt="Поиск" className="w-10 h-10" />
           <div className="text-left">
             <div className="text-base font-semibold">Поиск по имени</div>
           </div>
-        </motion.button>
+        </PressButton>
 
         {/* Поделиться ссылкой */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
+        <PressButton
           onClick={() => { try { hapticSelect(); } catch {} void onShareInvite(); }}
-          className="w-full flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
+          className="w-full flex items-center gap-3 rounded-2xl px-4 py-3"
+          baseColor="#3c73ff"
         >
           <img src="/friends/plane.svg" alt="Поделиться" className="w-10 h-10" />
           <div className="text-left">
             <div className="text-base font-semibold">Поделиться ссылкой</div>
           </div>
-        </motion.button>
+        </PressButton>
 
         {/* Шторка поиска снизу */}
         <BottomSheet open={searchOpen} onClose={() => setSearchOpen(false)} title="Поиск по имени" minHeightVh={70}>
@@ -276,3 +274,41 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
 }
 
 
+function PressButton({
+  className = '',
+  baseColor,
+  onClick,
+  children,
+}: {
+  className?: string;
+  baseColor: string; // основной цвет кнопки
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const shadowHeight = 6;
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
+  const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={onClick}
+      className={className}
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
+      transition={{ duration: 0 }}
+      style={{ background: baseColor, color: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}
+    >
+      {children}
+    </motion.button>
+  );
+}
