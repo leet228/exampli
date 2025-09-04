@@ -17,16 +17,34 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }, []);
   const [loadingInv, setLoadingInv] = useState<boolean>(false);
   const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null }>>([]);
-  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null }>>(() => {
+  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>>(() => {
     try {
       const fromBoot = (window as any)?.__exampliBootFriends as any[] | undefined;
-      if (Array.isArray(fromBoot) && fromBoot.length) return fromBoot as any;
+      if (Array.isArray(fromBoot) && fromBoot.length) return (fromBoot as any).map((r: any) => ({ ...r, avatar_url: (r as any)?.avatar_url ?? null }));
       const cached = cacheGet<any[]>(CACHE_KEYS.friendsList);
-      if (Array.isArray(cached)) return cached as any;
+      if (Array.isArray(cached)) return (cached as any).map((r: any) => ({ ...r, avatar_url: (r as any)?.avatar_url ?? null }));
     } catch {}
     return [];
   });
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
+
+  // Компоновка «облака иконок» как в профиле
+  const iconsCloud = useMemo(() => {
+    const rows: { y: number; xs: number[] }[] = [
+      { y: 30, xs: [28, 72] },
+      { y: 38, xs: [18, 50, 82] },
+      { y: 46, xs: [28, 72] },
+      { y: 58, xs: [10, 30, 70, 90] },
+      { y: 70, xs: [28, 72] },
+      { y: 78, xs: [18, 50, 82] },
+      { y: 86, xs: [28, 72] },
+    ];
+    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
+    rows.forEach((row) => {
+      row.xs.forEach((x) => { items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 }); });
+    });
+    return items;
+  }, []);
 
   useEffect(() => {
     if (!open) { setInvitesOpen(false); setInvites([]); }
@@ -34,6 +52,21 @@ export default function FriendsPanel({ open, onClose }: Props) {
 
   useEffect(() => { if (open && invitesOpen) void loadInvites(); }, [open, invitesOpen]);
   useEffect(() => { if (open) void loadFriends(); }, [open]);
+
+  async function enrichWithAvatars(rows: Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url?: string | null }>): Promise<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>> {
+    try {
+      const missing = rows.filter(r => !r.avatar_url).map(r => r.user_id);
+      if (missing.length) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, avatar_url')
+          .in('id', missing as string[]);
+        const map = new Map<string, string | null>((data || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+        return rows.map(r => ({ ...r, avatar_url: map.get(r.user_id) ?? r.avatar_url ?? null }));
+      }
+    } catch {}
+    return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
+  }
 
   async function loadInvites() {
     if (!myId) return;
@@ -110,14 +143,16 @@ export default function FriendsPanel({ open, onClose }: Props) {
       // 1) Пытаемся получить через RPC, чтобы RLS не мешал
       const rpc = await supabase.rpc('rpc_friend_list', { caller: myId } as any);
       if (!rpc.error && Array.isArray(rpc.data)) {
-        const rows = (rpc.data as any[]).map((p) => ({
+        let rows = (rpc.data as any[]).map((p) => ({
           user_id: p.user_id || p.friend_id,
           first_name: p.first_name ?? null,
           username: p.username ?? null,
           background_color: p.background_color ?? null,
           background_icon: p.background_icon ?? null,
+          avatar_url: (p as any)?.avatar_url ?? null,
         }));
-        setFriends(rows.filter(r => r.user_id));
+        rows = await enrichWithAvatars(rows.filter(r => r.user_id));
+        setFriends(rows);
         try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: rows.length } })); } catch {}
         return;
       }
@@ -139,7 +174,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
         .select('user_id, first_name, username, background_color, background_icon')
         .in('user_id', ids as string[]);
       const byId = new Map<string, any>((profs || []).map(p => [p.user_id, p]));
-      const rows = ids.map(id => {
+      let rows = ids.map(id => {
         const p = byId.get(id) || {};
         return {
           user_id: id,
@@ -147,8 +182,10 @@ export default function FriendsPanel({ open, onClose }: Props) {
           username: p.username ?? null,
           background_color: p.background_color ?? null,
           background_icon: p.background_icon ?? null,
+          avatar_url: null as string | null,
         };
       });
+      rows = await enrichWithAvatars(rows);
       setFriends(rows);
       try { cacheSet(CACHE_KEYS.friendsList, rows); (window as any).__exampliBootFriends = rows; } catch {}
     } finally { setLoadingFriends(false); }
@@ -222,27 +259,66 @@ export default function FriendsPanel({ open, onClose }: Props) {
         {/* Список друзей — без контейнера с собственным скроллом: скроллится вся панель */}
         <div className="text-base font-bold text-white mb-2">Друзья</div>
         {loadingFriends && <div className="text-sm text-white/70">Загрузка…</div>}
-        <div className="flex flex-col gap-2">
-          {friends.map((f) => (
-            <div key={f.user_id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-              <div className="relative w-16 h-14 rounded-xl overflow-hidden border border-white/10" style={{ background: f.background_color || '#1d2837' }}>
-                {f.background_icon && (
-                  <img src={`/profile_icons/${f.background_icon}.svg`} alt="" className="absolute right-1 bottom-1 w-5 h-5 opacity-80" />
-                )}
-                <div className="absolute left-1 top-1 w-7 h-7 rounded-full bg-black/30 grid place-items-center text-xs font-bold border border-white/20">
-                  {(f.first_name || f.username || '?').slice(0,1).toUpperCase()}
+        <div className="flex flex-col gap-3">
+          {friends.map((f) => {
+            const initials = (f.first_name || f.username || '?').slice(0,1).toUpperCase();
+            const iconKey = f.background_icon || 'bg_icon_cat';
+            return (
+              <div key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                <div
+                  className="relative w-full"
+                  style={{ height: 140, background: f.background_color || '#1d2837' }}
+                >
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)',
+                      WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)'
+                    }}
+                  >
+                    {iconsCloud.map((it, i) => (
+                      <img
+                        key={i}
+                        src={`/profile_icons/${iconKey}.svg`}
+                        alt=""
+                        style={{
+                          position: 'absolute',
+                          left: `${it.x}%`,
+                          top: `${it.y}%`,
+                          width: `${24 * it.s}px`,
+                          height: `${24 * it.s}px`,
+                          opacity: it.o,
+                          transform: `translate(-50%, -50%) rotate(${it.r}deg)`,
+                          filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))'
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="relative z-[1] w-20 h-20 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+                      {f.avatar_url ? (
+                        <img src={f.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <div className="w-full h-full grid place-items-center text-lg font-bold text-white/95">{initials}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Имя по центру, под аватаркой, у нижнего края фона */}
+                  <div className="absolute left-1/2 bottom-2 -translate-x-1/2 text-center">
+                    <div className="font-semibold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}>
+                      {f.first_name || 'Без имени'}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col text-left">
-                <div className="font-semibold">{f.first_name || 'Без имени'}</div>
-                {f.username && <div className="text-sm text-white/70">@{f.username}</div>}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </FullScreenSheet>
   );
 }
-
 
