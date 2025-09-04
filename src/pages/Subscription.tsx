@@ -4,6 +4,17 @@ import { motion } from 'framer-motion';
 type Plan = { id: string; months: number; price: number; title: string };
 
 export default function Subscription() {
+  // Общие утилиты для кнопок с «нижней полоской»
+  const accentColor = '#3c73ff';
+  const shadowHeight = 6;
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
   const plans: Plan[] = [
     { id: 'm1', months: 1,  price: 499,  title: 'КУРСИК' },
     { id: 'm6', months: 6,  price: 2699, title: 'КУРСИК' },
@@ -82,9 +93,14 @@ export default function Subscription() {
               </div>
 
               <div className="mt-5">
-                <button type="button" className="btn w-full">
+                <PressButton
+                  className="w-full rounded-3xl px-5 py-4 font-semibold text-white"
+                  baseColor={accentColor}
+                  shadowHeight={shadowHeight}
+                  darken={darken}
+                >
                   Купить за {p.price.toLocaleString('ru-RU')} ₽
-                </button>
+                </PressButton>
               </div>
             </motion.div>
           ))}
@@ -139,11 +155,50 @@ export default function Subscription() {
                 <div className="text-3xl" aria-hidden>{g.icon}</div>
                 <div className="text-lg font-semibold tabular-nums">{g.amount}</div>
               </div>
-              <button type="button" className="btn px-5 py-2">{g.price}</button>
+              <PressButton
+                className="px-5 py-2 rounded-3xl font-semibold text-white"
+                baseColor={accentColor}
+                shadowHeight={shadowHeight}
+                darken={darken}
+              >
+                {g.price}
+              </PressButton>
             </div>
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+// Универсальная кнопка с «нижней полоской» (box-shadow), мгновенная анимация
+function PressButton({
+  className = '',
+  baseColor,
+  shadowHeight = 6,
+  darken,
+  children,
+}: {
+  className?: string;
+  baseColor: string;
+  shadowHeight?: number;
+  darken: (hex: string, amount?: number) => string;
+  children: React.ReactNode;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
+  return (
+    <motion.button
+      type="button"
+      className={className}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
+      transition={{ duration: 0 }}
+      style={{ background: baseColor, border: '1px solid rgba(0,0,0,0.08)' }}
+    >
+      {children}
+    </motion.button>
   );
 }
