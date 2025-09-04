@@ -582,7 +582,7 @@ function PressButton({
       const re = /#(?:[0-9a-fA-F]{3}){1,2}|rgba?\([^\)]+\)/g;
       if (s.startsWith('linear-gradient')) {
         const matches = s.match(re);
-        if (matches && matches.length) return matches[matches.length - 1];
+        if (matches && matches.length) return matches[0];
       }
       return s.match(re)?.[0] || s;
     } catch { return '#1d2837'; }
