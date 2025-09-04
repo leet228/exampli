@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSlideReveal, hapticSlideClose, hapticSelect } from '../../lib/haptics';
@@ -82,6 +82,17 @@ export default function FriendsPanel({ open, onClose }: Props) {
     } catch {}
     return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
   }
+
+  // Высота выпадающей панели приглашений: по числу элементов, но не больше max
+  const invitePanelMaxH = 280;
+  const inviteRowH = 56;  // h-14
+  const inviteGap = 8;    // gap-2
+  const invitePadV = 12;  // p-3 (верх/низ по 12)
+  const inviteVisibleCount = Math.max(1, invites.length || (loadingInv ? 1 : 0));
+  const inviteTargetH = Math.min(
+    invitePanelMaxH,
+    invitePadV * 2 + inviteVisibleCount * inviteRowH + Math.max(0, inviteVisibleCount - 1) * inviteGap
+  );
 
   async function loadInvites() {
     if (!myId) return;
@@ -216,10 +227,10 @@ export default function FriendsPanel({ open, onClose }: Props) {
         <button
           type="button"
           onClick={() => setInvitesOpen(v => { if (!v) { try { hapticSlideReveal(); } catch {} } else { try { hapticSlideClose(); } catch {} } return !v; })}
-          className="w-full flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
+          className="relative w-full flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
         >
           <div className="text-sm font-bold text-white">Приглашения</div>
-          <span className="text-white/80" style={{ transform: invitesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 160ms ease' }}>▾</span>
+          <span className="absolute right-4 text-white/80" style={{ transform: invitesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 160ms ease' }}>▾</span>
         </button>
 
         {/* Выпадающая панель приглашений — компактная, собственный скролл */}
@@ -228,12 +239,12 @@ export default function FriendsPanel({ open, onClose }: Props) {
             <motion.div
               key="invites"
               initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 280, opacity: 1 }}
+              animate={{ height: inviteTargetH, opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ type: 'tween', duration: 0.24 }}
               className="overflow-hidden"
             >
-              <div className="h-[280px] rounded-2xl bg-white/5 border border-white/10 p-3 overflow-auto no-scrollbar">
+              <div className="h-full rounded-2xl bg-white/5 border border-white/10 p-3 overflow-auto no-scrollbar">
                 {loadingInv && <div className="text-sm text-white/70">Загрузка…</div>}
                 {!loadingInv && invites.length === 0 && (
                   <div className="text-sm text-white/70">Нет приглашений</div>
