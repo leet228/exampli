@@ -59,13 +59,8 @@ export default function AddCourseSheet({
 
   const picked = useMemo(() => all.find((s) => s.id === pickedId) || null, [all, pickedId]);
 
-  // Цвет «полоски» вычисляем от основного цвета (accent для выбранного и тёмный фон для обычного)
-  const accentColor = useMemo(() => {
-    try {
-      const c = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      return c || '#306bff';
-    } catch { return '#306bff'; }
-  }, []);
+  // Локальный accent (не берём из CSS)
+  const accentColor = '#3c73ff';
   const shadowHeight = 6;
   const darken = (hex: string, amount = 18) => {
     const h = hex.replace('#', '');
@@ -76,6 +71,13 @@ export default function AddCourseSheet({
     return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
   };
   const baseDefault = '#22313a';
+  const hexToRgba = (hex: string, alpha: number) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
 
   const save = async () => {
     if (!picked) return;
@@ -184,8 +186,9 @@ export default function AddCourseSheet({
                           setPickedId(s.id);
                         }}
                         className={`w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
-                          active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5'
+                          active ? 'bg-white/5' : 'border-white/10 bg-white/5'
                         }`}
+                        style={{ borderColor: active ? accentColor : undefined, backgroundColor: active ? 'rgba(60, 115, 255, 0.10)' : undefined }}
                         animate={{
                           y: pressedId === s.id ? shadowHeight : 0,
                           boxShadow: pressedId === s.id
@@ -193,7 +196,6 @@ export default function AddCourseSheet({
                             : `0px ${shadowHeight}px 0px ${active ? darken(accentColor, 18) : darken(baseDefault, 18)}`,
                         }}
                         transition={{ duration: 0 }}
-                        style={{ borderRadius: 16 }}
                       >
                         <div className="flex items-center gap-3">
                           <img
@@ -205,10 +207,10 @@ export default function AddCourseSheet({
                             }}
                           />
                           <div className="text-left leading-tight">
-                            <div className={`font-semibold truncate max-w-[60vw] ${active ? 'text-[var(--accent)]' : ''}`}>{s.title}</div>
+                            <div className={`font-semibold truncate max-w-[60vw]`} style={{ color: active ? accentColor : undefined }}>{s.title}</div>
                           </div>
                         </div>
-                        <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
+                        <div className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: active ? accentColor : 'rgba(255,255,255,0.2)' }} />
                       </motion.button>
                     );
                   })}

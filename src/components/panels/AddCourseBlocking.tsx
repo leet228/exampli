@@ -13,9 +13,8 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
-  const accentColor = useMemo(() => {
-    try { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#306bff'; } catch { return '#306bff'; }
-  }, []);
+  // Локальный accent (не берём из CSS)
+  const accentColor = '#3c73ff';
   const baseDefault = '#22313a';
   const shadowHeight = 6;
   const darken = (hex: string, amount = 18) => {
@@ -135,8 +134,9 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
-                            isSel ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
+                            isSel ? 'bg-white/5' : 'border-white/10 bg-white/5 hover:bg-white/10'
                           }`}
+                          style={{ borderColor: isSel ? accentColor : undefined, backgroundColor: isSel ? 'rgba(60,115,255,0.10)' : undefined }}
                           animate={{
                             y: pressedId === s.id ? shadowHeight : 0,
                             boxShadow: pressedId === s.id
@@ -153,7 +153,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                             />
                             <div className="text-left leading-tight">
-                              <div className={`font-semibold truncate max-w-[60vw] ${isSel ? 'text-[var(--accent)]' : ''}`}>{s.title}</div>
+                              <div className={`font-semibold truncate max-w-[60vw]`} style={{ color: isSel ? accentColor : undefined }}>{s.title}</div>
                             </div>
                           </div>
 
