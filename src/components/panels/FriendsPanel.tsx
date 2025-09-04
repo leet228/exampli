@@ -574,15 +574,43 @@ function PressButton({
 }) {
   const [pressed, setPressed] = useState(false);
   const shadowHeight = 6;
-  const darken = (hex: string, amount = 18) => {
-    const h = hex.replace('#', '');
-    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
-    const n = parseInt(full, 16);
-    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  // Разбор цвета: поддержка hex, rgb/rgba, а также linear-gradient(...) — берём последний цвет-стоп
+  function pickColorToken(input: string): string {
+    try {
+      if (!input) return '#1d2837';
+      const s = String(input).trim();
+      const re = /#(?:[0-9a-fA-F]{3}){1,2}|rgba?\([^\)]+\)/g;
+      if (s.startsWith('linear-gradient')) {
+        const matches = s.match(re);
+        if (matches && matches.length) return matches[matches.length - 1];
+      }
+      return s.match(re)?.[0] || s;
+    } catch { return '#1d2837'; }
+  }
+  function tokenToRgb(token: string): { r: number; g: number; b: number } {
+    try {
+      const t = token.trim();
+      if (t.startsWith('#')) {
+        const h = t.slice(1);
+        const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+        const n = parseInt(full, 16);
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+      }
+      if (t.startsWith('rgb')) {
+        const nums = t.replace(/rgba?\(/, '').replace(/\)/, '').split(',').map(x => parseFloat(x.trim()));
+        return { r: Math.round(nums[0] || 0), g: Math.round(nums[1] || 0), b: Math.round(nums[2] || 0) };
+      }
+    } catch {}
+    return { r: 29, g: 40, b: 55 }; // #1d2837 fallback
+  }
+  function darkenToken(input: string, amount = 18): string {
+    const token = pickColorToken(input);
+    const { r, g, b } = tokenToRgb(token);
     const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
     return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
-  };
-  const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
+  }
+  const shadowColor = darkenToken(baseColor, 18);
+  const shadow = pressed ? `0px 0px 0px ${shadowColor}` : `0px ${shadowHeight}px 0px ${shadowColor}`;
   return (
     <motion.button
       type="button"
