@@ -246,13 +246,16 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
                     ) : statusById[r.user_id] === 'friend' ? (
                       <div className="text-sm text-white/60">Друг</div>
                     ) : (
-                      <button
-                        type="button"
+                      <PressButton
                         onClick={() => void sendRequest(r.user_id)}
-                        className="px-3 py-1 rounded-xl bg-white/10 border border-white/10 text-sm font-semibold active:opacity-80"
+                        className="px-3 py-1 rounded-xl text-sm font-semibold"
+                        baseColor="#2a3944"
+                        background="rgba(255,255,255,0.10)"
+                        borderColor="rgba(255,255,255,0.10)"
+                        textColor="#ffffff"
                       >
                         Добавить
-                      </button>
+                      </PressButton>
                     )}
                   </div>
                 </div>
