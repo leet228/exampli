@@ -165,13 +165,26 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
           supabase.rpc('rpc_friend_count', { caller: userRow.id } as any),
         ]);
         if (!listR.error && Array.isArray(listR.data)) {
-          const list = (listR.data as any[]).map(p => ({
+          let list = (listR.data as any[]).map(p => ({
             user_id: p.user_id || p.friend_id,
             first_name: p.first_name ?? null,
             username: p.username ?? null,
             background_color: p.background_color ?? null,
             background_icon: p.background_icon ?? null,
+            avatar_url: (p as any)?.avatar_url ?? null,
           }));
+          // обогатим avatar_url из users для отсутствующих значений
+          try {
+            const need = list.filter(r => !r.avatar_url).map(r => r.user_id);
+            if (need.length) {
+              const { data: usersData } = await supabase
+                .from('users')
+                .select('id, avatar_url')
+                .in('id', need as string[]);
+              const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+              list = list.map(r => ({ ...r, avatar_url: r.avatar_url ?? map.get(r.user_id) ?? null }));
+            }
+          } catch {}
           cacheSet(CACHE_KEYS.friendsList, list);
           try { (window as any).__exampliBootFriends = list; } catch {}
           try { console.log('[boot] refreshed friends list, count:', list.length); } catch {}
@@ -215,13 +228,25 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   try {
     const r = await supabase.rpc('rpc_friend_list', { caller: userRow?.id } as any);
     if (!r.error && Array.isArray(r.data)) {
-      const list = (r.data as any[]).map(p => ({
+      let list = (r.data as any[]).map(p => ({
         user_id: p.user_id || p.friend_id,
         first_name: p.first_name ?? null,
         username: p.username ?? null,
         background_color: p.background_color ?? null,
         background_icon: p.background_icon ?? null,
+        avatar_url: (p as any)?.avatar_url ?? null,
       }));
+      try {
+        const need = list.filter(r => !r.avatar_url).map(r => r.user_id);
+        if (need.length) {
+          const { data: usersData } = await supabase
+            .from('users')
+            .select('id, avatar_url')
+            .in('id', need as string[]);
+          const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+          list = list.map(r => ({ ...r, avatar_url: r.avatar_url ?? map.get(r.user_id) ?? null }));
+        }
+      } catch {}
       cacheSet(CACHE_KEYS.friendsList, list);
       try { (window as any).__exampliBootFriends = list; } catch {}
     }
