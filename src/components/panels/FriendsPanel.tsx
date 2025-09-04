@@ -307,12 +307,10 @@ export default function FriendsPanel({ open, onClose }: Props) {
     try { hapticSelect(); } catch {}
     // Сначала открываем локальный оверлей в панели для красивой анимации
     void openFriendProfile(f);
-    // Затем через короткую паузу закрываем панель и переходим в профиль
-    setTimeout(() => {
-      try { (window as any)?.Telegram?.WebApp?.BackButton?.hide?.(); } catch {}
-      onClose();
-      navigate('/profile');
-    }, 600);
+    // Сразу закрываем панель и переходим в профиль
+    try { (window as any)?.Telegram?.WebApp?.BackButton?.hide?.(); } catch {}
+    onClose();
+    navigate('/profile');
   }
 
   return (
