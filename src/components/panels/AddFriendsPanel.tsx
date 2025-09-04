@@ -15,7 +15,7 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [q, setQ] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [rows, setRows] = useState<Array<{ user_id: string; first_name: string | null; username: string | null }>>([]);
+  const [rows, setRows] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; avatar_url: string | null }>>([]);
   const [pending, setPending] = useState<Record<string, 'pending' | 'accepted'>>({});
   const [statusById, setStatusById] = useState<Record<string, 'friend'>>(() => {
     try {
@@ -34,6 +34,20 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       return {};
     } catch { return {}; }
   });
+
+  async function enrichSearchAvatars(list: Array<{ user_id: string; first_name: string | null; username: string | null; avatar_url?: string | null }>): Promise<Array<{ user_id: string; first_name: string | null; username: string | null; avatar_url: string | null }>> {
+    try {
+      const ids = Array.from(new Set(list.map(r => r.user_id).filter(Boolean)));
+      if (!ids.length) return list.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
+      const { data } = await supabase
+        .from('users')
+        .select('id, avatar_url')
+        .in('id', ids as string[]);
+      const map = new Map<string, string | null>((data || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+      return list.map(r => ({ ...r, avatar_url: map.get(r.user_id) ?? r.avatar_url ?? null }));
+    } catch {}
+    return list.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
+  }
   const [toast, setToast] = useState<string | null>(null);
   async function onShareInvite() {
     try {
@@ -98,8 +112,14 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
       }
       const { data, error } = await req.limit(20);
       if (!error && Array.isArray(data)) {
-        const filtered = data.filter(r => r.user_id && r.user_id !== myId);
-        setRows(filtered as any);
+        const filtered = (data as any[]).filter(r => r.user_id && r.user_id !== myId).map((r) => ({
+          user_id: r.user_id,
+          first_name: r.first_name ?? null,
+          username: r.username ?? null,
+          avatar_url: null as string | null,
+        }));
+        const withAvatars = await enrichSearchAvatars(filtered);
+        setRows(withAvatars as any);
         // обновим статусы из кэша и серверные статусы (через RPC, если доступен)
         try {
           const list = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
@@ -204,8 +224,12 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
               {rows.map((r) => (
                 <div key={r.user_id} className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-white/10 grid place-items-center text-sm font-bold">
-                      {(r.first_name || r.username || '?').slice(0,1).toUpperCase()}
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.25)] grid place-items-center">
+                      {r.avatar_url ? (
+                        <img src={r.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <span className="text-sm font-bold text-white/95">{(r.first_name || r.username || '?').slice(0,1).toUpperCase()}</span>
+                      )}
                     </div>
                     <div className="flex flex-col">
                       <div className="font-semibold">{r.first_name || 'Без имени'}</div>
