@@ -305,10 +305,13 @@ export default function FriendsPanel({ open, onClose }: Props) {
                       )}
                     </div>
                   </div>
-                </div>
-                <div className="px-3 py-2 text-left">
-                  <div className="font-semibold">{f.first_name || 'Без имени'}</div>
-                  {f.username && <div className="text-sm text-white/70">@{f.username}</div>}
+
+                  {/* Имя по центру, под аватаркой, у нижнего края фона */}
+                  <div className="absolute left-1/2 bottom-2 -translate-x-1/2 text-center">
+                    <div className="font-semibold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}>
+                      {f.first_name || 'Без имени'}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
