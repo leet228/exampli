@@ -65,6 +65,8 @@ export default function Profile() {
   const [qrOpen, setQrOpen] = useState<boolean>(false);
   const [qrImgUrl, setQrImgUrl] = useState<string>('');
   const [qrLoading, setQrLoading] = useState<boolean>(false);
+  const [addPressed, setAddPressed] = useState<boolean>(false);
+  const addShadowHeight = 6;
 
   async function openQrInvite() {
     try {
@@ -348,12 +350,29 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Кнопка «Добавить друзей» */}
+          {/* Кнопка «Добавить друзей» — фон как у приложения, белая обводка/текст, нижняя полоска белая */}
           <div className="w-full max-w-xl px-3">
-            <button type="button" onClick={() => setAddFriendsOpen(true)} className="w-full rounded-3xl px-4 py-4 bg-white/5 border border-white/10 flex items-center justify-center gap-2 font-semibold">
+            <motion.button
+              type="button"
+              onPointerDown={() => setAddPressed(true)}
+              onPointerUp={() => setAddPressed(false)}
+              onPointerCancel={() => setAddPressed(false)}
+              onClick={() => setAddFriendsOpen(true)}
+              className="w-full rounded-3xl px-4 py-4 flex items-center justify-center gap-2 font-semibold"
+              animate={{
+                y: addPressed ? addShadowHeight : 0,
+                boxShadow: addPressed ? `0px 0px 0px rgba(255,255,255,1)` : `0px ${addShadowHeight}px 0px rgba(255,255,255,1)`,
+              }}
+              transition={{ duration: 0 }}
+              style={{
+                background: 'var(--bg)',
+                border: '1px solid rgba(255,255,255,1)',
+                color: 'rgba(255,255,255,1)'
+              }}
+            >
               <span className="text-lg">👤＋</span>
               <span>Добавить друзей</span>
-            </button>
+            </motion.button>
           </div>
 
           {/* Обзор */}
