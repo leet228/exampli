@@ -224,6 +224,65 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   } catch {}
   step(++i, TOTAL);
 
+  // 2g) Входящие приглашения: количество и список (other_id, first_name, username, avatar_url)
+  try {
+    if (userRow?.id) {
+      const rpc = await supabase.rpc('rpc_friend_incoming', { caller: userRow.id } as any);
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        let invites = (rpc.data as any[]).map((r) => ({
+          other_id: r.other_id || r.friend_id || r.a_id || r.b_id,
+          first_name: r.first_name ?? null,
+          username: r.username ?? null,
+          avatar_url: (r as any)?.avatar_url ?? null,
+        }));
+        // дополним avatar_url из users при необходимости
+        try {
+          const need = invites.filter(x => !x.avatar_url).map(x => x.other_id).filter(Boolean);
+          if (need.length) {
+            const { data: usersData } = await supabase
+              .from('users')
+              .select('id, avatar_url')
+              .in('id', need as string[]);
+            const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+            invites = invites.map(x => ({ ...x, avatar_url: x.avatar_url ?? map.get(x.other_id) ?? null }));
+          }
+        } catch {}
+        cacheSet(CACHE_KEYS.invitesIncomingList, invites);
+        cacheSet(CACHE_KEYS.invitesIncomingCount, invites.length);
+        try { (window as any).__exampliBootInvites = invites; } catch {}
+      } else {
+        // fallback: friend_links pending not requested by me
+        const { data: links } = await supabase
+          .from('friend_links')
+          .select('a_id,b_id,requester_id,status')
+          .eq('status', 'pending')
+          .neq('requester_id', userRow.id)
+          .or(`a_id.eq.${userRow.id},b_id.eq.${userRow.id}`)
+          .limit(50);
+        const ids = Array.from(new Set((links as any[] || []).map((l: any) => (l.a_id === userRow.id ? l.b_id : l.a_id)).filter(Boolean)));
+        let list: any[] = [];
+        if (ids.length) {
+          const [{ data: profs }, { data: usersData }] = await Promise.all([
+            supabase.from('user_profile').select('user_id, first_name, username').in('user_id', ids as string[]),
+            supabase.from('users').select('id, avatar_url').in('id', ids as string[]),
+          ]);
+          const byProf = new Map<string, any>((profs || []).map((p: any) => [String(p.user_id), p]));
+          const byUser = new Map<string, any>((usersData || []).map((u: any) => [String(u.id), u]));
+          list = ids.map((id) => ({
+            other_id: id,
+            first_name: byProf.get(String(id))?.first_name ?? null,
+            username: byProf.get(String(id))?.username ?? null,
+            avatar_url: byUser.get(String(id))?.avatar_url ?? null,
+          }));
+        }
+        cacheSet(CACHE_KEYS.invitesIncomingList, list);
+        cacheSet(CACHE_KEYS.invitesIncomingCount, list.length);
+        try { (window as any).__exampliBootInvites = list; } catch {}
+      }
+    }
+  } catch {}
+  step(++i, TOTAL);
+
   // 2e) список друзей для кэша и boot
   try {
     const r = await supabase.rpc('rpc_friend_list', { caller: userRow?.id } as any);

@@ -51,7 +51,18 @@ export default function FriendsPanel({ open, onClose }: Props) {
     if (!open) { setInvitesOpen(false); setInvites([]); }
   }, [open]);
 
-  useEffect(() => { if (open && invitesOpen) void loadInvites(); }, [open, invitesOpen]);
+  useEffect(() => {
+    if (open && invitesOpen) {
+      // первичная инициализация из boot/cache
+      try {
+        const boot = (window as any).__exampliBootInvites as any[] | undefined;
+        const cached = cacheGet<any[]>(CACHE_KEYS.invitesIncomingList) || [];
+        const seed = (Array.isArray(boot) && boot.length ? boot : cached) as any[];
+        if (Array.isArray(seed) && seed.length) setInvites(seed as any);
+      } catch {}
+      void loadInvites();
+    }
+  }, [open, invitesOpen]);
   useEffect(() => { if (open) void loadFriends(); }, [open]);
 
   async function enrichWithAvatars(rows: Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url?: string | null }>): Promise<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>> {
@@ -152,6 +163,13 @@ export default function FriendsPanel({ open, onClose }: Props) {
           delete (sent as any)[otherId];
           cacheSet(CACHE_KEYS.friendsPendingSent, sent);
         } catch {}
+        // обновим кеш инвайтов и счётчик
+        try {
+          const rest = (cacheGet<any[]>(CACHE_KEYS.invitesIncomingList) || []).filter((x: any) => x?.other_id !== otherId);
+          cacheSet(CACHE_KEYS.invitesIncomingList, rest);
+          cacheSet(CACHE_KEYS.invitesIncomingCount, rest.length);
+          (window as any).__exampliBootInvites = rest;
+        } catch {}
       }
     } catch {}
   }
@@ -162,6 +180,13 @@ export default function FriendsPanel({ open, onClose }: Props) {
       let { error } = await supabase.rpc('rpc_friend_remove', { other_id: otherId, caller: myId } as any);
       if (error) { const r2 = await supabase.rpc('rpc_friend_remove', { other_id: otherId } as any); error = r2.error; }
       if (!error) setInvites(list => list.filter(x => x.other_id !== otherId));
+      // обновим кеш инвайтов и счётчик
+      try {
+        const rest = (cacheGet<any[]>(CACHE_KEYS.invitesIncomingList) || []).filter((x: any) => x?.other_id !== otherId);
+        cacheSet(CACHE_KEYS.invitesIncomingList, rest);
+        cacheSet(CACHE_KEYS.invitesIncomingCount, rest.length);
+        (window as any).__exampliBootInvites = rest;
+      } catch {}
     } catch {}
   }
 
@@ -230,6 +255,18 @@ export default function FriendsPanel({ open, onClose }: Props) {
           className="relative w-full flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
         >
           <div className="text-sm font-bold text-white">Приглашения</div>
+          {/* красный бейдж с количеством */}
+          {(() => {
+            try {
+              const cnt = cacheGet<number>(CACHE_KEYS.invitesIncomingCount) || ((window as any).__exampliBootInvites?.length ?? 0);
+              if (!cnt) return null;
+              return (
+                <span className="absolute right-9 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold">
+                  {Math.min(99, cnt)}
+                </span>
+              );
+            } catch { return null; }
+          })()}
           <span className="absolute right-4 text-white/80" style={{ transform: invitesOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 160ms ease' }}>▾</span>
         </button>
 
