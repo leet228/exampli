@@ -32,9 +32,9 @@ export default function FriendsPanel({ open, onClose }: Props) {
   const iconsCloud = useMemo(() => {
     // Чуть больший вертикальный шаг; ряд из 4 иконок на уровне центра аватарки (≈50%)
     const rows: { y: number; xs: number[] }[] = [
-      { y: 26, xs: [28, 72] },
-      { y: 36, xs: [18, 50, 82] },
-      { y: 46, xs: [28, 72] },
+      { y: 12, xs: [28, 72] },
+      { y: 24, xs: [18, 50, 82] },
+      { y: 36, xs: [28, 72] },
       { y: 50, xs: [10, 30, 70, 90] },
       { y: 64, xs: [28, 72] },
       { y: 76, xs: [18, 50, 82] },
