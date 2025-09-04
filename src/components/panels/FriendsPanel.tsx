@@ -30,14 +30,15 @@ export default function FriendsPanel({ open, onClose }: Props) {
 
   // Компоновка «облака иконок» как в профиле
   const iconsCloud = useMemo(() => {
+    // Чуть больший вертикальный шаг; ряд из 4 иконок на уровне центра аватарки (≈50%)
     const rows: { y: number; xs: number[] }[] = [
-      { y: 30, xs: [28, 72] },
-      { y: 38, xs: [18, 50, 82] },
+      { y: 26, xs: [28, 72] },
+      { y: 36, xs: [18, 50, 82] },
       { y: 46, xs: [28, 72] },
-      { y: 58, xs: [10, 30, 70, 90] },
-      { y: 70, xs: [28, 72] },
-      { y: 78, xs: [18, 50, 82] },
-      { y: 86, xs: [28, 72] },
+      { y: 50, xs: [10, 30, 70, 90] },
+      { y: 64, xs: [28, 72] },
+      { y: 76, xs: [18, 50, 82] },
+      { y: 88, xs: [28, 72] },
     ];
     const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
     rows.forEach((row) => {
