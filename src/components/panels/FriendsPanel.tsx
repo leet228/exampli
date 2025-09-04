@@ -305,9 +305,14 @@ export default function FriendsPanel({ open, onClose }: Props) {
 
   function onFriendClick(f: { user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }) {
     try { hapticSelect(); } catch {}
-    try { (window as any)?.Telegram?.WebApp?.BackButton?.hide?.(); } catch {}
-    onClose();
-    navigate('/profile');
+    // Сначала открываем локальный оверлей в панели для красивой анимации
+    void openFriendProfile(f);
+    // Затем через короткую паузу закрываем панель и переходим в профиль
+    setTimeout(() => {
+      try { (window as any)?.Telegram?.WebApp?.BackButton?.hide?.(); } catch {}
+      onClose();
+      navigate('/profile');
+    }, 600);
   }
 
   return (
