@@ -12,6 +12,20 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
   const [all, setAll] = useState<Subject[]>([]);
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [pressedId, setPressedId] = useState<number | null>(null);
+  const accentColor = useMemo(() => {
+    try { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#306bff'; } catch { return '#306bff'; }
+  }, []);
+  const baseDefault = '#22313a';
+  const shadowHeight = 6;
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
 
   useEffect(() => { if (!open) return;
     (async () => {
@@ -59,9 +73,9 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                         <motion.button
                           key={s.id}
                           type="button"
-                          whileTap={{ scale: 0.97 }}
-                          animate={isSel ? { scale: [1, 0.96, 1.02, 1] } : {}}
-                          transition={{ duration: 0.28 }}
+                          onPointerDown={() => setPressedId(s.id)}
+                          onPointerUp={() => setPressedId(null)}
+                          onPointerCancel={() => setPressedId(null)}
                           onClick={async () => {
                             setSelectedId(s.id);
                             hapticSelect();
@@ -123,6 +137,13 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                             isSel ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
                           }`}
+                          animate={{
+                            y: pressedId === s.id ? shadowHeight : 0,
+                            boxShadow: pressedId === s.id
+                              ? `0px 0px 0px ${isSel ? darken(accentColor, 18) : darken(baseDefault, 18)}`
+                              : `0px ${shadowHeight}px 0px ${isSel ? darken(accentColor, 18) : darken(baseDefault, 18)}`,
+                          }}
+                          transition={{ duration: 0 }}
                         >
                           <div className="flex items-center gap-3">
                             <img
@@ -132,7 +153,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                             />
                             <div className="text-left leading-tight">
-                              <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
+                              <div className={`font-semibold truncate max-w-[60vw] ${isSel ? 'text-[var(--accent)]' : ''}`}>{s.title}</div>
                             </div>
                           </div>
 

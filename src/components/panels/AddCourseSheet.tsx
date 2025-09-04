@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
@@ -20,6 +21,7 @@ export default function AddCourseSheet({
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
+  const [pressedId, setPressedId] = useState<number | null>(null);
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -56,6 +58,24 @@ export default function AddCourseSheet({
   }, [all]);
 
   const picked = useMemo(() => all.find((s) => s.id === pickedId) || null, [all, pickedId]);
+
+  // Цвет «полоски» вычисляем от основного цвета (accent для выбранного и тёмный фон для обычного)
+  const accentColor = useMemo(() => {
+    try {
+      const c = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      return c || '#306bff';
+    } catch { return '#306bff'; }
+  }, []);
+  const shadowHeight = 6;
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
+  const baseDefault = '#22313a';
 
   const save = async () => {
     if (!picked) return;
@@ -153,9 +173,12 @@ export default function AddCourseSheet({
                     const active = s.id === pickedId;
                     const imgSrc = `/subjects/${s.code}.svg`;
                     return (
-                      <button
+                      <motion.button
                         key={s.id}
                         type="button"
+                        onPointerDown={() => setPressedId(s.id)}
+                        onPointerUp={() => setPressedId(null)}
+                        onPointerCancel={() => setPressedId(null)}
                         onClick={() => {
                           hapticSelect();
                           setPickedId(s.id);
@@ -163,6 +186,14 @@ export default function AddCourseSheet({
                         className={`w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                           active ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/10 bg-white/5'
                         }`}
+                        animate={{
+                          y: pressedId === s.id ? shadowHeight : 0,
+                          boxShadow: pressedId === s.id
+                            ? `0px 0px 0px ${active ? darken(accentColor, 18) : darken(baseDefault, 18)}`
+                            : `0px ${shadowHeight}px 0px ${active ? darken(accentColor, 18) : darken(baseDefault, 18)}`,
+                        }}
+                        transition={{ duration: 0 }}
+                        style={{ borderRadius: 16 }}
                       >
                         <div className="flex items-center gap-3">
                           <img
@@ -174,11 +205,11 @@ export default function AddCourseSheet({
                             }}
                           />
                           <div className="text-left leading-tight">
-                            <div className="font-semibold truncate max-w-[60vw]">{s.title}</div>
+                            <div className={`font-semibold truncate max-w-[60vw] ${active ? 'text-[var(--accent)]' : ''}`}>{s.title}</div>
                           </div>
                         </div>
                         <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
-                      </button>
+                      </motion.button>
                     );
                   })}
                   </div>
