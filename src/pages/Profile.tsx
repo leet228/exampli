@@ -67,6 +67,17 @@ export default function Profile() {
   const [qrLoading, setQrLoading] = useState<boolean>(false);
   const [addPressed, setAddPressed] = useState<boolean>(false);
   const addShadowHeight = 6;
+  const [savePressed, setSavePressed] = useState<boolean>(false);
+  const saveShadowHeight = 6;
+  const accentColor = '#3c73ff';
+  const darken = (hex: string, amount = 18) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
 
   async function openQrInvite() {
     try {
@@ -475,9 +486,18 @@ export default function Profile() {
 
           {/* Сохранить */}
           <div className="w-full max-w-xl px-3">
-            <button
+            <motion.button
               type="button"
-              className="btn w-full mt-4"
+              onPointerDown={() => setSavePressed(true)}
+              onPointerUp={() => setSavePressed(false)}
+              onPointerCancel={() => setSavePressed(false)}
+              className="w-full mt-4 rounded-3xl px-5 py-4 font-semibold text-white"
+              animate={{
+                y: savePressed ? saveShadowHeight : 0,
+                boxShadow: savePressed ? `0px 0px 0px ${darken(accentColor, 18)}` : `0px ${saveShadowHeight}px 0px ${darken(accentColor, 18)}`,
+              }}
+              transition={{ duration: 0 }}
+              style={{ background: accentColor, border: '1px solid rgba(0,0,0,0.08)' }}
               onClick={async () => {
                 try {
                   const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id;
@@ -519,7 +539,7 @@ export default function Profile() {
               }}
             >
               Сохранить
-            </button>
+            </motion.button>
             {/* Телеграм BackButton — отмена изменений */}
             <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setTempBgIcon(bgIcon); setEditing(false); }} active={editing} />
           </div>
