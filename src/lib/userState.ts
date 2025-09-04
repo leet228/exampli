@@ -33,6 +33,7 @@ export async function ensureUser(): Promise<UserStats | null> {
         username: tgUser?.username,
         first_name: tgUser?.first_name,
         last_name: tgUser?.last_name,
+        avatar_url: tgUser?.photo_url ?? null,
         timezone,
         // дефолты при первом создании
         energy: 25,
@@ -64,6 +65,15 @@ export async function ensureUser(): Promise<UserStats | null> {
     if (!user.timezone && currentTz) {
       await supabase.from('users').update({ timezone: currentTz }).eq('id', (user as any).id);
       (user as any).timezone = currentTz;
+    }
+  } catch {}
+  // обновим avatar_url из Telegram, если он отсутствует или изменился
+  try {
+    const tgUser = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user;
+    const photo = tgUser?.photo_url as string | undefined;
+    if (photo && (user as any)?.avatar_url !== photo) {
+      await supabase.from('users').update({ avatar_url: photo }).eq('id', (user as any).id);
+      (user as any).avatar_url = photo;
     }
   } catch {}
   // ensure user_profile существует для существующего пользователя
