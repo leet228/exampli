@@ -22,6 +22,7 @@ export default function AddCourseSheet({
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
+  const [ctaPressed, setCtaPressed] = useState<boolean>(false);
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -225,16 +226,28 @@ export default function AddCourseSheet({
       {/* Sticky CTA: без блюра и прозрачности, фон как у панели */}
       <div className="fixed inset-x-0 bottom-0 z-50 bg-[var(--surface,#131f24)] border-t border-white/10">
         <div className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+40px)]">
-          <button
+          <motion.button
             type="button"
             disabled={!picked}
-            onClick={() => { hapticSelect(); save(); }}
-            className={`w-full rounded-2xl py-4 font-semibold transition
-              ${picked ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}
-            `}
+            onPointerDown={() => { if (picked) setCtaPressed(true); }}
+            onPointerUp={() => setCtaPressed(false)}
+            onPointerCancel={() => setCtaPressed(false)}
+            onClick={() => { if (!picked) return; hapticSelect(); save(); }}
+            className="w-full rounded-2xl py-4 font-semibold text-white"
+            animate={{
+              y: picked && ctaPressed ? shadowHeight : 0,
+              boxShadow: picked ? (ctaPressed ? `0px 0px 0px ${darken(accentColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(accentColor, 18)}`) : 'none',
+            }}
+            transition={{ duration: 0 }}
+            style={{
+              background: picked ? accentColor : '#37464f',
+              border: '1px solid rgba(0,0,0,0.08)',
+              color: picked ? '#fff' : 'rgba(255,255,255,0.6)',
+              cursor: picked ? 'pointer' : 'not-allowed',
+            }}
           >
             {picked ? 'Добавить' : 'Выбери курс'}
-          </button>
+          </motion.button>
         </div>
       </div>
     </FullScreenSheet>
