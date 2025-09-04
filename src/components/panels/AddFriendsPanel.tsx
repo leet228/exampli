@@ -185,7 +185,10 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         <PressButton
           onClick={() => { try { hapticSelect(); } catch {} setSearchOpen(true); }}
           className="w-full flex items-center gap-3 rounded-2xl px-4 py-3"
-          baseColor="#3c73ff"
+          baseColor="#2a3944"
+          background="rgba(255,255,255,0.05)"
+          borderColor="rgba(255,255,255,0.10)"
+          textColor="#ffffff"
         >
           <img src="/friends/loupe.svg" alt="Поиск" className="w-10 h-10" />
           <div className="text-left">
@@ -197,7 +200,10 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
         <PressButton
           onClick={() => { try { hapticSelect(); } catch {} void onShareInvite(); }}
           className="w-full flex items-center gap-3 rounded-2xl px-4 py-3"
-          baseColor="#3c73ff"
+          baseColor="#2a3944"
+          background="rgba(255,255,255,0.05)"
+          borderColor="rgba(255,255,255,0.10)"
+          textColor="#ffffff"
         >
           <img src="/friends/plane.svg" alt="Поделиться" className="w-10 h-10" />
           <div className="text-left">
@@ -277,11 +283,17 @@ export default function AddFriendsPanel({ open, onClose }: Props) {
 function PressButton({
   className = '',
   baseColor,
+  background,
+  borderColor,
+  textColor,
   onClick,
   children,
 }: {
   className?: string;
-  baseColor: string; // основной цвет кнопки
+  baseColor: string; // основной цвет кнопки для тени
+  background?: string; // цвет фона (например, rgba для «матового» вида)
+  borderColor?: string;
+  textColor?: string;
   onClick?: () => void;
   children: React.ReactNode;
 }) {
@@ -306,7 +318,11 @@ function PressButton({
       className={className}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
       transition={{ duration: 0 }}
-      style={{ background: baseColor, color: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}
+      style={{
+        background: background || baseColor,
+        color: textColor || '#fff',
+        border: `1px solid ${borderColor || 'rgba(0,0,0,0.08)'}`,
+      }}
     >
       {children}
     </motion.button>
