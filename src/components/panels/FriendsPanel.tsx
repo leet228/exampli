@@ -408,7 +408,15 @@ export default function FriendsPanel({ open, onClose }: Props) {
             const initials = (f.first_name || f.username || '?').slice(0,1).toUpperCase();
             const iconKey = f.background_icon || 'bg_icon_cat';
             return (
-              <button type="button" onClick={() => onFriendClick(f)} key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden text-left active:opacity-90">
+              <PressButton
+                key={f.user_id}
+                onClick={() => onFriendClick(f)}
+                className="rounded-2xl overflow-hidden text-left"
+                baseColor={f.background_color || '#1d2837'}
+                background="rgba(255,255,255,0.05)"
+                borderColor="rgba(255,255,255,0.10)"
+                textColor="#ffffff"
+              >
                 <div
                   className="relative w-full"
                   style={{ height: 140, background: f.background_color || '#1d2837' }}
@@ -457,7 +465,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
                     </div>
                   </div>
                 </div>
-              </button>
+              </PressButton>
             );
           })}
         </div>
