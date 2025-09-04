@@ -16,7 +16,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
     try { return (window as any)?.__exampliBoot?.user?.id as string | undefined; } catch { return undefined; }
   }, []);
   const [loadingInv, setLoadingInv] = useState<boolean>(false);
-  const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null }>>([]);
+  const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null; avatar_url: string | null }>>([]);
   const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>>(() => {
     try {
       const fromBoot = (window as any)?.__exampliBootFriends as any[] | undefined;
@@ -69,6 +69,20 @@ export default function FriendsPanel({ open, onClose }: Props) {
     return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
   }
 
+  async function enrichInviteAvatars(rows: Array<{ other_id: string; first_name: string | null; username: string | null; avatar_url?: string | null }>): Promise<Array<{ other_id: string; first_name: string | null; username: string | null; avatar_url: string | null }>> {
+    try {
+      const ids = Array.from(new Set(rows.map(r => r.other_id).filter(Boolean)));
+      if (!ids.length) return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
+      const { data } = await supabase
+        .from('users')
+        .select('id, avatar_url')
+        .in('id', ids as string[]);
+      const map = new Map<string, string | null>((data || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+      return rows.map(r => ({ ...r, avatar_url: map.get(r.other_id) ?? r.avatar_url ?? null }));
+    } catch {}
+    return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
+  }
+
   async function loadInvites() {
     if (!myId) return;
     setLoadingInv(true);
@@ -76,12 +90,14 @@ export default function FriendsPanel({ open, onClose }: Props) {
       // 1) Пробуем безопасный RPC (обходит RLS)
       const rpc = await supabase.rpc('rpc_friend_incoming', { caller: myId } as any);
       if (!rpc.error && Array.isArray(rpc.data)) {
-        const arr = (rpc.data as any[]).map((r) => ({
+        let arr = (rpc.data as any[]).map((r) => ({
           other_id: r.other_id || r.friend_id || r.a_id || r.b_id,
           first_name: r.first_name ?? null,
           username: r.username ?? null,
+          avatar_url: (r as any)?.avatar_url ?? null,
         }));
-        setInvites(arr.filter(x => x.other_id && x.other_id !== myId));
+        arr = await enrichInviteAvatars(arr.filter(x => x.other_id && x.other_id !== myId));
+        setInvites(arr);
         return;
       }
       // 2) Фолбэк на прямой select (если RLS выключен или настроен)
@@ -101,10 +117,11 @@ export default function FriendsPanel({ open, onClose }: Props) {
         .select('user_id, first_name, username')
         .in('user_id', ids as string[]);
       const byId = new Map<string, any>((profs || []).map(p => [p.user_id, p]));
-      const rows = ids.map(id => {
+      let rows = ids.map(id => {
         const p = byId.get(id) || {};
-        return { other_id: id, first_name: p.first_name || null, username: p.username || null };
+        return { other_id: id, first_name: p.first_name || null, username: p.username || null, avatar_url: null as string | null };
       });
+      rows = await enrichInviteAvatars(rows);
       setInvites(rows);
     } finally { setLoadingInv(false); }
   }
@@ -222,35 +239,42 @@ export default function FriendsPanel({ open, onClose }: Props) {
                   <div className="text-sm text-white/70">Нет приглашений</div>
                 )}
                 <div className="flex flex-col gap-2">
-                  {invites.map((r) => (
-                    <div key={r.other_id} className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-white/10 grid place-items-center text-sm font-bold">
-                          {(r.first_name || r.username || '?').slice(0,1).toUpperCase()}
+                  {invites.map((r) => {
+                    const initials = (r.first_name || r.username || '?').slice(0,1).toUpperCase();
+                    return (
+                      <div key={r.other_id} className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-black/20 border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.25)] grid place-items-center">
+                            {r.avatar_url ? (
+                              <img src={r.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <span className="text-sm font-bold text-white/95">{initials}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="font-semibold">{r.first_name || 'Без имени'}</div>
+                            {r.username && <div className="text-sm text-white/70">@{r.username}</div>}
+                          </div>
                         </div>
-                        <div className="flex flex-col">
-                          <div className="font-semibold">{r.first_name || 'Без имени'}</div>
-                          {r.username && <div className="text-sm text-white/70">@{r.username}</div>}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void accept(r.other_id)}
+                            className="px-3 py-1 rounded-lg bg-green-600/70 text-white text-sm font-semibold active:opacity-80"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void decline(r.other_id)}
+                            className="px-3 py-1 rounded-lg bg-red-600/70 text-white text-sm font-semibold active:opacity-80"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void accept(r.other_id)}
-                          className="px-3 py-1 rounded-lg bg-green-600/70 text-white text-sm font-semibold active:opacity-80"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void decline(r.other_id)}
-                          className="px-3 py-1 rounded-lg bg-red-600/70 text-white text-sm font-semibold active:opacity-80"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
