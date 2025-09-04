@@ -304,7 +304,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
   return (
     <>
     <FullScreenSheet open={open} onClose={() => { setInvitesOpen(false); onClose(); }} title="Друзья">
-      <div className="flex flex-col gap-3" style={{ minHeight: '60vh' }}>
+      <div className="relative flex flex-col gap-3" style={{ minHeight: '60vh' }}>
         {/* Кнопка «Приглашения» */}
         <button
           type="button"
@@ -449,40 +449,40 @@ export default function FriendsPanel({ open, onClose }: Props) {
       </div>
     </FullScreenSheet>
 
-    {/* Friend Profile Overlay */}
+    {/* Friend Profile Overlay (inside panel) */}
     <AnimatePresence>
       {friendOpen && friendView && (
         <motion.div
-          className="fixed inset-0 z-[50]"
+          className="absolute inset-0 z-[55]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
           onClick={closeFriendProfile}
         >
-          <div className="w-full h-full flex items-center justify-center p-6">
+          <div className="w-full h-full flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-              className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5"
-              style={{ width: 'min(480px, 92vw)', maxWidth: 520 }}
+              className="relative overflow-hidden rounded-2xl border border-white/10"
+              style={{ width: 'min(560px, 96vw)', maxWidth: 620, background: 'var(--bg)' }}
               onClick={(e) => { e.stopPropagation(); }}
             >
               {/* header background like profile */}
-              <div className="relative w-full" style={{ height: 220, background: friendView.background_color || '#1d2837' }}>
+              <div className="relative w-full" style={{ height: 280, background: friendView.background_color || '#1d2837' }}>
                 <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)', WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)' }}>
                   {iconsCloud.map((it, i) => (
                     <img key={i} src={`/profile_icons/${friendView.background_icon || 'bg_icon_cat'}.svg`} alt="" style={{ position: 'absolute', left: `${it.x}%`, top: `${it.y}%`, width: `${24 * it.s}px`, height: `${24 * it.s}px`, opacity: it.o, transform: `translate(-50%, -50%) rotate(${it.r}deg)`, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }} />
                   ))}
                 </div>
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <div className="relative z-[1] w-24 h-24 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+                  <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                     {(friendStats?.avatar_url || friendView.avatar_url) ? (
                       <img src={(friendStats?.avatar_url || friendView.avatar_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
-                      <div className="w-full h-full grid place-items-center text-2xl font-bold text-white/95">{(friendView.first_name || friendView.username || '?').slice(0,1).toUpperCase()}</div>
+                      <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/95">{(friendView.first_name || friendView.username || '?').slice(0,1).toUpperCase()}</div>
                     )}
                   </div>
                 </div>
@@ -494,7 +494,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
               </div>
 
               {/* body */}
-              <div className="p-4">
+              <div className="p-4" style={{ background: 'var(--bg)' }}>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
                     {friendStats?.courseCode ? (
@@ -521,10 +521,6 @@ export default function FriendsPanel({ open, onClose }: Props) {
                     <div className="text-2xl font-extrabold tabular-nums">{friendStats?.coins ?? 0}</div>
                     <div className="text-base">coin</div>
                   </div>
-                </div>
-
-                <div className="mt-4 flex justify-center">
-                  <button type="button" onClick={closeFriendProfile} className="badge">Закрыть</button>
                 </div>
               </div>
             </motion.div>
