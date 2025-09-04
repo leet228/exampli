@@ -27,6 +27,23 @@ export default function FriendsPanel({ open, onClose }: Props) {
     return [];
   });
   const [loadingFriends, setLoadingFriends] = useState<boolean>(false);
+  const [friendOpen, setFriendOpen] = useState<boolean>(false);
+  const [friendView, setFriendView] = useState<{
+    user_id: string;
+    first_name: string | null;
+    username: string | null;
+    background_color: string | null;
+    background_icon: string | null;
+    avatar_url: string | null;
+  } | null>(null);
+  const [friendStats, setFriendStats] = useState<{
+    streak: number;
+    coins: number;
+    friendsCount: number;
+    courseCode: string | null;
+    courseTitle: string | null;
+    avatar_url?: string | null;
+  } | null>(null);
 
   // Компоновка «облака иконок» как в профиле
   const iconsCloud = useMemo(() => {
@@ -245,7 +262,47 @@ export default function FriendsPanel({ open, onClose }: Props) {
     } finally { setLoadingFriends(false); }
   }
 
+  async function openFriendProfile(f: { user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }) {
+    setFriendView(f);
+    setFriendStats(null);
+    setFriendOpen(true);
+    try {
+      const [{ data: urow }, countR] = await Promise.all([
+        supabase
+          .from('users')
+          .select('streak, coins, added_course, avatar_url')
+          .eq('id', f.user_id)
+          .single(),
+        supabase.rpc('rpc_friend_count', { caller: f.user_id } as any),
+      ]);
+      let courseCode: string | null = null;
+      let courseTitle: string | null = null;
+      const added = (urow as any)?.added_course as number | null | undefined;
+      if (added) {
+        try {
+          const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();
+          courseCode = (subj as any)?.code ?? null;
+          courseTitle = (subj as any)?.title ?? null;
+        } catch {}
+      }
+      setFriendStats({
+        streak: Number((urow as any)?.streak ?? 0),
+        coins: Number((urow as any)?.coins ?? 0),
+        friendsCount: countR && !countR.error ? Number(countR.data || 0) : 0,
+        courseCode,
+        courseTitle,
+        avatar_url: (urow as any)?.avatar_url ?? f.avatar_url ?? null,
+      });
+    } catch {}
+  }
+
+  function closeFriendProfile() {
+    setFriendOpen(false);
+    setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
+  }
+
   return (
+    <>
     <FullScreenSheet open={open} onClose={() => { setInvitesOpen(false); onClose(); }} title="Друзья">
       <div className="flex flex-col gap-3" style={{ minHeight: '60vh' }}>
         {/* Кнопка «Приглашения» */}
@@ -336,7 +393,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
             const initials = (f.first_name || f.username || '?').slice(0,1).toUpperCase();
             const iconKey = f.background_icon || 'bg_icon_cat';
             return (
-              <div key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+              <button type="button" onClick={() => void openFriendProfile(f)} key={f.user_id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden text-left active:opacity-90">
                 <div
                   className="relative w-full"
                   style={{ height: 140, background: f.background_color || '#1d2837' }}
@@ -385,12 +442,97 @@ export default function FriendsPanel({ open, onClose }: Props) {
                     </div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
     </FullScreenSheet>
+
+    {/* Friend Profile Overlay */}
+    <AnimatePresence>
+      {friendOpen && friendView && (
+        <motion.div
+          className="fixed inset-0 z-[50]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+          onClick={closeFriendProfile}
+        >
+          <div className="w-full h-full flex items-center justify-center p-6">
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+              style={{ width: 'min(480px, 92vw)', maxWidth: 520 }}
+              onClick={(e) => { e.stopPropagation(); }}
+            >
+              {/* header background like profile */}
+              <div className="relative w-full" style={{ height: 220, background: friendView.background_color || '#1d2837' }}>
+                <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)', WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)' }}>
+                  {iconsCloud.map((it, i) => (
+                    <img key={i} src={`/profile_icons/${friendView.background_icon || 'bg_icon_cat'}.svg`} alt="" style={{ position: 'absolute', left: `${it.x}%`, top: `${it.y}%`, width: `${24 * it.s}px`, height: `${24 * it.s}px`, opacity: it.o, transform: `translate(-50%, -50%) rotate(${it.r}deg)`, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }} />
+                  ))}
+                </div>
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <div className="relative z-[1] w-24 h-24 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+                    {(friendStats?.avatar_url || friendView.avatar_url) ? (
+                      <img src={(friendStats?.avatar_url || friendView.avatar_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full grid place-items-center text-2xl font-bold text-white/95">{(friendView.first_name || friendView.username || '?').slice(0,1).toUpperCase()}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="absolute left-1/2 bottom-2 -translate-x-1/2 text-center">
+                  <div className="font-semibold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}>
+                    {friendView.first_name || 'Без имени'}{friendView.username ? ` (@${friendView.username})` : ''}
+                  </div>
+                </div>
+              </div>
+
+              {/* body */}
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
+                    {friendStats?.courseCode ? (
+                      <img src={`/subjects/${friendStats.courseCode}.svg`} alt="Курс" className="w-16 h-16 object-contain" />
+                    ) : (
+                      <div className="w-16 h-16 grid place-items-center text-2xl">🧩</div>
+                    )}
+                    <div className="text-sm text-white/80 mt-1 truncate max-w-[160px]">{friendStats?.courseTitle || 'Курс'}</div>
+                  </div>
+                  <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
+                    <div className="text-2xl font-extrabold tabular-nums leading-tight">{friendStats?.friendsCount ?? 0}</div>
+                    <div className="text-sm text-white/80 leading-tight mt-1">друзья</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="px-1 py-1 flex items-center gap-3">
+                    <img src="/stickers/fire.svg" alt="Стрик" className="w-10 h-10" />
+                    <div className="text-2xl font-extrabold tabular-nums">{friendStats?.streak ?? 0}</div>
+                    <div className="text-base">{(friendStats?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
+                  </div>
+                  <div className="px-1 py-1 flex items-center gap-3 justify-end">
+                    <img src="/stickers/coin_cat.svg" alt="coins" className="w-9 h-9" />
+                    <div className="text-2xl font-extrabold tabular-nums">{friendStats?.coins ?? 0}</div>
+                    <div className="text-base">coin</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-center">
+                  <button type="button" onClick={closeFriendProfile} className="badge">Закрыть</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 
