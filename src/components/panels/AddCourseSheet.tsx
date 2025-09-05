@@ -147,6 +147,8 @@ export default function AddCourseSheet({
 
     // Прогреем оффлайн‑кэш тем/подтем/иконок для нового курса (без полного boot)
     try { await precacheTopicsForSubject(picked.id); } catch {}
+    // Покажем Splash и перезапустим boot, чтобы единообразно обновить глобалы и кэши
+    try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
   };
 
   return (

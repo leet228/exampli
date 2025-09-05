@@ -64,6 +64,8 @@ export default function AppLayout() {
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
+    const reboot = () => { setBootDone(false); };
+    window.addEventListener('exampli:reboot', reboot as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
 
