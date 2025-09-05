@@ -5,6 +5,7 @@ import FullScreenSheet from '../sheets/FullScreenSheet';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
+import { precacheTopicsForSubject } from '../../lib/boot';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -143,6 +144,9 @@ export default function AddCourseSheet({
       // бессрочная запись без поля e
       localStorage.setItem('exampli:' + 'user', JSON.stringify({ v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, e: null }));
     } catch {}
+
+    // Прогреем оффлайн‑кэш тем/подтем/иконок для нового курса (без полного boot)
+    try { await precacheTopicsForSubject(picked.id); } catch {}
   };
 
   return (

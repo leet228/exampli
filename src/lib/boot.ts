@@ -445,6 +445,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
         .order('order_index', { ascending: true });
       const tlist = (topics as any[]) || [];
       topicsBySubject[String(activeId)] = tlist;
+      // Сохраним темы в локальный кэш для оффлайна
+      try { cacheSet(CACHE_KEYS.topicsBySubject(activeId), tlist); } catch {}
       // подтемы пачкой
       const topicIds = tlist.map((t: any) => t.id);
       if (topicIds.length) {
@@ -459,10 +461,28 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
           const key = String(s.topic_id);
           (subtopicsByTopic[key] ||= []).push(s);
         });
+        // Сохраним подтемы целиком по subject для оффлайна (удобно склеивать на клиенте)
+        try { cacheSet(CACHE_KEYS.subtopicsBySubject(activeId), slist); } catch {}
       }
       // прогрев svg иконок тем по order_index (первые 42 иконки в /topics)
+      // Дополнительно — положим SVG в localStorage как data URL, чтобы показывать мгновенно оффлайн
       await Promise.all(
-        tlist.slice(0, 42).map((t: any) => preloadImage(`/topics/${t.order_index}.svg`))
+        tlist.slice(0, 42).map(async (t: any) => {
+          const idx = Number(t.order_index);
+          if (!Number.isFinite(idx)) return;
+          try {
+            const key = CACHE_KEYS.topicIconSvg(idx);
+            const existing = cacheGet<string>(key);
+            if (existing) return;
+          } catch {}
+          try {
+            const res = await fetch(`/topics/${idx}.svg`);
+            if (!res.ok) return;
+            const svgText = await res.text();
+            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgText)}`;
+            cacheSet(CACHE_KEYS.topicIconSvg(idx), dataUrl);
+          } catch {}
+        })
       );
     } catch {}
   }
@@ -547,4 +567,52 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
 
   return boot;
+}
+
+// Локальный прогрев тем/подтем и SVG‑иконок для указанного предмета.
+// Используется при смене/добавлении курса, чтобы сразу положить всё в localStorage.
+export async function precacheTopicsForSubject(subjectId: number | string): Promise<void> {
+  try {
+    // Темы
+    const { data: topics } = await supabase
+      .from('topics')
+      .select('id, subject_id, title, order_index')
+      .eq('subject_id', subjectId)
+      .order('order_index', { ascending: true });
+    const tlist = (topics as any[]) || [];
+    try { cacheSet(CACHE_KEYS.topicsBySubject(subjectId), tlist); } catch {}
+
+    // Подтемы
+    const topicIds = tlist.map((t: any) => t.id);
+    if (topicIds.length) {
+      const { data: subs } = await supabase
+        .from('subtopics')
+        .select('id, topic_id, title, order_index')
+        .in('topic_id', topicIds)
+        .order('topic_id', { ascending: true })
+        .order('order_index', { ascending: true });
+      const slist = (subs as any[]) || [];
+      try { cacheSet(CACHE_KEYS.subtopicsBySubject(subjectId), slist); } catch {}
+    }
+
+    // Иконки тем → data URL в localStorage (до 42)
+    await Promise.all(
+      tlist.slice(0, 42).map(async (t: any) => {
+        const idx = Number(t.order_index);
+        if (!Number.isFinite(idx)) return;
+        try {
+          const key = CACHE_KEYS.topicIconSvg(idx);
+          const existing = cacheGet<string>(key);
+          if (existing) return;
+        } catch {}
+        try {
+          const res = await fetch(`/topics/${idx}.svg`);
+          if (!res.ok) return;
+          const svgText = await res.text();
+          const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgText)}`;
+          cacheSet(CACHE_KEYS.topicIconSvg(idx), dataUrl);
+        } catch {}
+      })
+    );
+  } catch {}
 }

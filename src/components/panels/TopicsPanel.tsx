@@ -1,6 +1,7 @@
 // src/components/panels/TopicsPanel.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 import { AnimatePresence, motion } from 'framer-motion';
 import SidePanel from './SidePanel';
 import { hapticTiny, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
@@ -29,46 +30,27 @@ export default function TopicsPanel({ open, onClose }: Props) {
     try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
   }, []);
 
-  // -- загрузка активного предмета + тем/подтем (с попыткой чтения из boot-кэша)
+  // -- загрузка активного предмета + тем/подтем ТОЛЬКО из локального кэша
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const code = readActiveCode();
       if (!code) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
-
-      // быстрый путь: попробуем найти subject в boot
+      // находим subject по кэшу всех предметов
       let subj: Subject | null = null;
       try {
-        const boot: any = (window as any).__exampliBoot;
-        const list = (boot?.subjects || []) as Subject[];
-        subj = list.find(s => s.code === code) || null;
+        const all = (cacheGet<Subject[]>(CACHE_KEYS.subjectsAll) || []) as Subject[];
+        subj = all.find(s => s.code === code) || null;
       } catch {}
-      if (!subj) {
-        const resp = await supabase
-          .from('subjects')
-          .select('id, code, title')
-          .eq('code', code)
-          .single();
-        subj = (resp.data as Subject) || null;
-      }
       if (!subj?.id) { setSubject(null); setTopics([]); setSubsByTopic({}); return; }
       setSubject(subj as Subject);
 
-      // быстрый путь: темы из boot
+      // темы и подтемы только из локального кэша
       let tlist: Topic[] = [];
       try {
-        const boot: any = (window as any).__exampliBoot;
-        const pre = (boot?.topicsBySubject?.[String(subj.id)] || []) as Topic[];
-        tlist = pre;
+        const cached = cacheGet<Topic[]>(CACHE_KEYS.topicsBySubject(subj.id));
+        if (cached && Array.isArray(cached)) tlist = cached;
       } catch {}
-      if (!tlist.length) {
-        const { data: tps } = await supabase
-          .from('topics')
-          .select('id, subject_id, title, order_index')
-          .eq('subject_id', subj.id)
-          .order('order_index', { ascending: true });
-        tlist = (tps as Topic[]) || [];
-      }
       setTopics(tlist);
 
       // Если ранее был выбран топик — попробуем сразу развернуть его
@@ -88,11 +70,11 @@ export default function TopicsPanel({ open, onClose }: Props) {
         }
       } catch {}
 
-      // быстрый путь: подтемы из boot
+      // подтемы только из локального кэша
       let subsData: Subtopic[] = [];
       try {
-        const boot: any = (window as any).__exampliBoot;
-        subsData = tlist.flatMap((t) => (boot?.subtopicsByTopic?.[String(t.id)] || []) as Subtopic[]);
+        const cached = cacheGet<Subtopic[]>(CACHE_KEYS.subtopicsBySubject(subj.id));
+        if (cached && Array.isArray(cached)) subsData = cached;
       } catch {}
       if (!subsData.length) {
         const topicIds = tlist.map(t => t.id);
@@ -229,7 +211,15 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 className="w-full flex items-center gap-3 px-4 py-3 bg-white/[0.06] hover:bg-white/[0.09]"
               >
                 <img
-                  src={`/topics/${t.order_index}.svg`}
+                  src={(() => {
+                    // сначала пробуем data URL из кэша, затем обычный путь
+                    try {
+                      const key = CACHE_KEYS.topicIconSvg(Number(t.order_index));
+                      const cached = cacheGet<string>(key);
+                      if (cached) return cached;
+                    } catch {}
+                    return `/topics/${t.order_index}.svg`;
+                  })()}
                   alt=""
                   className="w-14 h-14 rounded-2xl bg-white/10 object-contain p-1"
                   loading="lazy"
