@@ -204,112 +204,124 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   } catch {}
   step(++i, TOTAL);
 
-  // 2d) количество друзей — кэшируем без TTL
+  // 2d) количество друзей — cache-first, обновление в фоне
   let friendsCountBoot: number | null = null;
-  try {
-    // сначала через RPC (обходит RLS)
-    const rpc = await supabase.rpc('rpc_friend_count', { caller: userRow?.id } as any);
-    if (!rpc.error) {
-      friendsCountBoot = Number(rpc.data || 0);
-      cacheSet(CACHE_KEYS.friendsCount, friendsCountBoot);
-    } else {
-      const { count } = await supabase
-        .from('friend_links')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'accepted')
-        .or(`a_id.eq.${userRow?.id},b_id.eq.${userRow?.id}`);
-      friendsCountBoot = Number(count || 0);
-      cacheSet(CACHE_KEYS.friendsCount, friendsCountBoot);
-    }
-  } catch {}
+  try { friendsCountBoot = cacheGet<number>(CACHE_KEYS.friendsCount) ?? null; } catch {}
+  (async () => {
+    try {
+      const rpc = await supabase.rpc('rpc_friend_count', { caller: userRow?.id } as any);
+      if (!rpc.error) {
+        const cnt = Number(rpc.data || 0);
+        cacheSet(CACHE_KEYS.friendsCount, cnt);
+        try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: cnt } } as any)); } catch {}
+      } else {
+        const { count } = await supabase
+          .from('friend_links')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'accepted')
+          .or(`a_id.eq.${userRow?.id},b_id.eq.${userRow?.id}`);
+        const cnt = Number(count || 0);
+        cacheSet(CACHE_KEYS.friendsCount, cnt);
+        try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: cnt } } as any)); } catch {}
+      }
+    } catch {}
+  })();
   step(++i, TOTAL);
 
-  // 2g) Входящие приглашения: количество и список (other_id, first_name, username, avatar_url)
+  // 2g) Входящие приглашения — cache-first, обновление в фоне
   try {
-    if (userRow?.id) {
-      const rpc = await supabase.rpc('rpc_friend_incoming', { caller: userRow.id } as any);
-      if (!rpc.error && Array.isArray(rpc.data)) {
-        let invites = (rpc.data as any[]).map((r) => ({
-          other_id: r.other_id || r.friend_id || r.a_id || r.b_id,
-          first_name: r.first_name ?? null,
-          username: r.username ?? null,
-          avatar_url: (r as any)?.avatar_url ?? null,
+    const cachedList = cacheGet<any[]>(CACHE_KEYS.invitesIncomingList) || [];
+    const cachedCount = cacheGet<number>(CACHE_KEYS.invitesIncomingCount) || cachedList.length || 0;
+    try { (window as any).__exampliBootInvites = cachedList; } catch {}
+  } catch {}
+  (async () => {
+    try {
+      if (userRow?.id) {
+        const rpc = await supabase.rpc('rpc_friend_incoming', { caller: userRow.id } as any);
+        if (!rpc.error && Array.isArray(rpc.data)) {
+          let invites = (rpc.data as any[]).map((r) => ({
+            other_id: r.other_id || r.friend_id || r.a_id || r.b_id,
+            first_name: r.first_name ?? null,
+            username: r.username ?? null,
+            avatar_url: (r as any)?.avatar_url ?? null,
+          }));
+          try {
+            const need = invites.filter(x => !x.avatar_url).map(x => x.other_id).filter(Boolean);
+            if (need.length) {
+              const { data: usersData } = await supabase
+                .from('users')
+                .select('id, avatar_url')
+                .in('id', need as string[]);
+              const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
+              invites = invites.map(x => ({ ...x, avatar_url: x.avatar_url ?? map.get(x.other_id) ?? null }));
+            }
+          } catch {}
+          cacheSet(CACHE_KEYS.invitesIncomingList, invites);
+          cacheSet(CACHE_KEYS.invitesIncomingCount, invites.length);
+          try { (window as any).__exampliBootInvites = invites; } catch {}
+        } else {
+          const { data: links } = await supabase
+            .from('friend_links')
+            .select('a_id,b_id,requester_id,status')
+            .eq('status', 'pending')
+            .neq('requester_id', userRow.id)
+            .or(`a_id.eq.${userRow.id},b_id.eq.${userRow.id}`)
+            .limit(50);
+          const ids = Array.from(new Set((links as any[] || []).map((l: any) => (l.a_id === userRow.id ? l.b_id : l.a_id)).filter(Boolean)));
+          let list: any[] = [];
+          if (ids.length) {
+            const [{ data: profs }, { data: usersData }] = await Promise.all([
+              supabase.from('user_profile').select('user_id, first_name, username').in('user_id', ids as string[]),
+              supabase.from('users').select('id, avatar_url').in('id', ids as string[]),
+            ]);
+            const byProf = new Map<string, any>((profs || []).map((p: any) => [String(p.user_id), p]));
+            const byUser = new Map<string, any>((usersData || []).map((u: any) => [String(u.id), u]));
+            list = ids.map((id) => ({
+              other_id: id,
+              first_name: byProf.get(String(id))?.first_name ?? null,
+              username: byProf.get(String(id))?.username ?? null,
+              avatar_url: byUser.get(String(id))?.avatar_url ?? null,
+            }));
+          }
+          cacheSet(CACHE_KEYS.invitesIncomingList, list);
+          cacheSet(CACHE_KEYS.invitesIncomingCount, list.length);
+          try { (window as any).__exampliBootInvites = list; } catch {}
+        }
+      }
+    } catch {}
+  })();
+  step(++i, TOTAL);
+
+  // 2e) список друзей — cache-first, обновление в фоне
+  try { (window as any).__exampliBootFriends = cacheGet<any[]>(CACHE_KEYS.friendsList) || []; } catch {}
+  (async () => {
+    try {
+      const r = await supabase.rpc('rpc_friend_list', { caller: userRow?.id } as any);
+      if (!r.error && Array.isArray(r.data)) {
+        let list = (r.data as any[]).map(p => ({
+          user_id: p.user_id || p.friend_id,
+          first_name: p.first_name ?? null,
+          username: p.username ?? null,
+          background_color: p.background_color ?? null,
+          background_icon: p.background_icon ?? null,
+          avatar_url: (p as any)?.avatar_url ?? null,
         }));
-        // дополним avatar_url из users при необходимости
         try {
-          const need = invites.filter(x => !x.avatar_url).map(x => x.other_id).filter(Boolean);
+          const need = list.filter(r => !r.avatar_url).map(r => r.user_id);
           if (need.length) {
             const { data: usersData } = await supabase
               .from('users')
               .select('id, avatar_url')
               .in('id', need as string[]);
             const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
-            invites = invites.map(x => ({ ...x, avatar_url: x.avatar_url ?? map.get(x.other_id) ?? null }));
+            list = list.map(r => ({ ...r, avatar_url: r.avatar_url ?? map.get(r.user_id) ?? null }));
           }
         } catch {}
-        cacheSet(CACHE_KEYS.invitesIncomingList, invites);
-        cacheSet(CACHE_KEYS.invitesIncomingCount, invites.length);
-        try { (window as any).__exampliBootInvites = invites; } catch {}
-      } else {
-        // fallback: friend_links pending not requested by me
-        const { data: links } = await supabase
-          .from('friend_links')
-          .select('a_id,b_id,requester_id,status')
-          .eq('status', 'pending')
-          .neq('requester_id', userRow.id)
-          .or(`a_id.eq.${userRow.id},b_id.eq.${userRow.id}`)
-          .limit(50);
-        const ids = Array.from(new Set((links as any[] || []).map((l: any) => (l.a_id === userRow.id ? l.b_id : l.a_id)).filter(Boolean)));
-        let list: any[] = [];
-        if (ids.length) {
-          const [{ data: profs }, { data: usersData }] = await Promise.all([
-            supabase.from('user_profile').select('user_id, first_name, username').in('user_id', ids as string[]),
-            supabase.from('users').select('id, avatar_url').in('id', ids as string[]),
-          ]);
-          const byProf = new Map<string, any>((profs || []).map((p: any) => [String(p.user_id), p]));
-          const byUser = new Map<string, any>((usersData || []).map((u: any) => [String(u.id), u]));
-          list = ids.map((id) => ({
-            other_id: id,
-            first_name: byProf.get(String(id))?.first_name ?? null,
-            username: byProf.get(String(id))?.username ?? null,
-            avatar_url: byUser.get(String(id))?.avatar_url ?? null,
-          }));
-        }
-        cacheSet(CACHE_KEYS.invitesIncomingList, list);
-        cacheSet(CACHE_KEYS.invitesIncomingCount, list.length);
-        try { (window as any).__exampliBootInvites = list; } catch {}
+        cacheSet(CACHE_KEYS.friendsList, list);
+        try { (window as any).__exampliBootFriends = list; } catch {}
       }
-    }
-  } catch {}
-  step(++i, TOTAL);
-
-  // 2e) список друзей для кэша и boot
-  try {
-    const r = await supabase.rpc('rpc_friend_list', { caller: userRow?.id } as any);
-    if (!r.error && Array.isArray(r.data)) {
-      let list = (r.data as any[]).map(p => ({
-        user_id: p.user_id || p.friend_id,
-        first_name: p.first_name ?? null,
-        username: p.username ?? null,
-        background_color: p.background_color ?? null,
-        background_icon: p.background_icon ?? null,
-        avatar_url: (p as any)?.avatar_url ?? null,
-      }));
-      try {
-        const need = list.filter(r => !r.avatar_url).map(r => r.user_id);
-        if (need.length) {
-          const { data: usersData } = await supabase
-            .from('users')
-            .select('id, avatar_url')
-            .in('id', need as string[]);
-          const map = new Map<string, string | null>((usersData || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
-          list = list.map(r => ({ ...r, avatar_url: r.avatar_url ?? map.get(r.user_id) ?? null }));
-        }
-      } catch {}
-      cacheSet(CACHE_KEYS.friendsList, list);
-      try { (window as any).__exampliBootFriends = list; } catch {}
-    }
-  } catch {}
+    } catch {}
+  })();
   step(++i, TOTAL);
 
   // 2f) pending отправленные мной — восстановим из локального кэша в boot
@@ -413,17 +425,34 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
   step(++i, TOTAL);
 
-  // 6) уроки ТОЛЬКО активного курса
+  // 6) уроки ТОЛЬКО активного курса — cache-first, обновление в фоне
   let lessonsArr: LessonRow[] = [];
   if (activeId) {
-    const resp = await supabase
-      .from('lessons')
-      .select('id, title')
-      .eq('subject_id', activeId)
-      .order('order_index', { ascending: true })
-      .limit(12);
-    const lessonsData: any[] = (resp.data as any[]) ?? [];
-    cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData);
+    let lessonsData: any[] | null = null;
+    try { lessonsData = cacheGet<any[]>(CACHE_KEYS.lessonsByCode(activeCode || '')) || null; } catch {}
+    if (!lessonsData) {
+      const resp = await supabase
+        .from('lessons')
+        .select('id, title')
+        .eq('subject_id', activeId)
+        .order('order_index', { ascending: true })
+        .limit(12);
+      lessonsData = (resp.data as any[]) ?? [];
+      cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData);
+    } else {
+      (async () => {
+        try {
+          const resp = await supabase
+            .from('lessons')
+            .select('id, title')
+            .eq('subject_id', activeId)
+            .order('order_index', { ascending: true })
+            .limit(12);
+          const fresh = (resp.data as any[]) ?? [];
+          cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), fresh);
+        } catch {}
+      })();
+    }
 
     lessonsArr = (lessonsData ?? []).map((l: any) => ({
       id: l.id,
@@ -433,92 +462,57 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
   step(++i, TOTAL);
 
-  // 7) Префетч тем и подтем активного курса + прогрев иконок тем
+  // 7) Темы/подтемы активного курса — cache-first + прогрев в фоне; лого в фоне
   let topicsBySubject: Record<string, any[]> = {};
   let subtopicsByTopic: Record<string, any[]> = {};
   if (activeId) {
     try {
-      const { data: topics } = await supabase
-        .from('topics')
-        .select('id, subject_id, title, order_index')
-        .eq('subject_id', activeId)
-        .order('order_index', { ascending: true });
-      const tlist = (topics as any[]) || [];
-      topicsBySubject[String(activeId)] = tlist;
-      // Сохраним темы в локальный кэш для оффлайна
-      try { cacheSet(CACHE_KEYS.topicsBySubject(activeId), tlist); } catch {}
-      // подтемы пачкой
-      const topicIds = tlist.map((t: any) => t.id);
-      if (topicIds.length) {
-        const { data: subs } = await supabase
-          .from('subtopics')
-          .select('id, topic_id, title, order_index')
-          .in('topic_id', topicIds)
-          .order('topic_id', { ascending: true })
-          .order('order_index', { ascending: true });
-        const slist = (subs as any[]) || [];
-        slist.forEach((s: any) => {
+      const cachedT = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(activeId)) || [];
+      if (cachedT.length) topicsBySubject[String(activeId)] = cachedT;
+      const cachedS = cacheGet<any[]>(CACHE_KEYS.subtopicsBySubject(activeId)) || [];
+      if (cachedS.length) {
+        cachedS.forEach((s: any) => {
           const key = String(s.topic_id);
           (subtopicsByTopic[key] ||= []).push(s);
         });
-        // Сохраним подтемы целиком по subject для оффлайна (удобно склеивать на клиенте)
-        try { cacheSet(CACHE_KEYS.subtopicsBySubject(activeId), slist); } catch {}
       }
-      // прогрев svg иконок тем по order_index (первые 42 иконки в /topics)
-      // Дополнительно — положим SVG в localStorage как data URL, чтобы показывать мгновенно оффлайн
-      await Promise.all(
-        tlist.slice(0, 42).map(async (t: any) => {
-          const idx = Number(t.order_index);
-          if (!Number.isFinite(idx)) return;
-          try {
-            const key = CACHE_KEYS.topicIconSvg(idx);
-            const existing = cacheGet<string>(key);
-            if (existing) return;
-          } catch {}
-          try {
-            const res = await fetch(`/topics/${idx}.svg`);
-            if (!res.ok) return;
-            const svgText = await res.text();
-            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgText)}`;
-            cacheSet(CACHE_KEYS.topicIconSvg(idx), dataUrl);
-          } catch {}
-        })
-      );
     } catch {}
+    (async () => { try { await precacheTopicsForSubject(activeId); } catch {} })();
   }
-  // параллельно прогреем основной лого
-  await preloadImage('/kursik.svg');
+  try { preloadImage('/kursik.svg'); } catch {}
   step(++i, TOTAL);
 
-  // 8) Предзагрузка ВСЕХ предметов (OGE/EGE) для AddCourseSheet и прогрев их иконок
+  // 8) Все предметы — cache-first, обновление и прогрев иконок в фоне
   let subjectsAll: SubjectRow[] = [];
-  try {
-    const { data } = await supabase
-      .from('subjects')
-      .select('id,code,title,level')
-      .order('level', { ascending: true })
-      .order('title', { ascending: true });
-    subjectsAll = (data ?? []) as SubjectRow[];
-    cacheSet(CACHE_KEYS.subjectsAll, subjectsAll);
-    // прогреем svg для карточек
-    await Promise.all(
-      subjectsAll.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))
-    );
-  } catch {}
+  try { subjectsAll = cacheGet<SubjectRow[]>(CACHE_KEYS.subjectsAll) || []; } catch {}
+  (async () => {
+    try {
+      const { data } = await supabase
+        .from('subjects')
+        .select('id,code,title,level')
+        .order('level', { ascending: true })
+        .order('title', { ascending: true });
+      const all = (data ?? []) as SubjectRow[];
+      cacheSet(CACHE_KEYS.subjectsAll, all);
+      try { Promise.all(all.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))); } catch {}
+    } catch {}
+  })();
   step(++i, TOTAL);
 
-  // 9) Прогрев иконок нижней навигации и HUD
-  await Promise.all([
-    preloadImage('/stickers/home.svg'),
-    preloadImage('/stickers/quests.svg'),
-    preloadImage('/stickers/battle.svg'),
-    preloadImage('/stickers/ai.svg'),
-    preloadImage('/stickers/diamond.svg'),
-    preloadImage('/stickers/profile.svg'),
-    preloadImage('/stickers/dead_fire.svg'),
-    preloadImage('/stickers/coin_cat.svg'),
-    preloadImage('/stickers/lightning.svg'),
-  ]);
+  // 9) Прогрев иконок нижней навигации и HUD — в фоне
+  try {
+    Promise.all([
+      preloadImage('/stickers/home.svg'),
+      preloadImage('/stickers/quests.svg'),
+      preloadImage('/stickers/battle.svg'),
+      preloadImage('/stickers/ai.svg'),
+      preloadImage('/stickers/diamond.svg'),
+      preloadImage('/stickers/profile.svg'),
+      preloadImage('/stickers/dead_fire.svg'),
+      preloadImage('/stickers/coin_cat.svg'),
+      preloadImage('/stickers/lightning.svg'),
+    ]);
+  } catch {}
   step(++i, TOTAL);
 
   // Попробуем восстановить названия выбранных темы/подтемы
