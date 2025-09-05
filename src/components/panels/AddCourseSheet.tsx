@@ -145,10 +145,7 @@ export default function AddCourseSheet({
       localStorage.setItem('exampli:' + 'user', JSON.stringify({ v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, e: null }));
     } catch {}
 
-    // Прогреем оффлайн‑кэш тем/подтем/иконок для нового курса (без полного boot)
-    try { await precacheTopicsForSubject(picked.id); } catch {}
-    // Покажем Splash и перезапустим boot, чтобы единообразно обновить глобалы и кэши
-    try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
+    // (сплэш и прогрев теперь вызываются в onClick — здесь не трогаем)
   };
 
   return (
@@ -235,20 +232,26 @@ export default function AddCourseSheet({
           <motion.button
             type="button"
             disabled={!picked}
-            onPointerDown={async () => {
-              if (!picked) return;
-              setCtaPressed(true);
-              // мгновенно показать сплэш и заблокировать автозапуск boot до нашего сигнала
-              try { (window as any).__exampliBootLocked = true; } catch {}
-              try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
-              // параллельно прогреть локальные кэши тем/подтем/иконок
-              try { await precacheTopicsForSubject(picked.id); } catch {}
-              // снять блок и просто закрыть сплэш без запуска boot
-              try { (window as any).__exampliBootLocked = false; window.dispatchEvent(new Event('exampli:finishSplash')); } catch {}
-            }}
+            onPointerDown={() => { if (picked) setCtaPressed(true); }}
             onPointerUp={() => setCtaPressed(false)}
             onPointerCancel={() => setCtaPressed(false)}
-            onClick={() => { if (!picked) return; hapticSelect(); save(); }}
+            onClick={async () => {
+              if (!picked) return;
+              hapticSelect();
+              // показываем сплэш на «отпускание» и блокируем автобут
+              try { (window as any).__exampliBootLocked = true; } catch {}
+              try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
+              // параллельно: кэш тем/подтем/иконок и запись нового курса в БД/лок кэши
+              try {
+                await Promise.all([
+                  precacheTopicsForSubject(picked.id),
+                  save(),
+                ]);
+              } finally {
+                // закрыть сплэш без boot
+                try { (window as any).__exampliBootLocked = false; window.dispatchEvent(new Event('exampli:finishSplash')); } catch {}
+              }
+            }}
             className="w-full rounded-2xl py-4 font-semibold text-white"
             animate={{
               y: picked && ctaPressed ? shadowHeight : 0,
