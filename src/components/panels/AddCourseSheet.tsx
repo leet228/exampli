@@ -235,7 +235,17 @@ export default function AddCourseSheet({
           <motion.button
             type="button"
             disabled={!picked}
-            onPointerDown={() => { if (picked) setCtaPressed(true); }}
+            onPointerDown={async () => {
+              if (!picked) return;
+              setCtaPressed(true);
+              // мгновенно показать сплэш и заблокировать автозапуск boot до нашего сигнала
+              try { (window as any).__exampliBootLocked = true; } catch {}
+              try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
+              // параллельно прогреть локальные кэши тем/подтем/иконок
+              try { await precacheTopicsForSubject(picked.id); } catch {}
+              // снять блок и просто закрыть сплэш без запуска boot
+              try { (window as any).__exampliBootLocked = false; window.dispatchEvent(new Event('exampli:finishSplash')); } catch {}
+            }}
             onPointerUp={() => setCtaPressed(false)}
             onPointerCancel={() => setCtaPressed(false)}
             onClick={() => { if (!picked) return; hapticSelect(); save(); }}

@@ -47,7 +47,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
 
   useEffect(() => {
     let live = true;
-    (async () => {
+    const runBoot = async () => {
       const data = await bootPreload();
       if (!live) return;
       setBoot(data);
@@ -55,7 +55,32 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
         setDone(true);
         onReady(data);
       }, 250);
-    })();
+    };
+
+    const locked = (() => { try { return Boolean((window as any).__exampliBootLocked); } catch { return false; } })();
+    if (locked) {
+      const starter = () => { window.removeEventListener('exampli:startBoot', starter as any); void runBoot(); };
+      const finisher = () => {
+        window.removeEventListener('exampli:finishSplash', finisher as any);
+        const current = (window as any).__exampliBoot as BootData | undefined;
+        const data = current || (boot as BootData | null) || null;
+        if (!live) return;
+        if (data) {
+          setBoot(data);
+          setTimeout(() => {
+            setDone(true);
+            onReady(data);
+          }, 100);
+        } else {
+          // нет данных — просто скрываем сплэш без апдейта
+          setDone(true);
+        }
+      };
+      window.addEventListener('exampli:startBoot', starter as any);
+      window.addEventListener('exampli:finishSplash', finisher as any);
+    } else {
+      void runBoot();
+    }
     return () => {
       live = false;
     };
