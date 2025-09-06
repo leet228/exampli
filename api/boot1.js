@@ -97,6 +97,14 @@ export default async function handler(req, res) {
     ]);
 
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
+    // Синхронизируем phone_number из профиля в users, чтобы клиентская логика видела номер в users
+    try {
+      const mergedPhone = userProfile?.phone_number ?? userRow.phone_number ?? null;
+      if (mergedPhone && !userRow.phone_number) {
+        await supabase.from('users').update({ phone_number: mergedPhone }).eq('id', userRow.id);
+        userRow.phone_number = mergedPhone;
+      }
+    } catch {}
 
     const onboarding = {
       phone_given: !!(userProfile?.phone_number || userRow.phone_number),
