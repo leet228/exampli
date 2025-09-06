@@ -73,6 +73,17 @@ export default function AppLayout() {
   useEffect(() => {
     if (bootDone) {
       window.dispatchEvent(new Event('exampli:overlayToggled'));
+      // Фоновый прогрев для мгновенных панелей: если есть список всех предметов — прогреем ещё 1-2 помимо активного
+      try {
+        const boot = (window as any).__exampliBoot as BootData | null;
+        const activeCode = localStorage.getItem('exampli:active_course_code');
+        const active = (boot?.subjects || []).find((s) => s.code === activeCode);
+        const rest = (boot?.subjectsAll || []).filter((s) => s.id !== active?.id).slice(0, 2);
+        // прогреем темы/подтемы для пары курсов в фоне
+        import('../lib/boot').then((m) => {
+          rest.forEach((s) => { try { m.precacheTopicsForSubject(s.id); } catch {} });
+        });
+      } catch {}
     }
   }, [bootDone]);
 

@@ -47,52 +47,51 @@ function preloadImage(src: string) {
   });
 }
 
-export async function bootPreload(onProgress?: (p: number) => void): Promise<BootData> {
-  const step = (i: number, n: number) => onProgress?.(Math.round((i / n) * 100));
+export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (label: string) => void): Promise<BootData> {
+  // Укрупняем прогресс до 3 фаз: ~33% / ~66% / 100%
+  const step = (_i: number, _n: number) => {};
+  const report = (p: number) => { try { onProgress?.(p); } catch {} };
+  const phase = (label: string) => {
+    try { onPhase?.(label); } catch {}
+    try { window.dispatchEvent(new CustomEvent('exampli:bootPhase', { detail: { label } } as any)); } catch {}
+  };
 
-  // план шагов:
-  // 1 user, 2 stats, 2a invite, 2b onboarding, 3 rel, 4 subjects, 5 choose active, 6 lessons, 7 image
-  const TOTAL = 13;
+  // Раньше было 13 шагов — теперь показываем только 3 крупные фазы
   let i = 0;
 
-  // 1) пользователь (ensureUser создаёт пользователя при необходимости)
-  const user = await ensureUser();
-  if (user) cacheSet(CACHE_KEYS.user, user);
-  step(++i, TOTAL);
+  // ШАГ 1 — один запрос к нашему агрегирующему API /api/boot1 (критический путь)
+  phase('Готовим профиль и прогресс');
+  const tg = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null;
+  let activeCodeHint: string | null = null;
+  try { activeCodeHint = localStorage.getItem('exampli:activeSubjectCode'); } catch {}
+  const r1 = await fetch('/api/boot1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tg_user: tg, start_param: (window as any)?.Telegram?.WebApp?.initDataUnsafe?.start_param || null, active_code: activeCodeHint })
+  });
+  const step1 = r1.ok ? await r1.json() : null;
 
-  // Если работаем вне Telegram (нет пользователя) — считаем, что это новый пользователь: показываем онбординг
-  if (!user?.id) {
+  // Если гость — отдаём то, что пришло, и выходим
+  if (!step1?.user?.id) {
     const boot: BootData = {
       user: null,
-      stats: { streak: 0, energy: 25, coins: 500 },
-      userProfile: { background_color: '#3280c2', background_icon: 'nothing', phone_number: null, first_name: null, username: null },
-      subjects: [],
-      lessons: [],
-      onboarding: { phone_given: false, course_taken: false, boarding_finished: false },
+      stats: step1?.stats || { streak: 0, energy: 25, coins: 500 },
+      userProfile: step1?.userProfile || { background_color: '#3280c2', background_icon: 'nothing', phone_number: null, first_name: null, username: null },
+      subjects: step1?.subjects || [],
+      lessons: step1?.lessons || [],
+      onboarding: step1?.onboarding || { phone_given: false, course_taken: false, boarding_finished: false },
     };
     (window as any).__exampliBoot = boot as any;
     window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
     return boot;
   }
-
-  // 2) полные данные пользователя (включая phone_number и added_course)
-  let userRow: any | null = null;
-  if (user?.id) {
-    const { data } = await supabase
-      .from('users')
-      .select('id,streak,energy,coins,phone_number,added_course,current_topic,current_subtopic')
-      .eq('id', user.id)
-      .single();
-    userRow = data as any;
-    if (userRow) cacheSet(CACHE_KEYS.stats, { streak: userRow.streak ?? 0, energy: userRow.energy ?? 25, coins: userRow.coins ?? 500 });
-  }
-
-  const stats = {
-    streak: userRow?.streak ?? 0,
-    energy: userRow?.energy ?? 25,
-    coins: userRow?.coins ?? 500,
-  };
-  step(++i, TOTAL);
+  // нормальный пользователь
+  const userRow = step1.user;
+  cacheSet(CACHE_KEYS.user, userRow);
+  try { cacheSet(CACHE_KEYS.userAvatarUrl, (step1?.avatar_url as string) || (userRow?.avatar_url as string) || null); } catch {}
+  const stats = step1.stats;
+  cacheSet(CACHE_KEYS.stats, stats);
+  report(33);
 
   // 2a) Обработка ИНВАЙТА ПО ССЫЛКЕ (friend_invites) — отдельная ветка от обычных pending
   try {
@@ -202,7 +201,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       } catch {}
     }
   } catch {}
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 2d) количество друзей — cache-first, обновление в фоне
   let friendsCountBoot: number | null = null;
@@ -226,7 +226,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       }
     } catch {}
   })();
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 2g) Входящие приглашения — cache-first, обновление в фоне
   try {
@@ -290,7 +291,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       }
     } catch {}
   })();
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 2e) список друзей — cache-first, обновление в фоне
   try { (window as any).__exampliBootFriends = cacheGet<any[]>(CACHE_KEYS.friendsList) || []; } catch {}
@@ -322,7 +324,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       }
     } catch {}
   })();
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 2f) pending отправленные мной — восстановим из локального кэша в boot
   try {
@@ -364,7 +367,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   if (!userProfile) {
     userProfile = { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow?.phone_number ?? null, first_name: null, username: null };
   }
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 2b) онбординг теперь вычисляем только по phone_number в users
   let onboarding: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null = null;
@@ -378,31 +382,25 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       boarding_finished: hasPhone,
     };
   }
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 3) выбранный курс пользователя (один) из users.added_course
   const subjectIds: number[] = userRow?.added_course ? [Number(userRow.added_course)] : [];
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
-  // 4) сам выбранный предмет пользователя (если есть)
-  let subjectsArr: SubjectRow[] = [];
-  if (subjectIds.length) {
-    const { data: subj } = await supabase
-      .from('subjects')
-      .select('id,code,title,level')
-      .in('id', subjectIds)
-      .order('title', { ascending: true });
-
-    subjectsArr = (subj ?? []) as SubjectRow[];
-  }
-  step(++i, TOTAL);
+  // 4) выбранный предмет и уроки берём из step1
+  phase('Курсы и уроки');
+  let subjectsArr: SubjectRow[] = step1.subjects || [];
+  // конец фазы 2 (курсы/уроки/темы) отметим позднее, когда прогреем темы (ниже)
 
   // 5) определяем активный курс (из localStorage или первый по списку)
   let activeCode: string | null = null;
   let activeId: number | null = null;
   let activeTitle: string | null = null;
 
-  try { activeCode = localStorage.getItem(ACTIVE_KEY); } catch {}
+  try { activeCode = step1.active_code || localStorage.getItem(ACTIVE_KEY); } catch {}
 
   if (activeCode) {
     const found = subjectsArr.find((s) => s.code === activeCode);
@@ -415,54 +413,25 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
     }
   }
 
-  if (!activeCode && subjectsArr.length) {
+  if ((!activeCode || !activeId) && subjectsArr.length) {
     const first = subjectsArr[0];
     activeCode = first.code;
     activeId = first.id;
     activeTitle = first.title;
-    try { localStorage.setItem(ACTIVE_KEY, activeCode); } catch {}
-    cacheSet(CACHE_KEYS.activeCourseCode, activeCode);
   }
-  step(++i, TOTAL);
+  try { if (activeCode) localStorage.setItem(ACTIVE_KEY, activeCode); } catch {}
+  if (activeCode) cacheSet(CACHE_KEYS.activeCourseCode, activeCode);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 6) уроки ТОЛЬКО активного курса — cache-first, обновление в фоне
-  let lessonsArr: LessonRow[] = [];
-  if (activeId) {
-    let lessonsData: any[] | null = null;
-    try { lessonsData = cacheGet<any[]>(CACHE_KEYS.lessonsByCode(activeCode || '')) || null; } catch {}
-    if (!lessonsData) {
-      const resp = await supabase
-        .from('lessons')
-        .select('id, title')
-        .eq('subject_id', activeId)
-        .order('order_index', { ascending: true })
-        .limit(12);
-      lessonsData = (resp.data as any[]) ?? [];
-      cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), lessonsData);
-    } else {
-      (async () => {
-        try {
-          const resp = await supabase
-            .from('lessons')
-            .select('id, title')
-            .eq('subject_id', activeId)
-            .order('order_index', { ascending: true })
-            .limit(12);
-          const fresh = (resp.data as any[]) ?? [];
-          cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), fresh);
-        } catch {}
-      })();
-    }
-
-    lessonsArr = (lessonsData ?? []).map((l: any) => ({
-      id: l.id,
-      title: l.title,
-      subject: { title: activeTitle, level: null },
-    })) as LessonRow[];
-  }
-  step(++i, TOTAL);
+  let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, title: l.title, subject: { title: activeTitle, level: null } }));
+  cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), step1.lessons || []);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 7) Темы/подтемы активного курса — cache-first + прогрев в фоне; лого в фоне
+  phase('Темы и иконки');
   let topicsBySubject: Record<string, any[]> = {};
   let subtopicsByTopic: Record<string, any[]> = {};
   if (activeId) {
@@ -477,29 +446,19 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
         });
       }
     } catch {}
-    (async () => { try { await precacheTopicsForSubject(activeId); } catch {} })();
   }
   try { preloadImage('/kursik.svg'); } catch {}
-  step(++i, TOTAL);
+  // фаза 2 завершена
+  report(66);
 
   // 8) Все предметы — cache-first, обновление и прогрев иконок в фоне
   let subjectsAll: SubjectRow[] = [];
   try { subjectsAll = cacheGet<SubjectRow[]>(CACHE_KEYS.subjectsAll) || []; } catch {}
-  (async () => {
-    try {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id,code,title,level')
-        .order('level', { ascending: true })
-        .order('title', { ascending: true });
-      const all = (data ?? []) as SubjectRow[];
-      cacheSet(CACHE_KEYS.subjectsAll, all);
-      try { Promise.all(all.slice(0, 24).map((s) => preloadImage(`/subjects/${s.code}.svg`))); } catch {}
-    } catch {}
-  })();
-  step(++i, TOTAL);
+  // (скрытый шаг)
+  step(++i, 1);
 
   // 9) Прогрев иконок нижней навигации и HUD — в фоне
+  phase('Финальный прогрев интерфейса');
   try {
     Promise.all([
       preloadImage('/stickers/home.svg'),
@@ -513,7 +472,8 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
       preloadImage('/stickers/lightning.svg'),
     ]);
   } catch {}
-  step(++i, TOTAL);
+  // финал boot
+  report(100);
 
   // Попробуем восстановить названия выбранных темы/подтемы
   let currentTopicTitle: string | null = null;
@@ -528,7 +488,7 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   } catch {}
 
   const boot: BootData = {
-    user: (userRow ?? user) ?? null,
+    user: userRow ?? null,
     stats,
     userProfile,
     friendsCount: friendsCountBoot ?? undefined,
@@ -561,6 +521,31 @@ export async function bootPreload(onProgress?: (p: number) => void): Promise<Boo
   }
 
   return boot;
+}
+
+// ШАГ 2 — один запрос к нашему агрегирующему API /api/boot2 (фон, после возврата boot)
+export async function bootPreloadBackground(userId: string, activeId: number | null) {
+  try {
+    const r2 = await fetch('/api/boot2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, active_id: activeId })
+    });
+    if (!r2.ok) return;
+    const data = await r2.json();
+    try { cacheSet(CACHE_KEYS.friendsList, data.friends || []); } catch {}
+    try { cacheSet(CACHE_KEYS.invitesIncomingList, data.invites || []); cacheSet(CACHE_KEYS.invitesIncomingCount, (data.invites || []).length); } catch {}
+    try { cacheSet(CACHE_KEYS.subjectsAll, data.subjectsAll || []); } catch {}
+    try {
+      const topicsBySubject = data.topicsBySubject || {};
+      const subtopicsByTopic = data.subtopicsByTopic || {};
+      Object.entries(topicsBySubject).forEach(([sid, arr]) => cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any));
+      // В subtopics кешируем агрегированно по subjectId (как и раньше)
+      const compact: any[] = [];
+      Object.values<any[]>(subtopicsByTopic).forEach((arr) => { compact.push(...(arr || [])); });
+      if (activeId) cacheSet(CACHE_KEYS.subtopicsBySubject(activeId), compact);
+    } catch {}
+  } catch {}
 }
 
 // Локальный прогрев тем/подтем и SVG‑иконок для указанного предмета.

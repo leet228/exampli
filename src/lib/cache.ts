@@ -38,6 +38,7 @@ export function cacheRemove(key: string): void {
 // Common cache keys
 export const CACHE_KEYS = {
   user: 'user',
+  userAvatarUrl: 'user_avatar_url',
   stats: 'stats',
   activeCourseCode: 'active_course_code',
   subjectsAll: 'subjects_all',

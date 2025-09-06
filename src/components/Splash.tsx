@@ -1,11 +1,12 @@
 // src/components/Splash.tsx
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { bootPreload, BootData } from '../lib/boot';
+import { bootPreload, BootData, bootPreloadBackground } from '../lib/boot';
 
 export default function Splash({ onReady }: { onReady: (boot: BootData) => void }) {
   const [boot, setBoot] = useState<BootData | null>(null);
   const [done, setDone] = useState(false);
+  const [phase, setPhase] = useState<string>('Подготовка…');
 
   // Блокируем прокрутку и жесты, пока сплэш на экране
   useEffect(() => {
@@ -48,13 +49,15 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
   useEffect(() => {
     let live = true;
     const runBoot = async () => {
-      const data = await bootPreload();
+      const data = await bootPreload(undefined, (label) => setPhase(label || 'Загрузка…'));
       if (!live) return;
       setBoot(data);
       setTimeout(() => {
         setDone(true);
         onReady(data);
       }, 250);
+      // Фоновый ШАГ 2: один запрос на тяжелые данные
+      try { const uid = (data?.user as any)?.id as string | undefined; const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null; if (uid) void bootPreloadBackground(uid, activeId); } catch {}
     };
 
     const locked = (() => { try { return Boolean((window as any).__exampliBootLocked); } catch { return false; } })();
@@ -99,12 +102,13 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
           onTouchMove={(e) => e.preventDefault()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <img
-            src="/kursik.svg"
-            alt="Загрузка"
-            className="w-full h-full object-contain"
-            draggable={false}
-          />
+          <div className="w-full h-full grid place-items-center p-8 text-white">
+            <div className="max-w-md text-center">
+              <img src="/kursik.svg" alt="Загрузка" className="w-40 h-40 mx-auto mb-6 select-none" draggable={false} />
+              <div className="text-2xl font-semibold tracking-wide mb-2">Готовим приложение…</div>
+              <div className="text-base opacity-80">{phase}</div>
+            </div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

@@ -128,11 +128,14 @@ export default function Profile() {
         if (user) cacheSet(CACHE_KEYS.user, user);
       }
       setU({ ...user, tg_username: tu.username, photo_url: tu.photo_url, first_name: tu.first_name });
-      // фото: надёжный фолбэк — пробуем несколько URL
+      // фото: сперва avatar_url из локального кэша/boot, затем фолбэки Telegram CDN
       try {
         const uname = tu?.username as string | undefined;
+        const fromCache = cacheGet<string>(CACHE_KEYS.userAvatarUrl);
+        const fromBoot = (window as any)?.__exampliBoot?.user?.avatar_url as string | undefined;
         const direct = (tu?.photo_url as string | undefined) || '';
         const candidates = [
+          fromCache || fromBoot || '',
           direct,
           ...(uname ? [
             `https://t.me/i/userpic/320/${uname}.jpg`,
