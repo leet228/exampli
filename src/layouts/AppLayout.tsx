@@ -10,14 +10,7 @@ import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
-// Hidden pre-mount of heavy overlays to avoid first-mount jank
-import AddCourseSheet from '../components/panels/AddCourseSheet';
-import FriendsPanel from '../components/panels/FriendsPanel';
-import AddFriendsPanel from '../components/panels/AddFriendsPanel';
-import TopicsPanel from '../components/panels/TopicsPanel';
-import CourseSheet from '../components/sheets/CourseSheet';
-import EnergySheet from '../components/sheets/EnergySheet';
-import StreakSheet from '../components/sheets/StreakSheet';
+
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -140,19 +133,6 @@ export default function AppLayout() {
 
       {/* Vercel Speed Insights */}
       <SpeedInsights />
-
-      {/* Hidden pre-mount hub: mounts all heavy overlays once to eliminate first-open cost */}
-      {bootDone && (
-        <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden>
-          <AddCourseSheet open={true} onClose={() => {}} onAdded={() => {}} useTelegramBack={false} />
-          <FriendsPanel open={true} onClose={() => {}} />
-          <AddFriendsPanel open={true} onClose={() => {}} />
-          <TopicsPanel open={true} onClose={() => {}} />
-          <CourseSheet open={true} onClose={() => {}} />
-          <EnergySheet open={true} onClose={() => {}} />
-          <StreakSheet open={true} onClose={() => {}} />
-        </div>
-      )}
     </div>
   );
 }
