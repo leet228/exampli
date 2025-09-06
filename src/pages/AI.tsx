@@ -122,15 +122,47 @@ export default function AI() {
         }),
       });
 
-      if (!response.ok) {
-        const detail = await safeText(response);
+      if (!response.ok || !response.body) {
+        const detail = await safeText(response as any);
         throw new Error(detail || `Request failed with ${response.status}`);
       }
 
-      const data: { content?: string } = await response.json();
-      const assistantReply = data.content?.trim() || 'Извини, я сейчас не смог ответить.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: assistantReply }]);
-      // Хаптик «как смс пришла» на ответ бота
+      // SSE поток из /api/chat -> постепенно накапливаем ответ
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let acc = '';
+      // добавляем «пустое» ассистентское сообщение, которое будем дополнять
+      setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        // протокол OpenAI SSE: строки data: {...}\n\n, выберем content дельты
+        chunk.split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('data:'))
+          .forEach((line) => {
+            const payload = line.slice(5).trim();
+            if (payload === '[DONE]') return;
+            try {
+              const json = JSON.parse(payload);
+              const delta = json?.choices?.[0]?.delta?.content;
+              if (typeof delta === 'string' && delta.length) {
+                acc += delta;
+                setMessages((prev) => {
+                  const copy = [...prev];
+                  // последнее сообщение — ассистент, добавляем дельту
+                  const last = copy[copy.length - 1];
+                  if (last && last.role === 'assistant' && typeof last.content === 'string') {
+                    copy[copy.length - 1] = { role: 'assistant', content: last.content + delta };
+                  }
+                  return copy;
+                });
+              }
+            } catch {}
+          });
+      }
+      // Хаптик на завершение ответа
       try { hapticSelect(); } catch {}
     } catch (e: any) {
       setError(e?.message ? String(e.message) : 'Не удалось получить ответ.');

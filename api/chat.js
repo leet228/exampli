@@ -45,6 +45,7 @@ export default async function handler(req, res) {
             ...openAiPrepared
         ], 35000);
 
+        // Streaming ответ
         const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -55,20 +56,33 @@ export default async function handler(req, res) {
                 model,
                 messages: prepared,
                 temperature: 1,
+                stream: true,
             })
         });
 
-        if (!dsResponse.ok) {
+        if (!dsResponse.ok || !dsResponse.body) {
             const errorText = await safeText(dsResponse);
             res.status(dsResponse.status).json({ error: 'OpenAI error', detail: errorText });
             return;
         }
 
-        const data = await dsResponse.json();
-        const content = data && data.choices && data.choices[0] && data.choices[0].message ?
-            data.choices[0].message.content :
-            '';
-        res.status(200).json({ content });
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+
+        const reader = dsResponse.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            // Проксируем SSE как есть (data: ...\n\n)
+            res.write(chunk);
+        }
+        res.end();
     } catch (error) {
         console.error('[api/chat] Unhandled error:', error);
         res.status(500).json({ error: 'Internal error', detail: String(error && error.message || error) });

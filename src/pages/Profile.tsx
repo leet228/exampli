@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
+import { hapticSelect } from '../lib/haptics';
 
 export default function Profile() {
   const [u, setU] = useState<any>(null);
@@ -371,7 +372,7 @@ export default function Profile() {
               onPointerDown={() => setAddPressed(true)}
               onPointerUp={() => setAddPressed(false)}
               onPointerCancel={() => setAddPressed(false)}
-              onClick={() => setAddFriendsOpen(true)}
+              onClick={() => { try { hapticSelect(); } catch {} setAddFriendsOpen(true); }}
               className="w-full rounded-3xl px-4 py-4 flex items-center justify-center gap-2 font-semibold"
               animate={{
                 y: addPressed ? addShadowHeight : 0,
