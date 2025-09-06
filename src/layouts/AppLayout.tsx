@@ -18,12 +18,6 @@ import TopicsPanel from '../components/panels/TopicsPanel';
 import CourseSheet from '../components/sheets/CourseSheet';
 import EnergySheet from '../components/sheets/EnergySheet';
 import StreakSheet from '../components/sheets/StreakSheet';
-import Home from '../pages/Home';
-import Quests from '../pages/Quests';
-import Battle from '../pages/Battle';
-import AI from '../pages/AI';
-import Subscription from '../pages/Subscription';
-import Profile from '../pages/Profile';
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -114,18 +108,7 @@ export default function AppLayout() {
       {showHUD && bootDone && <HUD />}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        {showBottom ? (
-          <div>
-            <div style={{ display: pathname === '/' ? 'block' : 'none' }}><Home /></div>
-            <div style={{ display: pathname === '/quests' ? 'block' : 'none' }}><Quests /></div>
-            <div style={{ display: pathname === '/battle' ? 'block' : 'none' }}><Battle /></div>
-            <div style={{ display: pathname === '/ai' ? 'block' : 'none' }}><AI /></div>
-            <div style={{ display: pathname === '/subscription' ? 'block' : 'none' }}><Subscription /></div>
-            <div style={{ display: pathname === '/profile' ? 'block' : 'none' }}><Profile /></div>
-          </div>
-        ) : (
-          <Outlet context={{ bootData }} />
-        )}
+        <Outlet context={{ bootData }} />
       </div>
 
       {/* Onboarding поверх после boot */}
