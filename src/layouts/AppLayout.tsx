@@ -46,12 +46,12 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // Логика показа онбординга/выбора курса (теперь берём телефон из userProfile тоже):
-      // 1) Если нет phone_number (в userProfile или users) — показываем онбординг
-      // 2) Иначе если нет added_course — сразу открываем выбор курса
+      // СТАРАЯ ЛОГИКА (как было):
+      // 1) Если НЕТ phone_number в users — показываем онбординг
+      // 2) ИНАЧЕ если НЕТ added_course — показываем выбор курса
       // 3) Иначе — ничего не показываем
-      const userHasPhone = Boolean(ce.detail?.userProfile?.phone_number || (ce.detail?.user as any)?.phone_number);
-      const userHasCourse = Boolean((ce.detail?.user as any)?.added_course);
+      const userHasPhone = !!(ce.detail?.user as any)?.phone_number;
+      const userHasCourse = !!(ce.detail?.user as any)?.added_course;
       if (!userHasPhone) {
         setOpenCoursePicker(false);
         setShowOnboarding(true);
