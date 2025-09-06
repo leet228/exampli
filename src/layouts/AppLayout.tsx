@@ -46,11 +46,8 @@ export default function AppLayout() {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
       setBootDone(true);
-      // СТАРАЯ ЛОГИКА (как было):
-      // 1) Если НЕТ phone_number в users — показываем онбординг
-      // 2) ИНАЧЕ если НЕТ added_course — показываем выбор курса
-      // 3) Иначе — ничего не показываем
-      const userHasPhone = !!(ce.detail?.user as any)?.phone_number;
+      // Проверяем телефон из users, а если пуст — берём из userProfile (чтобы не зависеть от рассинхрона)
+      const userHasPhone = Boolean((ce.detail?.user as any)?.phone_number || ce.detail?.userProfile?.phone_number);
       const userHasCourse = !!(ce.detail?.user as any)?.added_course;
       if (!userHasPhone) {
         setOpenCoursePicker(false);

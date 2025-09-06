@@ -102,13 +102,12 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
           onTouchMove={(e) => e.preventDefault()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="w-full h-full grid place-items-center p-8 text-white">
-            <div className="max-w-md text-center">
-              <img src="/kursik.svg" alt="Загрузка" className="w-40 h-40 mx-auto mb-6 select-none" draggable={false} />
-              <div className="text-2xl font-semibold tracking-wide mb-2">Готовим приложение…</div>
-              <div className="text-base opacity-80">{phase}</div>
-            </div>
-          </div>
+          <img
+            src="/kursik.svg"
+            alt="Загрузка"
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
         </motion.div>
       )}
     </AnimatePresence>
