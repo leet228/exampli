@@ -135,6 +135,17 @@ export default function AddCourseSheet({
 
     onAdded(picked);
     onClose();
+    // Сразу обновим глобальный снапшот boot, чтобы шторка курсов увидела новый курс без перезагрузки
+    try {
+      const boot: any = (window as any).__exampliBoot || {};
+      const listAll: Subject[] = (boot?.subjectsAll || []) as Subject[];
+      const hasInAll = Array.isArray(listAll) && listAll.some((s) => s.id === picked.id);
+      (window as any).__exampliBoot = {
+        ...boot,
+        subjects: [picked],
+        subjectsAll: hasInAll ? listAll : [...(listAll || []), picked],
+      };
+    } catch {}
     // оповестим UI (и сохраним снимок) через store
     window.dispatchEvent(new CustomEvent('exampli:subjectsChanged'));
     storeSetActiveCourse({ code: picked.code, title: picked.title });
