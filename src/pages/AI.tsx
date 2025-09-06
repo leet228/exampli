@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { hapticTiny, hapticSelect } from '../lib/haptics';
+import { hapticTiny, hapticSelect, hapticTypingTick } from '../lib/haptics';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -133,6 +133,7 @@ export default function AI() {
       let acc = '';
       // добавляем «пустое» ассистентское сообщение, которое будем дополнять
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+      let lastTick = 0;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -158,6 +159,9 @@ export default function AI() {
                   }
                   return copy;
                 });
+                // микро-хаптик не чаще раза в ~150мс, чтобы не раздражал
+                const now = Date.now();
+                if (now - lastTick > 150) { try { hapticTypingTick(); } catch {} lastTick = now; }
               }
             } catch {}
           });

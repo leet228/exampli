@@ -66,3 +66,19 @@ export function hapticSelect() {
     if ('vibrate' in navigator) (navigator as any).vibrate([12]);
   } catch {}
 }
+
+/**
+ * Микро-хаптики во время «печати» — короткие едва заметные тики.
+ * Вызывай с интервалом 120–200мс во время стриминга текста.
+ */
+export function hapticTypingTick() {
+  try {
+    if (typeof window === 'undefined') return;
+    const tg = (window as any)?.Telegram?.WebApp?.HapticFeedback;
+
+    // Очень лёгкий «soft», чтобы не раздражал
+    if (tg?.impactOccurred) { tg.impactOccurred('soft'); return; }
+    if (tg?.selectionChanged) { tg.selectionChanged(); return; }
+    if ('vibrate' in navigator) (navigator as any).vibrate(5);
+  } catch {}
+}
