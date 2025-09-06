@@ -32,9 +32,9 @@ export default function BottomSheet({ open, onClose, title, children, minHeightV
   }, [open]);
 
   const node = (
-    <AnimatePresence>
-      {open && (
-        <>
+    <>
+      <AnimatePresence>
+        {open && (
           <motion.div
             className="sheet-backdrop"
             onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -43,36 +43,35 @@ export default function BottomSheet({ open, onClose, title, children, minHeightV
             exit={{ opacity: 0 }}
             style={{ zIndex: 100 }}
           />
-          <motion.div
-            className="sheet-panel"
-            role="dialog"
-            aria-modal="true"
-            ref={panelRef}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            onClick={(e) => e.stopPropagation()}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
-            }}
-            style={{ zIndex: 101, minHeight: typeof minHeightVh === 'number' ? `${Math.max(0, Math.min(100, minHeightVh))}dvh` : undefined }}
-          >
-            {title ? (
-              <div className="px-5 pt-3 pb-2 border-b border-white/10">
-                <div className="sheet-handle" />
-                <div className="text-center font-semibold">{title}</div>
-              </div>
-            ) : (
-              <div className="sheet-handle" />
-            )}
-            <div className="p-4">{children}</div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+      <motion.div
+        className="sheet-panel"
+        role="dialog"
+        aria-modal="true"
+        ref={panelRef}
+        initial={false}
+        animate={{ y: open ? 0 : '100%' }}
+        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+        onClick={(e) => e.stopPropagation()}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
+        }}
+        style={{ zIndex: 101, minHeight: typeof minHeightVh === 'number' ? `${Math.max(0, Math.min(100, minHeightVh))}dvh` : undefined, pointerEvents: open ? 'auto' : 'none' }}
+      >
+        {title ? (
+          <div className="px-5 pt-3 pb-2 border-b border-white/10">
+            <div className="sheet-handle" />
+            <div className="text-center font-semibold">{title}</div>
+          </div>
+        ) : (
+          <div className="sheet-handle" />
+        )}
+        <div className="p-4">{children}</div>
+      </motion.div>
+    </>
   );
 
   // КРИТИЧНО: рендерим в body, чтобы шторка не «прилипала» к родителям

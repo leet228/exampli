@@ -47,9 +47,9 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
   }, [open]);
 
   const node = (
-    <AnimatePresence>
-      {open && (
-        <>
+    <>
+      <AnimatePresence>
+        {open && (
           <motion.div
             className="sheet-backdrop"
             onClick={dismissible ? onClose : undefined}
@@ -57,26 +57,25 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           />
-          <motion.div
-            className="sheet-panel full"
-            role="dialog"
-            aria-modal="true"
-            style={{ top: 'var(--hud-top)' }} // опускаем на высоту HUD/telegram
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            >
-            {title && (
-              <div className="px-5 pt-3 pb-2 border-b border-white/10 text-center font-semibold">
-                {title}
-              </div>
-            )}
-            <div className="p-4">{children}</div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+      <motion.div
+        className="sheet-panel full"
+        role="dialog"
+        aria-modal="true"
+        style={{ top: 'var(--hud-top)' }}
+        initial={false}
+        animate={{ y: open ? 0 : '100%' }}
+        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+      >
+        {title && (
+          <div className="px-5 pt-3 pb-2 border-b border-white/10 text-center font-semibold">
+            {title}
+          </div>
+        )}
+        <div className="p-4">{children}</div>
+      </motion.div>
+    </>
   );
 
   return typeof document !== 'undefined' ? createPortal(node, document.body) : node;

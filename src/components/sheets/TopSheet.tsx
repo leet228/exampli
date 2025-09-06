@@ -28,9 +28,9 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
   }, [arrowX]);
 
   return createPortal(
-    <AnimatePresence onExitComplete={() => setInteractiveBackdrop(false)}>
-      {open && (
-        <>
+    <>
+      <AnimatePresence onExitComplete={() => setInteractiveBackdrop(false)}>
+        {open && (
           <motion.div
             className="drop-backdrop"
             onClick={onClose}
@@ -40,36 +40,32 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
             exit={{ opacity: 0 }}
             transition={{ duration: .18, ease: [0.22,1,0.36,1] }}
           />
-          {/* разделительная полоса + SVG-стрелка-вырез */}
-          {(
-            <motion.div
-              className="drop-divider"
-              style={{ top: topOffset - 1 }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: .2 }}
-            >
-              <div className="drop-divider-line" />
-              <div className={["drop-triangle", variant ?? 'streak'].join(' ')} />
-            </motion.div>
-          )}
-          <motion.div
-            className="drop-panel"
-            style={{ top: topOffset, willChange: 'clip-path', ['--arrow-x' as any]: arrowCssVar, zIndex: 9998 }}
-            initial={{ clipPath: 'inset(0 0 100% 0)', opacity: 1 }}
-            animate={{ clipPath: 'inset(0 0 0 0)', opacity: 1 }}
-            exit={{ clipPath: 'inset(0 0 100% 0)', opacity: 1 }}
-            transition={{ duration: .6, ease: [0.22,1,0.36,1] }}
-          >
-            {title ? (
-              <div className="p-3 border-b border-white/10 text-center font-semibold">{title}</div>
-            ) : null}
-            <div className="p-3">{children}</div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
+        )}
+      </AnimatePresence>
+      {/* разделительная полоса + SVG-стрелка-вырез */}
+      <motion.div
+        className="drop-divider"
+        style={{ top: topOffset - 1, pointerEvents: 'none' }}
+        initial={false}
+        animate={{ opacity: open ? 1 : 0 }}
+        transition={{ duration: .2 }}
+      >
+        <div className="drop-divider-line" />
+        <div className={["drop-triangle", variant ?? 'streak'].join(' ')} />
+      </motion.div>
+      <motion.div
+        className="drop-panel"
+        style={{ top: topOffset, willChange: 'clip-path', ['--arrow-x' as any]: arrowCssVar, zIndex: 9998, pointerEvents: open ? 'auto' : 'none' }}
+        initial={false}
+        animate={{ clipPath: open ? 'inset(0 0 0 0)' : 'inset(0 0 100% 0)', opacity: 1 }}
+        transition={{ duration: .6, ease: [0.22,1,0.36,1] }}
+      >
+        {title ? (
+          <div className="p-3 border-b border-white/10 text-center font-semibold">{title}</div>
+        ) : null}
+        <div className="p-3">{children}</div>
+      </motion.div>
+    </>,
     document.body
   );
 }

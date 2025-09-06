@@ -38,28 +38,31 @@ export default function SidePanel({ open, onClose, title, useTelegramBack, hideL
     window.dispatchEvent(new Event('exampli:overlayToggled'));
   }, [open]);
 
+  // Всегда монтируем разметку, а видимость переключаем через CSS и анимации
   return createPortal(
-    <AnimatePresence>
-      {open && (
-        <>
+    <>
+      <AnimatePresence>
+        {open && (
           <motion.div className="side-backdrop" onClick={onClose}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-          <motion.aside className="side-panel"
-            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-          >
-            <div className="side-panel-header flex items-center justify-between">
-              {hideLocalClose ? <div className="opacity-0">•</div> : (
-                <button className="badge" onClick={onClose}>✕ Close</button>
-              )}
-              <div className="text-base font-semibold">{title}</div>
-              <div className="opacity-0">•</div>
-            </div>
-            <div className="side-panel-body" style={{ overscrollBehavior: 'contain' }}>{children}</div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>,
+        )}
+      </AnimatePresence>
+      <motion.aside className="side-panel"
+        initial={false}
+        animate={{ x: open ? 0 : '-100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        style={{ pointerEvents: open ? 'auto' : 'none' }}
+      >
+        <div className="side-panel-header flex items-center justify-between">
+          {hideLocalClose ? <div className="opacity-0">•</div> : (
+            <button className="badge" onClick={onClose}>✕ Close</button>
+          )}
+          <div className="text-base font-semibold">{title}</div>
+          <div className="opacity-0">•</div>
+        </div>
+        <div className="side-panel-body" style={{ overscrollBehavior: 'contain' }}>{children}</div>
+      </motion.aside>
+    </>,
     document.body
   );
 }

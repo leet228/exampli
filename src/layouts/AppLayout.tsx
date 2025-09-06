@@ -10,6 +10,20 @@ import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
+// Hidden pre-mount of heavy overlays to avoid first-mount jank
+import AddCourseSheet from '../components/panels/AddCourseSheet';
+import FriendsPanel from '../components/panels/FriendsPanel';
+import AddFriendsPanel from '../components/panels/AddFriendsPanel';
+import TopicsPanel from '../components/panels/TopicsPanel';
+import CourseSheet from '../components/sheets/CourseSheet';
+import EnergySheet from '../components/sheets/EnergySheet';
+import StreakSheet from '../components/sheets/StreakSheet';
+import Home from '../pages/Home';
+import Quests from '../pages/Quests';
+import Battle from '../pages/Battle';
+import AI from '../pages/AI';
+import Subscription from '../pages/Subscription';
+import Profile from '../pages/Profile';
 
 export default function AppLayout() {
   const { pathname } = useLocation();
@@ -100,7 +114,18 @@ export default function AppLayout() {
       {showHUD && bootDone && <HUD />}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        <Outlet context={{ bootData }} />
+        {showBottom ? (
+          <div>
+            <div style={{ display: pathname === '/' ? 'block' : 'none' }}><Home /></div>
+            <div style={{ display: pathname === '/quests' ? 'block' : 'none' }}><Quests /></div>
+            <div style={{ display: pathname === '/battle' ? 'block' : 'none' }}><Battle /></div>
+            <div style={{ display: pathname === '/ai' ? 'block' : 'none' }}><AI /></div>
+            <div style={{ display: pathname === '/subscription' ? 'block' : 'none' }}><Subscription /></div>
+            <div style={{ display: pathname === '/profile' ? 'block' : 'none' }}><Profile /></div>
+          </div>
+        ) : (
+          <Outlet context={{ bootData }} />
+        )}
       </div>
 
       {/* Onboarding поверх после boot */}
@@ -132,6 +157,19 @@ export default function AppLayout() {
 
       {/* Vercel Speed Insights */}
       <SpeedInsights />
+
+      {/* Hidden pre-mount hub: mounts all heavy overlays once to eliminate first-open cost */}
+      {bootDone && (
+        <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden>
+          <AddCourseSheet open={true} onClose={() => {}} onAdded={() => {}} useTelegramBack={false} />
+          <FriendsPanel open={true} onClose={() => {}} />
+          <AddFriendsPanel open={true} onClose={() => {}} />
+          <TopicsPanel open={true} onClose={() => {}} />
+          <CourseSheet open={true} onClose={() => {}} />
+          <EnergySheet open={true} onClose={() => {}} />
+          <StreakSheet open={true} onClose={() => {}} />
+        </div>
+      )}
     </div>
   );
 }
