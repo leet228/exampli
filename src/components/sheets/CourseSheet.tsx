@@ -90,6 +90,17 @@ export default function CoursesPanel(props: Props) {
       if (e.detail?.code) {
         setActiveCode(e.detail.code);
         writeActiveToStorage(e.detail.code);
+        // Обновляем локальный список предметов под выбранный курс, чтобы плитка обновилась без перезагрузки
+        try {
+          const boot: any = (window as any).__exampliBoot || {};
+          const all: Subject[] = (boot?.subjectsAll || []) as Subject[];
+          const found = all.find((s) => s.code === e.detail?.code);
+          if (found) {
+            setSubjects([found]);
+            // поддержим глобальный снапшот, чтобы другие места видели новый курс
+            try { (window as any).__exampliBoot = { ...boot, subjects: [found] }; } catch {}
+          }
+        } catch {}
       }
     };
     window.addEventListener('exampli:subjectsChanged', onSubjectsChanged);
