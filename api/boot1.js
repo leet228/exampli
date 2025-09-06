@@ -36,7 +36,7 @@ export default async function handler(req, res) {
         userProfile: { background_color: '#3280c2', background_icon: 'nothing', phone_number: null, first_name: null, username: null },
         subjects: [],
         lessons: [],
-        onboarding: { phone_given: false, course_taken: false, boarding_finished: false },
+        onboarding: { phone_given: false, course_taken: false },
         friendsCount: 0,
         invite_token: startParam || null,
       });
@@ -99,9 +99,8 @@ export default async function handler(req, res) {
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
 
     const onboarding = {
-      phone_given: !!userRow.phone_number,
+      phone_given: !!(userProfile?.phone_number || userRow.phone_number),
       course_taken: true,
-      boarding_finished: !!userRow.phone_number,
     };
 
     res.status(200).json({

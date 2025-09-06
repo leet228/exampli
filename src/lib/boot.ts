@@ -25,7 +25,7 @@ export type BootData = {
   lessons: LessonRow[];          // уроки активного курса
   subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
   // onboarding больше не используем в логике, оставляем опционально для обратной совместимости
-  onboarding?: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null;
+  onboarding?: { phone_given: boolean; course_taken: boolean } | null;
   // новые поля для восстановления выбранной темы/подтемы
   current_topic_id?: string | number | null;
   current_subtopic_id?: string | number | null;
@@ -371,15 +371,13 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   step(++i, 1);
 
   // 2b) онбординг теперь вычисляем только по phone_number в users
-  let onboarding: { phone_given: boolean; course_taken: boolean; boarding_finished: boolean } | null = null;
+  let onboarding: { phone_given: boolean; course_taken: boolean } | null = null;
   if (userRow?.id) {
     const hasPhone = !!userRow?.phone_number;
     onboarding = {
       phone_given: hasPhone,
       // курс считаем «не блокирующим» условием онбординга, так что ставим true
       course_taken: true,
-      // finished — если телефон уже дан, онбординг не нужен
-      boarding_finished: hasPhone,
     };
   }
   // (скрытый шаг)
@@ -508,7 +506,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   (window as any).__exampliBoot = boot;
   cacheSet(CACHE_KEYS.user, boot.user);
   cacheSet(CACHE_KEYS.activeCourseCode, activeCode || '');
-  cacheSet(CACHE_KEYS.userProfile, userProfile);
+  try { cacheSet(CACHE_KEYS.userProfile, userProfile); } catch {}
 
   // диспатчим bootData (как раньше)
   window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
