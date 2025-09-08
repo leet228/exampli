@@ -15,12 +15,14 @@ export default function AddCourseSheet({
   onAdded,
   useTelegramBack = true,
   sideEffects,
+  initialOpenLevels,
 }: {
   open: boolean;
   onClose: () => void;
   onAdded: (s: Subject) => void;
   useTelegramBack?: boolean;
   sideEffects?: boolean;
+  initialOpenLevels?: string[];
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
@@ -37,6 +39,12 @@ export default function AddCourseSheet({
       if (cached && cached.length) {
         setAll(cached);
         setPickedId(null);
+        // Если задан список уровней для предварительного раскрытия — применим
+        if (Array.isArray(initialOpenLevels) && initialOpenLevels.length) {
+          const map: Record<string, boolean> = {};
+          initialOpenLevels.forEach((lvl) => { map[String(lvl).toUpperCase()] = true; });
+          setOpenLevels(map);
+        }
         return;
       }
     } catch {}
@@ -48,8 +56,13 @@ export default function AddCourseSheet({
         .order('title', { ascending: true });
       setAll((data as Subject[]) || []);
       setPickedId(null);
+      if (Array.isArray(initialOpenLevels) && initialOpenLevels.length) {
+        const map: Record<string, boolean> = {};
+        initialOpenLevels.forEach((lvl) => { map[String(lvl).toUpperCase()] = true; });
+        setOpenLevels(map);
+      }
     })();
-  }, [open]);
+  }, [open, initialOpenLevels]);
 
   const grouped = useMemo(() => {
     const by: Record<string, Subject[]> = {};
@@ -168,7 +181,7 @@ export default function AddCourseSheet({
       title="Курсы"
       useTelegramBack={useTelegramBack}
       sideEffects={sideEffects ?? false}
-      portalTarget={document.getElementById('addcourse-root') || null}
+      portalTarget={document.getElementById('addcourse-root') || document.getElementById('prewarm-ac') || null}
     >
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44 px-4">

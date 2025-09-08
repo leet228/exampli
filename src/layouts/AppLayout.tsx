@@ -135,13 +135,6 @@ export default function AppLayout() {
     return () => window.removeEventListener('exampli:addCourse', handler as EventListener);
   }, []);
 
-  // inert для контейнера AddCourseSheet
-  useEffect(() => {
-    const el = addCourseRootRef.current;
-    const hidden = !showAddCourse;
-    try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
-  }, [showAddCourse]);
-
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
@@ -164,19 +157,22 @@ export default function AppLayout() {
       {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (
         <>
-          {/* Контейнер для портала AddCourseSheet: скрыт в режиме прогрева, видим при показе */}
+          {/* Прогрев: один раз монтируем AddCourseSheet открытым, раскрываем уровни, затем скрываем контейнер */}
+          <div id="prewarm-ac" className="prewarm-mount" aria-hidden="true" />
+          <AddCourseSheet
+            open
+            onClose={() => {/* noop в прогреве */}}
+            onAdded={() => {/* noop */}}
+            useTelegramBack={false}
+            initialOpenLevels={["OGE", "EGE"]}
+          />
+
+          {/* Боевой контейнер для показа по нажатию «+» */}
           <div
             ref={addCourseRootRef}
             id="addcourse-root"
             className={showAddCourse ? '' : 'prewarm-mount'}
             aria-hidden={showAddCourse ? undefined : true}
-          />
-          {/* Один экземпляр AddCourseSheet: всегда "open", но сайд‑эффекты выключены; видимость контролирует контейнер */}
-          <AddCourseSheet
-            open
-            onClose={() => setShowAddCourse(false)}
-            onAdded={() => setShowAddCourse(false)}
-            useTelegramBack={false}
           />
         </>
       )}
