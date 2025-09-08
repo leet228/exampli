@@ -16,6 +16,7 @@ import AI from '../pages/AI';
 import Battle from '../pages/Battle';
 import Quests from '../pages/Quests';
 import Subscription from '../pages/Subscription';
+import TopicsPanel from '../components/panels/TopicsPanel';
 
 
 export default function AppLayout() {
@@ -134,6 +135,13 @@ export default function AppLayout() {
             setBootReady(true);
           }}
         />
+      )}
+
+      {/* Прогрев TopicsPanel после готовности данных, но до скрытия сплэша */}
+      {bootReady && !bootDone && (
+        <div className="prewarm-mount" aria-hidden="true">
+          <TopicsPanel open onClose={() => {}} />
+        </div>
       )}
 
       {/* Верхний HUD (после загрузки) */}
