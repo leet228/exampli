@@ -17,6 +17,7 @@ import Battle from '../pages/Battle';
 import Quests from '../pages/Quests';
 import Subscription from '../pages/Subscription';
 import TopicsPanel from '../components/panels/TopicsPanel';
+import AddCourseSheet from '../components/panels/AddCourseSheet';
 
 
 export default function AppLayout() {
@@ -141,6 +142,13 @@ export default function AppLayout() {
       {bootReady && !bootDone && (
         <div className="prewarm-mount" aria-hidden="true">
           <TopicsPanel open onClose={() => {}} />
+        </div>
+      )}
+
+      {/* Постоянный прогрев AddCourseSheet (отключаем TelegramBack, чтобы не цеплять события) */}
+      {bootReady && (
+        <div className="prewarm-mount" aria-hidden="true">
+          <AddCourseSheet open onClose={() => {}} onAdded={() => {}} useTelegramBack={false} />
         </div>
       )}
 
