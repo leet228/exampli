@@ -11,6 +11,11 @@ import { setUserSubjects } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
 import Profile from '../pages/Profile';
+import Home from '../pages/Home';
+import AI from '../pages/AI';
+import Battle from '../pages/Battle';
+import Quests from '../pages/Quests';
+import Subscription from '../pages/Subscription';
 
 
 export default function AppLayout() {
@@ -28,6 +33,11 @@ export default function AppLayout() {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
+  const homeRef = useRef<HTMLDivElement | null>(null);
+  const aiRef = useRef<HTMLDivElement | null>(null);
+  const battleRef = useRef<HTMLDivElement | null>(null);
+  const questsRef = useRef<HTMLDivElement | null>(null);
+  const subsRef = useRef<HTMLDivElement | null>(null);
   const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
@@ -97,13 +107,21 @@ export default function AppLayout() {
     }
   }, [bootReady]);
 
-  // Управляем inert у постоянного контейнера профиля: на /profile активен, на других путях скрыт и inert
+  // Управляем inert у постоянных контейнеров страниц: активной странице снимаем inert, скрытым — ставим inert
   useEffect(() => {
-    const el = profileRef.current;
-    const hidden = pathname !== '/profile';
-    try {
-      if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert');
-    } catch {}
+    const map: Array<[string, React.RefObject<HTMLDivElement>]> = [
+      ['/', homeRef],
+      ['/ai', aiRef],
+      ['/battle', battleRef],
+      ['/quests', questsRef],
+      ['/subscription', subsRef],
+      ['/profile', profileRef],
+    ];
+    map.forEach(([path, ref]) => {
+      const el = ref.current;
+      const hidden = pathname !== path;
+      try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
+    });
   }, [pathname]);
 
   return (
@@ -122,19 +140,39 @@ export default function AppLayout() {
       {showHUD && bootDone && <HUD />}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        {/* Постоянно смонтированный Profile — монтируем после готовности данных */}
         {bootReady && (
-          <div
-            ref={profileRef}
-            className={pathname === '/profile' ? '' : 'prewarm-mount'}
-            aria-hidden={pathname === '/profile' ? undefined : true}
-          >
-            <Profile />
-          </div>
+          <>
+            {/* Home */}
+            <div ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
+              <Home />
+            </div>
+            {/* AI */}
+            <div ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
+              <AI />
+            </div>
+            {/* Battle */}
+            <div ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
+              <Battle />
+            </div>
+            {/* Quests */}
+            <div ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
+              <Quests />
+            </div>
+            {/* Subscription */}
+            <div ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
+              <Subscription />
+            </div>
+            {/* Profile */}
+            <div ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
+              <Profile />
+            </div>
+          </>
         )}
 
-        {/* Остальные маршруты через Outlet; на /profile избегаем дубляжа */}
-        {pathname !== '/profile' && <Outlet context={{ bootData }} />}
+        {/* Другие неизвестные маршруты — через Outlet, чтобы не дублировать наши страницы */}
+        {!['/', '/ai', '/battle', '/quests', '/subscription', '/profile'].includes(pathname) && (
+          <Outlet context={{ bootData }} />
+        )}
       </div>
 
       {/* Onboarding поверх после boot */}
