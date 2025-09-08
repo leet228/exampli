@@ -1,6 +1,6 @@
 // src/pages/AppLayout.tsx
 import { Outlet, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import HUD from '../components/HUD';
 import BottomNav from '../components/BottomNav';
 import Splash from '../components/Splash';
@@ -10,6 +10,7 @@ import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
+import Profile from '../pages/Profile';
 
 
 export default function AppLayout() {
@@ -25,6 +26,7 @@ export default function AppLayout() {
   const [bootData, setBootData] = useState<BootData | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
+  const prewarmRef = useRef<HTMLDivElement | null>(null);
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -85,9 +87,27 @@ export default function AppLayout() {
     }
   }, [bootDone]);
 
+  // Устанавливаем inert на контейнер прогрева без тайпинговой ошибки
+  useEffect(() => {
+    if (!bootDone) {
+      const el = prewarmRef.current;
+      try { el?.setAttribute('inert', ''); } catch {}
+      return () => { try { el?.removeAttribute('inert'); } catch {} };
+    }
+  }, [bootDone]);
+
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
+      {/* Прогрев: монтируем невидимый контейнер со страницами/панелями во время boot */}
+      {!bootDone && (
+        <div ref={prewarmRef} className="prewarm-mount" aria-hidden="true">
+          {/* Прогреваем профиль: читает данные из boot/cache, но не виден и не кликабелен */}
+          <Profile />
+        </div>
+      )}
+
+      {/* Splash (визуально поверх) */}
       {!bootDone && (
         <Splash
           onReady={(data) => {

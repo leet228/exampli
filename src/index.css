@@ -470,6 +470,20 @@ body::before {
     z-index: -1;
 }
 
+/* Контейнер для «прогрева» UI во время boot: монтируем реальное дерево, но скрываем */
+.prewarm-mount {
+    position: fixed;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+    contain: layout style paint;
+    z-index: -1;
+}
+.prewarm-mount * {
+    animation: none !important;
+    transition: none !important;
+}
+
 /* На странице профиля — тянуть фон панели выше верха экрана */
 body.profile-overscroll::before {
     background: var(--profile-bg, var(--bg));
