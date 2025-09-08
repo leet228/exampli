@@ -26,7 +26,7 @@ export default function AppLayout() {
   const [bootData, setBootData] = useState<BootData | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
-  const prewarmRef = useRef<HTMLDivElement | null>(null);
+  const profileRef = useRef<HTMLDivElement | null>(null);
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -87,27 +87,18 @@ export default function AppLayout() {
     }
   }, [bootDone]);
 
-  // Устанавливаем inert на контейнер прогрева без тайпинговой ошибки
+  // Управляем inert у постоянного контейнера профиля: на /profile активен, на других путях скрыт и inert
   useEffect(() => {
-    if (!bootDone) {
-      const el = prewarmRef.current;
-      try { el?.setAttribute('inert', ''); } catch {}
-      return () => { try { el?.removeAttribute('inert'); } catch {} };
-    }
-  }, [bootDone]);
+    const el = profileRef.current;
+    const hidden = pathname !== '/profile';
+    try {
+      if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert');
+    } catch {}
+  }, [pathname]);
 
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
-      {/* Прогрев: монтируем невидимый контейнер со страницами/панелями во время boot */}
-      {!bootDone && (
-        <div ref={prewarmRef} className="prewarm-mount" aria-hidden="true">
-          {/* Прогреваем профиль: читает данные из boot/cache, но не виден и не кликабелен */}
-          <Profile />
-        </div>
-      )}
-
-      {/* Splash (визуально поверх) */}
       {!bootDone && (
         <Splash
           onReady={(data) => {
@@ -121,7 +112,17 @@ export default function AppLayout() {
       {showHUD && bootDone && <HUD />}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        <Outlet context={{ bootData }} />
+        {/* Постоянно смонтированный Profile */}
+        <div
+          ref={profileRef}
+          className={pathname === '/profile' ? '' : 'prewarm-mount'}
+          aria-hidden={pathname === '/profile' ? undefined : true}
+        >
+          <Profile />
+        </div>
+
+        {/* Остальные маршруты через Outlet; на /profile избегаем дубляжа */}
+        {pathname !== '/profile' && <Outlet context={{ bootData }} />}
       </div>
 
       {/* Onboarding поверх после boot */}
