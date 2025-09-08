@@ -160,7 +160,14 @@ export default function AddCourseSheet({
   };
 
   return (
-    <FullScreenSheet open={open} onClose={onClose} title="Курсы" useTelegramBack={useTelegramBack} sideEffects={false} portalTarget={document.getElementById('prewarm-root') || null}>
+    <FullScreenSheet
+      open={open}
+      onClose={onClose}
+      title="Курсы"
+      useTelegramBack={useTelegramBack}
+      sideEffects={false}
+      portalTarget={document.getElementById('addcourse-root') || null}
+    >
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44 px-4">
         {Object.entries(grouped).map(([level, items]) => {

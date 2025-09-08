@@ -40,6 +40,8 @@ export default function AppLayout() {
   const battleRef = useRef<HTMLDivElement | null>(null);
   const questsRef = useRef<HTMLDivElement | null>(null);
   const subsRef = useRef<HTMLDivElement | null>(null);
+  const addCourseRootRef = useRef<HTMLDivElement | null>(null);
+  const [showAddCourse, setShowAddCourse] = useState(false);
   const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
@@ -126,6 +128,20 @@ export default function AppLayout() {
     });
   }, [pathname]);
 
+  // Слушаем глобальный запрос на показ AddCourseSheet
+  useEffect(() => {
+    const handler = () => setShowAddCourse(true);
+    window.addEventListener('exampli:addCourse', handler as EventListener);
+    return () => window.removeEventListener('exampli:addCourse', handler as EventListener);
+  }, []);
+
+  // inert для контейнера AddCourseSheet
+  useEffect(() => {
+    const el = addCourseRootRef.current;
+    const hidden = !showAddCourse;
+    try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
+  }, [showAddCourse]);
+
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
@@ -147,9 +163,22 @@ export default function AppLayout() {
 
       {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (
-        <div className="prewarm-mount" aria-hidden="true" id="prewarm-root">
-          <AddCourseSheet open onClose={() => {}} onAdded={() => {}} useTelegramBack={false} />
-        </div>
+        <>
+          {/* Контейнер для портала AddCourseSheet: скрыт в режиме прогрева, видим при показе */}
+          <div
+            ref={addCourseRootRef}
+            id="addcourse-root"
+            className={showAddCourse ? '' : 'prewarm-mount'}
+            aria-hidden={showAddCourse ? undefined : true}
+          />
+          {/* Один экземпляр AddCourseSheet: всегда "open", но сайд‑эффекты выключены; видимость контролирует контейнер */}
+          <AddCourseSheet
+            open
+            onClose={() => setShowAddCourse(false)}
+            onAdded={() => setShowAddCourse(false)}
+            useTelegramBack={false}
+          />
+        </>
       )}
 
       {/* Верхний HUD (после загрузки) */}
