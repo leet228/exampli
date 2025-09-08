@@ -22,11 +22,13 @@ export default function AppLayout() {
   const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
   const isAI = pathname === '/ai';
 
-  const [bootDone, setBootDone] = useState(false);
+  const [bootReady, setBootReady] = useState(false); // данные загружены и кэшированы
+  const [uiWarmed, setUiWarmed] = useState(false);   // профиль смонтирован
   const [bootData, setBootData] = useState<BootData | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
+  const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function AppLayout() {
     const ready = (e: Event) => {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
-      setBootDone(true);
+      setBootReady(true);
       // Проверяем телефон из users, а если пуст — берём из userProfile (чтобы не зависеть от рассинхрона)
       const userHasPhone = Boolean((ce.detail?.user as any)?.phone_number || ce.detail?.userProfile?.phone_number);
       const userHasCourse = !!(ce.detail?.user as any)?.added_course;
@@ -64,7 +66,7 @@ export default function AppLayout() {
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
-    const reboot = () => { setBootDone(false); };
+    const reboot = () => { setBootReady(false); setUiWarmed(false); };
     window.addEventListener('exampli:reboot', reboot as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
@@ -87,6 +89,14 @@ export default function AppLayout() {
     }
   }, [bootDone]);
 
+  // как только данные готовы и профиль будет смонтирован, подтверждаем прогрев UI
+  useEffect(() => {
+    if (bootReady) {
+      // дождёмся коммита DOM
+      requestAnimationFrame(() => { setUiWarmed(true); });
+    }
+  }, [bootReady]);
+
   // Управляем inert у постоянного контейнера профиля: на /profile активен, на других путях скрыт и inert
   useEffect(() => {
     const el = profileRef.current;
@@ -103,7 +113,7 @@ export default function AppLayout() {
         <Splash
           onReady={(data) => {
             setBootData(data);
-            setBootDone(true);
+            setBootReady(true);
           }}
         />
       )}
@@ -112,14 +122,16 @@ export default function AppLayout() {
       {showHUD && bootDone && <HUD />}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        {/* Постоянно смонтированный Profile */}
-        <div
-          ref={profileRef}
-          className={pathname === '/profile' ? '' : 'prewarm-mount'}
-          aria-hidden={pathname === '/profile' ? undefined : true}
-        >
-          <Profile />
-        </div>
+        {/* Постоянно смонтированный Profile — монтируем после готовности данных */}
+        {bootReady && (
+          <div
+            ref={profileRef}
+            className={pathname === '/profile' ? '' : 'prewarm-mount'}
+            aria-hidden={pathname === '/profile' ? undefined : true}
+          >
+            <Profile />
+          </div>
+        )}
 
         {/* Остальные маршруты через Outlet; на /profile избегаем дубляжа */}
         {pathname !== '/profile' && <Outlet context={{ bootData }} />}
@@ -145,7 +157,8 @@ export default function AppLayout() {
           // оповестим остальных
           window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));
           // перезапустим Splash/boot для повторной прогрузки и кэширования
-          setBootDone(false);
+          setBootReady(false);
+          setUiWarmed(false);
         }}
       />
 
