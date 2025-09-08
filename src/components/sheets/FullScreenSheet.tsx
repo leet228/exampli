@@ -10,11 +10,14 @@ type FullScreenSheetProps = {
   children: React.ReactNode;
   useTelegramBack?: boolean;
   dismissible?: boolean;
+  portalTarget?: HTMLElement | null;
+  sideEffects?: boolean; // управляет блокировкой скролла и TG BackButton
 };
 
-export default function FullScreenSheet({ open, onClose, title, children, useTelegramBack = true, dismissible = true }: FullScreenSheetProps) {
+export default function FullScreenSheet({ open, onClose, title, children, useTelegramBack = true, dismissible = true, portalTarget, sideEffects = true }: FullScreenSheetProps) {
   // Telegram BackButton
   useEffect(() => {
+      if (!sideEffects) return;
       const tg = (window as any)?.Telegram?.WebApp;
       if (!tg) return;
       if (open && useTelegramBack) {
@@ -29,10 +32,11 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
           tg.BackButton?.hide?.();
         };
       }
-    }, [open, onClose, useTelegramBack]);
+    }, [open, onClose, useTelegramBack, sideEffects]);
 
   // Лочим фон
   useEffect(() => {
+    if (!sideEffects) return;
     if (!open) return;
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
@@ -44,7 +48,7 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
       document.body.style.overflow = prevBody;
       window.dispatchEvent(new Event('exampli:overlayToggled'));
     };
-  }, [open]);
+  }, [open, sideEffects]);
 
   const node = (
     <AnimatePresence>
@@ -79,5 +83,5 @@ export default function FullScreenSheet({ open, onClose, title, children, useTel
     </AnimatePresence>
   );
 
-  return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
+  return typeof document !== 'undefined' ? createPortal(node, (portalTarget || document.body)) : node;
 }

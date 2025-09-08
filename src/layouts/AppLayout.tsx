@@ -145,9 +145,9 @@ export default function AppLayout() {
         </div>
       )}
 
-      {/* Постоянный прогрев AddCourseSheet (отключаем TelegramBack, чтобы не цеплять события) */}
+      {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (
-        <div className="prewarm-mount" aria-hidden="true">
+        <div className="prewarm-mount" aria-hidden="true" id="prewarm-root">
           <AddCourseSheet open onClose={() => {}} onAdded={() => {}} useTelegramBack={false} />
         </div>
       )}
