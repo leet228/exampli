@@ -174,6 +174,10 @@ export default function AddCourseSheet({
     // (сплэш и прогрев теперь вызываются в onClick — здесь не трогаем)
   };
 
+  const portalTarget = (sideEffects === false)
+    ? (document.getElementById('prewarm-ac') || null)
+    : null; // null => document.body (самый верхний слой)
+
   return (
     <FullScreenSheet
       open={open}
@@ -181,7 +185,7 @@ export default function AddCourseSheet({
       title="Курсы"
       useTelegramBack={useTelegramBack}
       sideEffects={sideEffects ?? false}
-      portalTarget={document.getElementById('addcourse-root') || document.getElementById('prewarm-ac') || null}
+      portalTarget={portalTarget}
     >
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}
       <div className="space-y-5 pb-44 px-4">

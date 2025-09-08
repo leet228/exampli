@@ -41,7 +41,7 @@ export default function AppLayout() {
   const questsRef = useRef<HTMLDivElement | null>(null);
   const subsRef = useRef<HTMLDivElement | null>(null);
   const addCourseRootRef = useRef<HTMLDivElement | null>(null);
-  const [showAddCourse, setShowAddCourse] = useState(false);
+  const [prewarmACDone, setPrewarmACDone] = useState(false);
   const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
@@ -128,12 +128,14 @@ export default function AppLayout() {
     });
   }, [pathname]);
 
-  // Слушаем глобальный запрос на показ AddCourseSheet
+  // После bootReady один раз прогреваем AddCourseSheet: монтируем и затем полностью размонтируем
   useEffect(() => {
-    const handler = () => setShowAddCourse(true);
-    window.addEventListener('exampli:addCourse', handler as EventListener);
-    return () => window.removeEventListener('exampli:addCourse', handler as EventListener);
-  }, []);
+    if (bootReady && !prewarmACDone) {
+      // даём кадр на монтирование, затем отмечаем как завершённый прогрев (размонтируем)
+      const id = requestAnimationFrame(() => setPrewarmACDone(true));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [bootReady, prewarmACDone]);
 
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
@@ -157,23 +159,20 @@ export default function AppLayout() {
       {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (
         <>
-          {/* Прогрев: один раз монтируем AddCourseSheet открытым, раскрываем уровни, затем скрываем контейнер */}
-          <div id="prewarm-ac" className="prewarm-mount" aria-hidden="true" />
-          <AddCourseSheet
-            open
-            onClose={() => {/* noop в прогреве */}}
-            onAdded={() => {/* noop */}}
-            useTelegramBack={false}
-            initialOpenLevels={["OGE", "EGE"]}
-          />
+          {/* Прогрев: один раз монтируем AddCourseSheet открытым (невидимо), затем размонтируем */}
+          {!prewarmACDone && <div id="prewarm-ac" className="prewarm-mount" aria-hidden="true" />}
+          {!prewarmACDone && (
+            <AddCourseSheet
+              open
+              onClose={() => {/* noop */}}
+              onAdded={() => {/* noop */}}
+              useTelegramBack={false}
+              initialOpenLevels={["OGE", "EGE"]}
+            />
+          )}
 
-          {/* Боевой контейнер для показа по нажатию «+» */}
-          <div
-            ref={addCourseRootRef}
-            id="addcourse-root"
-            className={showAddCourse ? '' : 'prewarm-mount'}
-            aria-hidden={showAddCourse ? undefined : true}
-          />
+          {/* Боевой контейнер: всегда присутствует и не скрыт, чтобы портал HUD был виден */}
+          <div ref={addCourseRootRef} id="addcourse-root" />
         </>
       )}
 
