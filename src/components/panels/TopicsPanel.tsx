@@ -23,6 +23,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [subsByTopic, setSubsByTopic] = useState<Record<string, Subtopic[]>>({});
   const [expandedTopicId, setExpandedTopicId] = useState<string | number | null>(null);
+  const [currentSubId, setCurrentSubId] = useState<string | number | null>(null);
   const [loading, setLoading] = useState(true);
 
   // -- helpers: активный курс из localStorage
@@ -56,6 +57,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
       // Если ранее был выбран топик — попробуем сразу развернуть его
       try {
         const savedTopicId = localStorage.getItem(CUR_TOPIC_ID_KEY);
+        const savedSubId = localStorage.getItem(CUR_SUBTOPIC_ID_KEY);
         if (savedTopicId) {
           const exists = tlist.some(t => String(t.id) === String(savedTopicId));
           if (exists) setExpandedTopicId(savedTopicId);
@@ -68,6 +70,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
             setExpandedTopicId(null);
           }
         }
+        if (savedSubId) setCurrentSubId(savedSubId);
       } catch {}
 
       // подтемы только из локального кэша
@@ -125,6 +128,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 }));
               } catch {}
               setExpandedTopicId(String(tFound.id));
+              setCurrentSubId(String(stFound.id));
             }
           }
         }
@@ -163,6 +167,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
       localStorage.setItem(CUR_TOPIC_TITLE_KEY, t.title);
       localStorage.setItem(CUR_SUBTOPIC_TITLE_KEY, st.title);
     } catch {}
+    try { setCurrentSubId(st.id); } catch {}
 
     // Сохраняем выбор в БД users: current_topic / current_subtopic
     try {
@@ -241,11 +246,11 @@ export default function TopicsPanel({ open, onClose }: Props) {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="divide-y divide-white/10"
+                    className="divide-y divide-white/20"
                     style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
                   >
                     {subs.map(st => (
-                      <TapSafeRow key={st.id} onPick={() => { hapticTiny(); pickSubtopic(t, st); }}>
+                      <TapSafeRow key={st.id} selected={String(st.id) === String(currentSubId)} onPick={() => { hapticTiny(); pickSubtopic(t, st); }}>
                         {st.title}
                       </TapSafeRow>
                     ))}
@@ -275,7 +280,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   );
 }
 
-function TapSafeRow({ children, onPick }: { children: React.ReactNode; onPick: () => void }) {
+function TapSafeRow({ children, onPick, selected = false }: { children: React.ReactNode; onPick: () => void; selected?: boolean }) {
   const tapRef = useRef<{ y: number; t: number } | null>(null);
   return (
     <button
@@ -290,9 +295,10 @@ function TapSafeRow({ children, onPick }: { children: React.ReactNode; onPick: (
         if (moved < 10 && dt < 350) onPick();
         tapRef.current = null;
       }}
-      className="w-full text-left px-4 py-3 hover:bg-white/[0.06]"
+      className={`w-full text-left px-4 py-4 hover:bg-white/[0.06] flex items-center justify-between ${selected ? 'bg-white/[0.08]' : ''}`}
     >
-      {children}
+      <span className={`text-[15px] ${selected ? 'font-semibold text-white' : ''}`}>{children}</span>
+      {selected && <span aria-hidden className="ml-3 inline-block w-2 h-2 rounded-full bg-[#1cb0f6]" />}
     </button>
   );
 }
