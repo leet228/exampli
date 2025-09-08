@@ -428,7 +428,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 7) Темы/подтемы активного курса — cache-first + прогрев в фоне; лого в фоне
+  // 7) Темы/подтемы активного курса — cache-first + прогрев; а также заранее прогреем иконки
   phase('Темы и иконки');
   let topicsBySubject: Record<string, any[]> = {};
   let subtopicsByTopic: Record<string, any[]> = {};
@@ -445,7 +445,13 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       }
     } catch {}
   }
-  try { preloadImage('/kursik.svg'); } catch {}
+  // Прогрев лого/иконок, важных для первого кадра
+  try {
+    await preloadImage('/kursik.svg');
+  } catch {}
+  if (activeCode) {
+    try { await preloadImage(`/subjects/${activeCode}.svg`); } catch {}
+  }
   // фаза 2 завершена
   report(66);
 
@@ -455,10 +461,10 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 9) Прогрев иконок нижней навигации и HUD — в фоне
+  // 9) Прогрев иконок нижней навигации и HUD — дожидаемся загрузки
   phase('Финальный прогрев интерфейса');
   try {
-    Promise.all([
+    await Promise.all([
       preloadImage('/stickers/home.svg'),
       preloadImage('/stickers/quests.svg'),
       preloadImage('/stickers/battle.svg'),
