@@ -18,6 +18,8 @@ import Quests from '../pages/Quests';
 import Subscription from '../pages/Subscription';
 import TopicsPanel from '../components/panels/TopicsPanel';
 import AddCourseSheet from '../components/panels/AddCourseSheet';
+import FriendsPanel from '../components/panels/FriendsPanel';
+import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 
 
 export default function AppLayout() {
@@ -42,6 +44,7 @@ export default function AppLayout() {
   const subsRef = useRef<HTMLDivElement | null>(null);
   const addCourseRootRef = useRef<HTMLDivElement | null>(null);
   const [prewarmACDone, setPrewarmACDone] = useState(false);
+  const [prewarmFriendsDone, setPrewarmFriendsDone] = useState(false);
   const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
@@ -137,6 +140,14 @@ export default function AppLayout() {
     }
   }, [bootReady, prewarmACDone]);
 
+  // После bootReady один раз прогреваем FriendsPanel и AddFriendsPanel, затем размонтируем
+  useEffect(() => {
+    if (bootReady && !prewarmFriendsDone) {
+      const id = requestAnimationFrame(() => setPrewarmFriendsDone(true));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [bootReady, prewarmFriendsDone]);
+
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
@@ -161,6 +172,14 @@ export default function AppLayout() {
         <div className="prewarm-mount" aria-hidden="true">
           <HUD />
           <BottomNav />
+        </div>
+      )}
+
+      {/* Прогрев FriendsPanel и AddFriendsPanel (один раз, затем размонтируем) */}
+      {bootReady && !bootDone && !prewarmFriendsDone && (
+        <div className="prewarm-mount" aria-hidden="true">
+          <FriendsPanel open onClose={() => {}} />
+          <AddFriendsPanel open onClose={() => {}} />
         </div>
       )}
 
