@@ -14,11 +14,13 @@ export default function AddCourseSheet({
   onClose,
   onAdded,
   useTelegramBack = true,
+  sideEffects,
 }: {
   open: boolean;
   onClose: () => void;
   onAdded: (s: Subject) => void;
   useTelegramBack?: boolean;
+  sideEffects?: boolean;
 }) {
   const [all, setAll] = useState<Subject[]>([]);
   const [pickedId, setPickedId] = useState<number | null>(null);
@@ -165,7 +167,7 @@ export default function AddCourseSheet({
       onClose={onClose}
       title="Курсы"
       useTelegramBack={useTelegramBack}
-      sideEffects={false}
+      sideEffects={sideEffects ?? false}
       portalTarget={document.getElementById('addcourse-root') || null}
     >
       {/* Контент с дополнительным нижним отступом, чтобы не прятался под кнопкой */}

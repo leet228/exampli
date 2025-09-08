@@ -340,6 +340,7 @@ export default function HUD() {
             storeSetActiveCourse({ code: s.code, title: s.title });
             setAddOpen(false);
           }}
+          sideEffects={true}
         />
       )}
     </>
