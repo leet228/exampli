@@ -156,6 +156,14 @@ export default function AppLayout() {
         </div>
       )}
 
+      {/* Прогрев HUD и BottomNav (невидимые, чтобы просчитались стили/иконки) */}
+      {bootReady && !bootDone && (
+        <div className="prewarm-mount" aria-hidden="true">
+          <HUD />
+          <BottomNav />
+        </div>
+      )}
+
       {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (
         <>
