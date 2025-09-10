@@ -148,7 +148,7 @@ export default function CoursesPanel(props: Props) {
                 <div
                   className={[
                     'grid place-items-center rounded-2xl border bg-transparent',
-                    active ? 'border-[3px] border-[#1cb0f6]' : 'border-white/12',
+                    active ? 'border-[2px] border-[#3c73ff]' : 'border-white/12',
                   ].join(' ')}
                   style={{ width: 78, height: 56 }}
                 >
