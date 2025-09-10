@@ -18,8 +18,6 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
   useEffect(() => {
     if (!open || !anchorEl) return;
     const rect = anchorEl.getBoundingClientRect();
-    const vpW = window.innerWidth;
-    const pad = 12;
     const desiredTop = Math.round(rect.bottom + 10);
     setTop(desiredTop);
     // стрелка: после рендера узнаем левую границу панели
@@ -47,8 +45,8 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
           />
           <motion.div
             ref={panelRef}
-            className="fixed left-3 right-3 z-[71]"
-            style={{ top }}
+            className="fixed z-[71]"
+            style={{ top, left: '50%', transform: 'translateX(-50%)' }}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -62,7 +60,7 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
                 className="absolute -top-3"
                 style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #4ade3b' }}
               />
-              <div className="rounded-3xl" style={{ background: '#4ade3b', color: '#053b00', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
+              <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: '#4ade3b', color: '#053b00', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
                 <div className="px-5 pt-4 pb-3">
                   <div className="text-xl font-extrabold">{title}</div>
                   <div className="text-base opacity-90 mt-1">Лекция 1 из 4</div>

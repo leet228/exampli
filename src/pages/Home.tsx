@@ -191,12 +191,9 @@ export default function Home() {
       ) : lessons.length > 0 ? (
         <LessonRoad
           lessons={lessons}
-          onOpen={(id) => {
+          onOpen={(id, el) => {
             setCurrentLessonId(id);
-            // найдём DOM-элемент последней нажатой кнопки (через фокус/active)
-            setTimeout(() => {
-              try { setAnchorEl(document.activeElement as HTMLElement); } catch {}
-            }, 0);
+            setAnchorEl(el);
             setLessonPreviewOpen(true);
           }}
         />
