@@ -295,10 +295,10 @@ function TapSafeRow({ children, onPick, selected = false }: { children: React.Re
         if (moved < 10 && dt < 350) onPick();
         tapRef.current = null;
       }}
-      className={`w-full text-left px-4 py-4 hover:bg-white/[0.06] flex items-center justify-between ${selected ? 'bg-white/[0.08]' : ''}`}
+      className={`w-full text-left px-4 py-4 hover:bg-white/[0.06] flex items-center justify-between ${selected ? 'bg-[#3c73ff]/10' : ''}`}
     >
-      <span className={`text-[15px] ${selected ? 'font-semibold text-white' : ''}`}>{children}</span>
-      {selected && <span aria-hidden className="ml-3 inline-block w-2 h-2 rounded-full bg-[#1cb0f6]" />}
+      <span className={`text-[15px] ${selected ? 'font-semibold text-[#3c73ff]' : ''}`}>{children}</span>
+      {/* убираем точку-индикатор для выбранной подтемы */}
     </button>
   );
 }
