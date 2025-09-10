@@ -220,7 +220,7 @@ export default function HUD() {
                 <img
                   src={`/subjects/${courseCode}.svg`}
                   alt=""
-                  className="w-[64px] h-[48px] object-contain"
+                  className="w-[56px] h-[44px] object-contain"
                   onError={() => setIconOk(false)}
                 />
               ) : (
