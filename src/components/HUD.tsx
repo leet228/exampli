@@ -235,7 +235,7 @@ export default function HUD() {
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(prev => prev === 'streak' ? null : 'streak'); }}
-              className="justify-self-start flex items-center gap-0 text-sm text-[color:var(--muted)]"
+              className="justify-self-start ml-2 flex items-center gap-0 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
               <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-9 h-9" />
