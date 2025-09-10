@@ -12,41 +12,41 @@ type Props = {
 export default function LessonStartPopover({ open, anchorEl, title = 'Урок', onClose, onStart }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [top, setTop] = useState<number>(0);
+  const [left, setLeft] = useState<number>(0);
   const [arrowLeft, setArrowLeft] = useState<number>(0);
 
-  // вычисляем позицию под кнопкой урока и положение стрелки
+  // вычисляем позицию под кнопкой урока и положение стрелки, не вылезая за экран
   useEffect(() => {
     if (!open || !anchorEl) return;
-    const rect = anchorEl.getBoundingClientRect();
-    const desiredTop = Math.round(rect.bottom + 10);
-    setTop(desiredTop);
-    // стрелка: после рендера узнаем левую границу панели
-    const id = requestAnimationFrame(() => {
-      const p = panelRef.current;
-      if (!p) return;
-      const pr = p.getBoundingClientRect();
-      const x = Math.max(16, Math.min(pr.width - 16, rect.left + rect.width / 2 - pr.left));
-      setArrowLeft(x);
-    });
-    return () => cancelAnimationFrame(id);
+    const update = () => {
+      const rect = anchorEl.getBoundingClientRect();
+      const desiredTop = Math.round(rect.bottom + 10);
+      setTop(desiredTop);
+      const width = 340; // фиксированная ширина панели
+      const vpW = window.innerWidth;
+      const pad = 12; // поля по краям экрана
+      const center = rect.left + rect.width / 2;
+      const leftClamped = Math.max(pad, Math.min(vpW - pad - width, Math.round(center - width / 2)));
+      setLeft(leftClamped);
+      // положение стрелки внутри панели
+      const arrow = Math.max(16, Math.min(width - 16, Math.round(center - leftClamped)));
+      setArrowLeft(arrow);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update as any); };
   }, [open, anchorEl]);
 
   return (
     <AnimatePresence>
       {open && (
         <>
-          <motion.div
-            className="fixed inset-0 z-[70]"
-            style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)' }}
-            onClick={onClose}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
+          {/* без затемнения фона */}
           <motion.div
             ref={panelRef}
             className="fixed z-[71]"
-            style={{ top, left: '50%', transform: 'translateX(-50%)' }}
+            style={{ top, left }}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
