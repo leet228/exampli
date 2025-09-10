@@ -148,6 +148,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
 
   // выбор подтемы → сообщаем дороге и кнопке, закрываем панель
   const pickSubtopic = useCallback(async (t: Topic, st: Subtopic) => {
+    // 1) Мгновенно обновляем UI и закрываем панель
     window.dispatchEvent(new CustomEvent('exampli:subtopicChanged', {
       detail: {
         subjectId: subject?.id,
@@ -155,12 +156,9 @@ export default function TopicsPanel({ open, onClose }: Props) {
         subtopicId: st.id, subtopicTitle: st.title,
       },
     }));
-    // отдельное маленькое событие для кнопки (две строки)
     window.dispatchEvent(new CustomEvent('exampli:topicBadge', {
       detail: { topicTitle: t.title, subtopicTitle: st.title },
     }));
-
-    // Локальный кэш для мгновенного восстановления текста кнопки
     try {
       localStorage.setItem(CUR_TOPIC_ID_KEY, String(t.id));
       localStorage.setItem(CUR_SUBTOPIC_ID_KEY, String(st.id));
@@ -168,19 +166,19 @@ export default function TopicsPanel({ open, onClose }: Props) {
       localStorage.setItem(CUR_SUBTOPIC_TITLE_KEY, st.title);
     } catch {}
     try { setCurrentSubId(st.id); } catch {}
+    onClose();
 
-    // Сохраняем выбор в БД users: current_topic / current_subtopic
+    // 2) Запись в БД — в фоне (не блокируем UI)
     try {
       const boot: any = (window as any).__exampliBoot;
       const userId = boot?.user?.id;
       if (userId) {
-        await supabase
+        void supabase
           .from('users')
           .update({ current_topic: t.id, current_subtopic: st.id })
           .eq('id', userId);
       }
     } catch {}
-    onClose();
   }, [onClose, subject?.id]);
 
   const body = useMemo(() => {
