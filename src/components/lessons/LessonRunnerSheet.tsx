@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny } from '../../lib/haptics';
+import BottomSheet from '../sheets/BottomSheet';
 
 type TaskRow = {
   id: number | string;
@@ -20,6 +21,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState<string>('');
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const task = tasks[idx];
 
   useEffect(() => {
@@ -81,11 +83,24 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
+  // Telegram BackButton: показать и перехватить для подтверждения выхода
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const tg = (window as any)?.Telegram?.WebApp;
+      tg?.BackButton?.show?.();
+      const handler = () => { try { hapticTiny(); } catch {} setConfirmExit(true); };
+      tg?.BackButton?.onClick?.(handler);
+      return () => { try { tg?.BackButton?.offClick?.(handler); tg?.BackButton?.hide?.(); } catch {} };
+    } catch {}
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (
         <>
-          <motion.div className="sheet-backdrop" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+          {/* запрет закрытия по клику вне панели */}
+          <motion.div className="sheet-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           <motion.div
             className="sheet-panel full"
             role="dialog"
@@ -97,8 +112,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* прогресс */}
-            <div className="px-5 pt-3 pb-2 border-b border-white/10">
+            {/* верхняя панель: только прогресс, возврат через Telegram BackButton */}
+            <div className="px-5 pt-2 pb-2 border-b border-white/10">
               <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%` }} /></div>
             </div>
 
@@ -166,6 +181,21 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               )}
             </div>
           </motion.div>
+          {/* подтверждение выхода */}
+          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="">
+            <div className="grid gap-4 text-center">
+              <div className="text-lg font-semibold">Если выйдешь, потеряешь XP этой лекции</div>
+              <button type="button" className="btn w-full" onClick={() => setConfirmExit(false)}>ПРОДОЛЖИТЬ</button>
+              <button
+                type="button"
+                onClick={() => { setConfirmExit(false); onClose(); }}
+                className="w-full py-2 text-red-400 font-extrabold"
+                style={{ background: 'transparent' }}
+              >
+                ВЫЙТИ
+              </button>
+            </div>
+          </BottomSheet>
         </>
       )}
     </AnimatePresence>
