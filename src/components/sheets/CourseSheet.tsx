@@ -155,7 +155,7 @@ export default function CoursesPanel(props: Props) {
                   <img
                     src={`/subjects/${s.code}.svg`}
                     alt={s.title}
-                    className="w-[72px] h-auto object-contain relative -translate-y-1"
+                    className="w-[72px] h-auto object-contain relative -translate-y-0"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
