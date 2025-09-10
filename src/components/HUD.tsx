@@ -220,7 +220,7 @@ export default function HUD() {
                 <img
                   src={`/subjects/${courseCode}.svg`}
                   alt=""
-                  className="w-[80px] h-[64px] object-contain"
+                  className="w-[64px] h-[48px] object-contain"
                   onError={() => setIconOk(false)}
                 />
               ) : (
@@ -265,8 +265,20 @@ export default function HUD() {
               className="justify-self-end flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
-              <img src="/stickers/lightning.svg" alt="" aria-hidden className="w-8 h-8" />
-              <span className="tabular-nums font-bold text-base text-white">{energy}</span>
+              <img
+                src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`}
+                alt=""
+                aria-hidden
+                className="w-9 h-9"
+              />
+              <span
+                className={[
+                  'tabular-nums font-bold text-base',
+                  energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
+                ].join(' ')}
+              >
+                {energy}
+              </span>
             </button>
           </div>
         </div>
