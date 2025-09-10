@@ -87,7 +87,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         <>
           <motion.div className="sheet-backdrop" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           <motion.div
-            className="sheet-panel"
+            className="sheet-panel full"
+            role="dialog"
+            aria-modal="true"
+            style={{ top: 'var(--hud-top)' }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}

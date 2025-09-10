@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import SkillRoad from '../components/SkillRoad';
 import LessonRoad from '../components/lessons/LessonRoad';
-import LessonPreview from '../components/lessons/LessonPreview';
+import LessonStartPopover from '../components/lessons/LessonStartPopover';
 import LessonRunnerSheet from '../components/lessons/LessonRunnerSheet';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
@@ -25,6 +25,7 @@ export default function Home() {
   const [runnerOpen, setRunnerOpen] = useState(false);
   const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
   const [lessons, setLessons] = useState<LessonNode[]>([]);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   // активный курс
   const [activeCode, setActiveCode] = useState<string | null>(null);
@@ -159,6 +160,8 @@ export default function Home() {
     window.addEventListener('exampli:courseChanged', onChanged as EventListener);
     const onSubtopic = () => { fetchLessons(); };
     window.addEventListener('exampli:subtopicChanged', onSubtopic as EventListener);
+    const onLessonsChanged = () => { fetchLessons(); };
+    window.addEventListener('exampli:lessonsChanged', onLessonsChanged as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
   }, [fetchLessons, writeActiveToStorage]);
 
@@ -188,15 +191,23 @@ export default function Home() {
       ) : lessons.length > 0 ? (
         <LessonRoad
           lessons={lessons}
-          onOpen={(id) => { setCurrentLessonId(id); setLessonPreviewOpen(true); }}
+          onOpen={(id) => {
+            setCurrentLessonId(id);
+            // найдём DOM-элемент последней нажатой кнопки (через фокус/active)
+            setTimeout(() => {
+              try { setAnchorEl(document.activeElement as HTMLElement); } catch {}
+            }, 0);
+            setLessonPreviewOpen(true);
+          }}
         />
       ) : (
         <div className="card">В этой подтеме пока нет уроков.</div>
       )}
 
-      {/* предпросмотр */}
-      <LessonPreview
+      {/* поповер старта под узлом урока */}
+      <LessonStartPopover
         open={lessonPreviewOpen}
+        anchorEl={anchorEl}
         onClose={() => setLessonPreviewOpen(false)}
         title={courseTitle || 'Урок'}
         onStart={() => { setLessonPreviewOpen(false); setRunnerOpen(true); }}

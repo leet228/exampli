@@ -194,6 +194,22 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 .from('users')
                 .update({ current_topic: t.id, current_subtopic: st.id })
                 .eq('id', userId);
+              // Подгрузим и закэшируем уроки новой подтемы, затем оповестим UI
+              try {
+                const { data: lessons } = await supabase
+                  .from('lessons')
+                  .select('id, subtopic_id, order_index')
+                  .eq('subtopic_id', st.id)
+                  .order('order_index', { ascending: true });
+                const list = (lessons as any[]) || [];
+                try {
+                  // через cache API
+                  const key = CACHE_KEYS.lessonsBySubtopic(st.id as any);
+                  const payload = { v: list, e: null } as any;
+                  localStorage.setItem(`exampli:${key}`, JSON.stringify(payload));
+                } catch {}
+                try { window.dispatchEvent(new Event('exampli:lessonsChanged')); } catch {}
+              } catch {}
             }
           } catch {}
         })();

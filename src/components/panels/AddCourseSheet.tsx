@@ -129,6 +129,19 @@ export default function AddCourseSheet({
           .from('users')
           .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null, current_subtopic: firstSub?.id ?? null })
           .eq('id', user.id);
+        // lessons for first subtopic — cache & notify
+        try {
+          if (firstSub?.id) {
+            const { data: lessons } = await supabase
+              .from('lessons')
+              .select('id, subtopic_id, order_index')
+              .eq('subtopic_id', firstSub.id)
+              .order('order_index', { ascending: true });
+            const list = (lessons as any[]) || [];
+            cacheSet(CACHE_KEYS.lessonsBySubtopic(firstSub.id), list as any);
+            try { window.dispatchEvent(new Event('exampli:lessonsChanged')); } catch {}
+          }
+        } catch {}
         // cache local selection for immediate UI
         try {
           if (firstTopic?.id) {
