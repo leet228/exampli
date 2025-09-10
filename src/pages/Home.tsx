@@ -2,10 +2,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import SkillRoad from '../components/SkillRoad';
+import LessonRoad from '../components/lessons/LessonRoad';
+import LessonPreview from '../components/lessons/LessonPreview';
+import LessonRunnerSheet from '../components/lessons/LessonRunnerSheet';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
 
 type RoadItem = { id: string; title: string; subtitle?: string };
+type LessonNode = { id: string | number; order_index: number };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
 
@@ -17,6 +21,10 @@ export default function Home() {
   const [items, setItems] = useState<RoadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTopics, setOpenTopics] = useState(false);
+  const [lessonPreviewOpen, setLessonPreviewOpen] = useState(false);
+  const [runnerOpen, setRunnerOpen] = useState(false);
+  const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
+  const [lessons, setLessons] = useState<LessonNode[]>([]);
 
   // активный курс
   const [activeCode, setActiveCode] = useState<string | null>(null);
@@ -98,9 +106,21 @@ export default function Home() {
         if (title) setCourseTitle(title);
       }
 
-      // уроки из кэша
-      const data = cacheGet<any[]>(CACHE_KEYS.lessonsByCode(code)) || [];
-      const mapped: RoadItem[] = (data || []).map((l: any) => ({ id: String(l.id), title: l.title, subtitle: title }));
+      // уроки подтемы: читаем из кэша по current_subtopic
+      let subId: string | number | null = null;
+      try {
+        const boot: any = (window as any).__exampliBoot;
+        subId = boot?.current_subtopic_id ?? boot?.user?.current_subtopic ?? null;
+      } catch {}
+      if (subId != null) {
+        const data = cacheGet<any[]>(CACHE_KEYS.lessonsBySubtopic(subId)) || [];
+        const nodes: LessonNode[] = (data || []).map((l: any) => ({ id: l.id, order_index: Number(l.order_index || 0) }));
+        setLessons(nodes);
+      } else {
+        setLessons([]);
+      }
+      // placeholder карточка «нет уроков» через старый список
+      const mapped: RoadItem[] = [];
       setItems(mapped);
     } finally {
       setLoading(false);
@@ -137,6 +157,8 @@ export default function Home() {
       fetchLessons(code);
     };
     window.addEventListener('exampli:courseChanged', onChanged as EventListener);
+    const onSubtopic = () => { fetchLessons(); };
+    window.addEventListener('exampli:subtopicChanged', onSubtopic as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
   }, [fetchLessons, writeActiveToStorage]);
 
@@ -163,12 +185,30 @@ export default function Home() {
 
       {loading ? (
         <div className="card">Загружаем уроки…</div>
-      ) : items.length === 0 ? (
-        <div className="card">
-          В этом курсе пока нет уроков. Выбери другой курс через «🧩 Выбрать тему».
-        </div>
+      ) : lessons.length > 0 ? (
+        <LessonRoad
+          lessons={lessons}
+          onOpen={(id) => { setCurrentLessonId(id); setLessonPreviewOpen(true); }}
+        />
       ) : (
-        <SkillRoad items={items} />
+        <div className="card">В этой подтеме пока нет уроков.</div>
+      )}
+
+      {/* предпросмотр */}
+      <LessonPreview
+        open={lessonPreviewOpen}
+        onClose={() => setLessonPreviewOpen(false)}
+        title={courseTitle || 'Урок'}
+        onStart={() => { setLessonPreviewOpen(false); setRunnerOpen(true); }}
+      />
+
+      {/* раннер */}
+      {currentLessonId != null && (
+        <LessonRunnerSheet
+          open={runnerOpen}
+          onClose={() => setRunnerOpen(false)}
+          lessonId={currentLessonId}
+        />
       )}
     </div>
   );

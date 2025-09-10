@@ -12,8 +12,8 @@ export type SubjectRow = {
 
 export type LessonRow = {
   id: number | string;
-  title: string;
-  subject?: { title?: string | null; level?: string | null } | null;
+  subtopic_id: number | string;
+  order_index: number | string;
 };
 
 export type BootData = {
@@ -422,9 +422,12 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 6) уроки ТОЛЬКО активного курса — cache-first, обновление в фоне
-  let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, title: l.title, subject: { title: activeTitle, level: null } }));
-  cacheSet(CACHE_KEYS.lessonsByCode(activeCode || ''), step1.lessons || []);
+  // 6) уроки активной подтемы (если выбрана) — приходят из step1
+  const currentSubIdBoot: string | number | null = userRow?.current_subtopic ?? null;
+  let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, subtopic_id: l.subtopic_id, order_index: l.order_index }));
+  if (currentSubIdBoot != null) {
+    try { cacheSet(CACHE_KEYS.lessonsBySubtopic(currentSubIdBoot), lessonsArr as any); } catch {}
+  }
   // (скрытый шаг)
   step(++i, 1);
 
