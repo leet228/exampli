@@ -42,7 +42,15 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
     <AnimatePresence>
       {open && (
         <>
-          {/* без затемнения фона */}
+          {/* клики вне панели — закрываем; фон полностью прозрачный */}
+          <motion.div
+            className="fixed inset-0 z-[70]"
+            style={{ background: 'transparent' }}
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
           <motion.div
             ref={panelRef}
             className="fixed z-[71]"
