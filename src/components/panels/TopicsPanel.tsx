@@ -168,16 +168,36 @@ export default function TopicsPanel({ open, onClose }: Props) {
     try { setCurrentSubId(st.id); } catch {}
     onClose();
 
-    // 2) Запись в БД — в фоне (не блокируем UI)
+    // 2) Запись в БД — в фоне (не блокируем UI).
+    // Используем setTimeout для гарантии выполнения после закрытия панели и fallback по tg_id.
     try {
-      const boot: any = (window as any).__exampliBoot;
-      const userId = boot?.user?.id;
-      if (userId) {
-        void supabase
-          .from('users')
-          .update({ current_topic: t.id, current_subtopic: st.id })
-          .eq('id', userId);
-      }
+      setTimeout(() => {
+        (async () => {
+          try {
+            const boot: any = (window as any).__exampliBoot;
+            let userId: string | number | null = boot?.user?.id ?? null;
+            if (!userId) {
+              try {
+                const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                if (tgId) {
+                  const { data: urow } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('tg_id', String(tgId))
+                    .single();
+                  userId = (urow as any)?.id ?? null;
+                }
+              } catch {}
+            }
+            if (userId) {
+              await supabase
+                .from('users')
+                .update({ current_topic: t.id, current_subtopic: st.id })
+                .eq('id', userId);
+            }
+          } catch {}
+        })();
+      }, 0);
     } catch {}
   }, [onClose, subject?.id]);
 
