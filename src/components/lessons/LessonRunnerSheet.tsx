@@ -118,7 +118,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
             </div>
 
-            <div className="p-4 flex flex-col gap-4 pb-36 min-h-[70vh]">
+            <div className="p-4 flex flex-col gap-4 pb-28 min-h-[70vh]">
               {task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -137,7 +137,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {/* ответы */}
                   {(task.answer_type === 'choice' || task.answer_type === 'word_letters') && (
-                    <div className="grid gap-2 mt-auto mb-4">
+                    <div className="grid gap-2 mt-auto mb-1">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
@@ -180,7 +180,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 {status === 'idle' ? (
                   <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                 ) : (
-                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={next} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
+                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={() => { try { hapticTiny(); } catch {} next(); }} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
                 )}
               </div>
             </div>
