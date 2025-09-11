@@ -10,11 +10,10 @@ type Props = {
 
 export default function LessonRoad({ lessons, onOpen }: Props) {
   return (
-    <div className="relative overflow-x-hidden">
-      {/* центральная вертикальная линия */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-white/10" />
+    <div className="relative overflow-visible">
+      {/* центральную вертикальную линию убрали */}
 
-      <ul className="space-y-10">
+      <ul className="space-y-10 overflow-visible">
         {lessons.map((l, idx) => {
           return (
             <li key={l.id}>
@@ -28,8 +27,8 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
                   <LessonRoundButton
                     size={68}
                     icon={'★'}
-                    baseColor="#4ade3b"
-                    innerIconBg="#1a7f11"
+                    baseColor="#3c73ff"
+                    innerIconBg="#2b57e6"
                     onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
                   />
                 </motion.div>

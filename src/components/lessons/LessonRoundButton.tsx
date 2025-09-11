@@ -73,7 +73,8 @@ export default function LessonRoundButton({
     transform: pressed ? `translateY(${shadowHeight}px)` : 'translateY(0)',
     transition: 'none',
     overflow: 'visible',
-    zIndex: 1,
+    position: 'relative',
+    zIndex: 10,
   };
 
   return (

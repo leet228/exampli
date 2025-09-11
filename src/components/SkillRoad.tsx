@@ -4,9 +4,8 @@ export default function SkillRoad({
   items,
 }: { items: { id: string; title: string; subtitle?: string }[] }) {
   return (
-    <div className="relative overflow-x-hidden">
-      {/* центральная вертикальная линия */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-white/10" />
+    <div className="relative overflow-visible">
+      {/* центральную вертикальную линию убрали */}
 
       <ul className="space-y-10">
         {items.map((it, idx) => {

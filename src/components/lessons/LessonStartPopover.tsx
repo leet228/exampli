@@ -67,15 +67,15 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
               <div
                 aria-hidden
                 className="absolute -top-3"
-                style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #4ade3b' }}
+                style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #3c73ff' }}
               />
-              <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: '#4ade3b', color: '#053b00', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
+              <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: '#3c73ff', color: '#ffffff', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
                 <div className="px-5 pt-4 pb-3">
                   <div className="text-xl font-extrabold">{title}</div>
                   <div className="text-base opacity-90 mt-1">Лекция 1 из 4</div>
                 </div>
                 <div className="px-5 pb-5">
-                  <LessonButton text="НАЧАТЬ +20 XP" onClick={onStart} baseColor="#4ade3b" />
+                  <LessonButton text="НАЧАТЬ +20 XP" onClick={onStart} baseColor="#ffffff" textColor="#3c73ff" shadowColorOverride="rgba(0,0,0,0.12)" />
                 </div>
               </div>
             </div>

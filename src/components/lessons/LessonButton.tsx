@@ -10,6 +10,10 @@ type LessonButtonProps = {
   shadowHeight?: number;
   className?: string;
   disabled?: boolean;
+  /** Цвет текста. Если не задан, вычисляется автоматически */
+  textColor?: string;
+  /** Переопределение цвета нижней тени */
+  shadowColorOverride?: string;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -52,18 +56,24 @@ export default function LessonButton({
   shadowHeight = 6,
   className = '',
   disabled = false,
+  textColor,
+  shadowColorOverride,
 }: LessonButtonProps) {
   const [pressed, setPressed] = useState(false);
 
-  const shadowColor = useMemo(() => darken(baseColor, 18), [baseColor]);
-  const textColor = useMemo(() => {
-    // Контрастная тёмная надпись для светло-зелёной кнопки
-    return '#053b00';
-  }, []);
+  const shadowColor = useMemo(() => shadowColorOverride || darken(baseColor, 18), [baseColor, shadowColorOverride]);
+  const resolvedTextColor = useMemo(() => {
+    if (textColor) return textColor;
+    // Простой выбор контраста
+    const rgb = hexToRgb(baseColor);
+    if (!rgb) return '#053b00';
+    const luminance = 0.2126 * (rgb.r / 255) + 0.7152 * (rgb.g / 255) + 0.0722 * (rgb.b / 255);
+    return luminance > 0.65 ? '#053b00' : '#ffffff';
+  }, [textColor, baseColor]);
 
   const baseStyle: React.CSSProperties = {
     backgroundColor: baseColor,
-    color: textColor,
+    color: resolvedTextColor,
     borderRadius: 20,
     // «Нижняя полоска», повторяющая форму кнопки
     boxShadow: pressed ? `0 0 0 ${shadowColor}` : `0 ${shadowHeight}px 0 ${shadowColor}`,
