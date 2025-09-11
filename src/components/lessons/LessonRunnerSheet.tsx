@@ -124,7 +124,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   <div className="text-sm text-muted">{task.prompt}</div>
                   <div className="card text-left">
                     <div className="text-lg leading-relaxed">
-                      {partsWithUnderline(task.task_text).map((p, i) => p.t === 'text' ? <span key={i}>{p.v}</span> : <span key={i} className="px-1 font-semibold">____</span>)}
+                      {partsWithUnderline(task.task_text).map((p, i) => (
+                        p.t === 'text'
+                          ? <span key={i}>{p.v}</span>
+                          : (status === 'idle'
+                              ? <span key={i} className="px-1 font-semibold">____</span>
+                              : <span key={i} className="px-1 font-extrabold text-green-400">{task.correct}</span>
+                            )
+                        ))}
                     </div>
                   </div>
 
@@ -171,9 +178,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               )}
               <div className="px-4 pt-1 pb-[calc(env(safe-area-inset-bottom)+12px)]">
                 {status === 'idle' ? (
-                  <LessonButton text="ПРОВЕРИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
+                  <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                 ) : (
-                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={next} baseColor="#3c73ff" />
+                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={next} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
                 )}
               </div>
             </div>
