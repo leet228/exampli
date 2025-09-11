@@ -34,11 +34,11 @@ export default function TopSheet({ open, onClose, anchor, title = '', children, 
           <motion.div
             className="drop-backdrop"
             onClick={onClose}
-            style={{ pointerEvents: interactiveBackdrop ? 'auto' : 'none', opacity: 1 }}
-            initial={{ opacity: 1 }}
+            style={{ pointerEvents: interactiveBackdrop ? 'auto' : 'none' }}
+            initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 1 }}
-            transition={{ duration: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: .18, ease: [0.22,1,0.36,1] }}
           />
           {/* разделительная полоса + SVG-стрелка-вырез */}
           {(
