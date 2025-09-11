@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import LessonRoundButton from './LessonRoundButton';
 
 export type LessonNode = { id: string | number; order_index: number };
 
@@ -18,22 +19,20 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
           return (
             <li key={l.id}>
               <div className={`flex justify-center`}>
-                <motion.button
-                  type="button"
+                <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.06 }}
-                  onClick={(e) => onOpen(l.id, e.currentTarget as HTMLElement)}
-                  className={`relative group`}
+                  className={`relative`}
                 >
-                  {/* Круглая кнопка со звездой */}
-                  <div
-                    className="w-20 h-20 rounded-full grid place-items-center bg-[#1f2b33] border border-white/10 shadow-[0_10px_24px_rgba(0,0,0,0.35)] group-active:scale-95 transition"
-                    aria-label={`Урок ${idx + 1}`}
-                  >
-                    <div className="w-9 h-9 rounded-full grid place-items-center bg-[var(--accent)] text-white font-bold">★</div>
-                  </div>
-                </motion.button>
+                  <LessonRoundButton
+                    size={80}
+                    icon={'★'}
+                    baseColor="#4ade3b"
+                    innerIconBg="#1a7f11"
+                    onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
+                  />
+                </motion.div>
               </div>
             </li>
           );

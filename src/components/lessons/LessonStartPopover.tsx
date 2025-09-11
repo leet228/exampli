@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import LessonButton from './LessonButton';
 
 type Props = {
   open: boolean;
@@ -74,14 +75,7 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
                   <div className="text-base opacity-90 mt-1">Лекция 1 из 4</div>
                 </div>
                 <div className="px-5 pb-5">
-                  <button
-                    type="button"
-                    onClick={onStart}
-                    className="w-full rounded-[20px] bg-white text-[#169c15] font-extrabold text-lg py-3"
-                    style={{ boxShadow: '0 6px 0 rgba(0,0,0,0.12)' }}
-                  >
-                    НАЧАТЬ +20 XP
-                  </button>
+                  <LessonButton text="НАЧАТЬ +20 XP" onClick={onStart} baseColor="#4ade3b" />
                 </div>
               </div>
             </div>
