@@ -137,7 +137,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {/* ответы */}
                   {(task.answer_type === 'choice' || task.answer_type === 'word_letters') && (
-                    <div className="grid gap-2 mt-auto mb-6">
+                    <div className="grid gap-2 mt-auto mb-10">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
