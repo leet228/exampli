@@ -74,7 +74,7 @@ export default function LessonRoundButton({
     transition: 'none',
     overflow: 'visible',
     position: 'relative',
-    zIndex: 200,
+    zIndex: 10,
   };
 
   return (
