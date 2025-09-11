@@ -196,12 +196,17 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         if (p.t === 'cardbox') {
                           const txt = (selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : '';
                           if (selectedCard != null) {
+                            const stateClass = (status === 'idle')
+                              ? 'bg-white/10 border-white/15 text-white'
+                              : (status === 'correct'
+                                  ? 'text-green-400 bg-green-600/10 border-green-500/60'
+                                  : 'text-red-400 bg-red-600/10 border-red-500/60');
                             return (
                               <button
                                 key={`cb-sel-${i}`}
                                 type="button"
                                 onClick={() => { try { hapticTiny(); } catch {} setSelectedCard(null); }}
-                                className="rounded-lg px-2 py-1 text-sm font-semibold bg-white/10 border border-white/15"
+                                className={`rounded-lg px-2 py-1 text-sm font-semibold border ${stateClass}`}
                               >
                                 {txt}
                               </button>
@@ -493,7 +498,7 @@ function CardBox({ cardText, onRemove, setRect, status }: { cardText: string; on
   return (
     <div ref={ref} className={`inline-flex items-center justify-center align-middle rounded-xl border ${resolvedClass}`} style={{ minWidth: 96, minHeight: 56, padding: 6 }}>
       {hasCard ? (
-        <button type="button" onClick={onRemove} className="rounded-lg px-2 py-1 text-sm font-semibold bg-white/10 border border-white/15">
+        <button type="button" onClick={onRemove} className={`rounded-lg px-2 py-1 text-sm font-semibold border ${status === 'idle' ? 'bg-white/10 border-white/15' : (status === 'correct' ? 'text-green-400 bg-green-600/10 border-green-500/60' : 'text-red-400 bg-red-600/10 border-red-500/60')}`}>
           {cardText}
         </button>
       ) : (
