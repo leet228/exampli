@@ -47,7 +47,7 @@ function darken(hex: string, percent: number): string {
 }
 
 export default function LessonRoundButton({
-  size = 68,
+  size = 76,
   icon = '★',
   onClick,
   baseColor = '#4ade3b',

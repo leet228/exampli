@@ -176,8 +176,8 @@ export default function Home() {
         onClose={() => setOpenTopics(false)}
       />
 
-      {/* отступ, чтобы дорога не упиралась в фиксированный баннер Темы (80px) */}
-      <div style={{ height: 96 }} />
+      {/* отступ, чтобы дорога была ближе к баннеру Темы, но не перекрывалась */}
+      <div style={{ height: 76 }} />
 
       {/* состояния */}
       {!activeCode && !loading && (

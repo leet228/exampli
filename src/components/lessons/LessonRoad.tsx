@@ -10,7 +10,7 @@ type Props = {
 
 export default function LessonRoad({ lessons, onOpen }: Props) {
   return (
-    <div className="relative overflow-visible" style={{ paddingTop: 12 }}>
+    <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* центральную вертикальную линию убрали */}
 
       <ul className="space-y-10 overflow-visible">
@@ -25,7 +25,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
                   className={`relative`}
                 >
                   <LessonRoundButton
-                    size={68}
+                    size={76}
                     icon={'★'}
                     baseColor="#3c73ff"
                     innerIconBg="#2b57e6"
