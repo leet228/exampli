@@ -193,15 +193,31 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           />
                         );
                         // card box marker
-                        return (
-                          <CardBox
-                            key={`cb-${i}`}
-                            cardText={(selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : ''}
-                            onRemove={() => setSelectedCard(null)}
-                            setRect={(r) => setCardBoxRect(r)}
-                            status={status}
-                          />
-                        );
+                        if (p.t === 'cardbox') {
+                          const txt = (selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : '';
+                          if (selectedCard != null) {
+                            return (
+                              <button
+                                key={`cb-sel-${i}`}
+                                type="button"
+                                onClick={() => setSelectedCard(null)}
+                                className="rounded-lg px-2 py-1 text-sm font-semibold bg-white/10 border border-white/15"
+                              >
+                                {txt}
+                              </button>
+                            );
+                          }
+                          return (
+                            <CardBox
+                              key={`cb-${i}`}
+                              cardText={''}
+                              onRemove={() => setSelectedCard(null)}
+                              setRect={(r) => setCardBoxRect(r)}
+                              status={status}
+                            />
+                          );
+                        }
+                        return null;
                       })}
                     </div>
                   </div>
@@ -530,13 +546,24 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
   };
 
   return (
-    <div
-      ref={cardRef}
-      onPointerDown={onDown}
-      className={`relative rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'}`}
-      style={dragging && pos ? { transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 50, position: 'relative' } as any : undefined}
-    >
-      {text}
+    <div className="relative">
+      {/* оригинальная карточка, скрывается во время перетаскивания */}
+      <div
+        ref={cardRef}
+        onPointerDown={onDown}
+        className={`rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-0' : 'opacity-100'}`}
+      >
+        {text}
+      </div>
+      {/* плавающий «превью»-клон, движется за пальцем */}
+      {dragging && pos && (
+        <div
+          className="fixed pointer-events-none rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 text-sm font-semibold"
+          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 9999 }}
+        >
+          {text}
+        </div>
+      )}
     </div>
   );
 }
