@@ -18,7 +18,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
         {lessons.map((l, idx) => {
           return (
             <li key={l.id}>
-              <div className={`flex justify-center`}>
+              <div className={`flex justify-center`} style={{ overflow: 'visible' }}>
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -26,7 +26,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
                   className={`relative`}
                 >
                   <LessonRoundButton
-                    size={80}
+                    size={68}
                     icon={'★'}
                     baseColor="#4ade3b"
                     innerIconBg="#1a7f11"

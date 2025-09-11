@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { hapticSelect } from '../../lib/haptics';
 
 type Props = {
   size?: number; // диаметр в px
   icon?: React.ReactNode;
-  onClick?: () => void;
+  onClick?: (e?: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => void;
   baseColor?: string; // основной зелёный цвет круга
   innerIconBg?: string; // фон маленького внутреннего круга со звездой
   className?: string;
@@ -46,21 +47,21 @@ function darken(hex: string, percent: number): string {
 }
 
 export default function LessonRoundButton({
-  size = 80,
+  size = 68,
   icon = '★',
   onClick,
   baseColor = '#4ade3b',
   innerIconBg = '#1a7f11',
   className = '',
   disabled = false,
-  shadowHeight = 8,
+  shadowHeight = 6,
 }: Props) {
   const [pressed, setPressed] = useState(false);
   const shadowColor = useMemo(() => darken(baseColor, 18), [baseColor]);
   const contentColor = '#053b00';
 
   const sizePx = `${size}px`;
-  const innerSize = Math.round(size * 0.45);
+  const innerSize = Math.round(size * 0.52);
 
   const style: React.CSSProperties = {
     width: sizePx,
@@ -71,6 +72,8 @@ export default function LessonRoundButton({
     boxShadow: pressed ? `0 0 0 ${shadowColor}` : `0 ${shadowHeight}px 0 ${shadowColor}`,
     transform: pressed ? `translateY(${shadowHeight}px)` : 'translateY(0)',
     transition: 'none',
+    overflow: 'visible',
+    zIndex: 1,
   };
 
   return (
@@ -78,7 +81,7 @@ export default function LessonRoundButton({
       type="button"
       className={`grid place-items-center border border-white/10 ${className}`}
       style={style}
-      onPointerDown={() => setPressed(true)}
+      onPointerDown={() => { setPressed(true); hapticSelect(); }}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
       onClick={onClick}
