@@ -11,7 +11,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards';
   options: string[] | null;
   correct: string;
 };
@@ -23,6 +23,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState<string>('');
   const [lettersSel, setLettersSel] = useState<number[]>([]); // индексы выбранных букв из options
+  const [selectedCard, setSelectedCard] = useState<number | null>(null);
+  const [cardBoxRect, setCardBoxRect] = useState<DOMRect | null>(null);
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const task = tasks[idx];
@@ -50,13 +52,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setChoice(null);
       setText('');
       setLettersSel([]);
+      setSelectedCard(null);
+      setCardBoxRect(null);
       setStatus('idle');
     })();
   }, [open, lessonId]);
 
-  function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox'; v?: string }>{
-    const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox'; v?: string }> = [];
-    const re = /(\(underline\)|\(letter_box\)|\(input_box\))/g;
+  function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }>{
+    const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }> = [];
+    const re = /(\(underline\)|\(letter_box\)|\(input_box\)|\(card_box\))/g;
     let last = 0; let m: RegExpExecArray | null;
     while ((m = re.exec(src))){
       if (m.index > last) res.push({ t: 'text', v: src.slice(last, m.index) });
@@ -64,6 +68,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       if (token === '(underline)') res.push({ t: 'blank' });
       else if (token === '(letter_box)') res.push({ t: 'letterbox' });
       else if (token === '(input_box)') res.push({ t: 'inputbox' });
+      else if (token === '(card_box)') res.push({ t: 'cardbox' });
       last = m.index + m[0].length;
     }
     if (last < src.length) res.push({ t: 'text', v: src.slice(last) });
@@ -74,9 +79,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (!task) return false;
     if (task.answer_type === 'choice') return !!choice;
     if (task.answer_type === 'word_letters') return (lettersSel.length > 0);
+    if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
     return false;
-  }, [task, choice, text, lettersSel]);
+  }, [task, choice, text, lettersSel, selectedCard]);
 
   function check(){
     if (!task) return;
@@ -86,6 +92,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     else if (task.answer_type === 'word_letters') {
       const opts = (task.options || []) as string[];
       user = lettersSel.map(i => opts[i] ?? '').join('');
+    } else if (task.answer_type === 'cards') {
+      const opts = (task.options || []) as string[];
+      user = (selectedCard != null) ? (opts[selectedCard] ?? '') : '';
     }
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
@@ -100,6 +109,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setChoice(null);
       setText('');
       setLettersSel([]);
+      setSelectedCard(null);
       setStatus('idle');
     } else {
       onClose();
@@ -173,12 +183,22 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           );
                         }
                         // input box for text answer
-                        return (
+                        if (p.t === 'inputbox') return (
                           <InputBox
                             key={`ib-${i}`}
                             value={status === 'idle' ? text : (task.correct || '')}
                             editable={status === 'idle' && task.answer_type === 'text'}
                             onChange={(val) => setText(val)}
+                            status={status}
+                          />
+                        );
+                        // card box marker
+                        return (
+                          <CardBox
+                            key={`cb-${i}`}
+                            cardText={(selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : ''}
+                            onRemove={() => setSelectedCard(null)}
+                            setRect={(r) => setCardBoxRect(r)}
                             status={status}
                           />
                         );
@@ -211,6 +231,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             letter={ch}
                             onClick={() => { setLettersSel(prev => [...prev, i]); try { hapticSelect(); } catch {} }}
                             disabled={status !== 'idle'}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {task.answer_type === 'cards' && (
+                    <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(96px,1fr))' }}>
+                      {((task.options || []) as string[]).map((txt, i) => {
+                        if (selectedCard === i) return null;
+                        return (
+                          <DraggableCard
+                            key={`${txt}-${i}`}
+                            text={txt}
+                            disabled={status !== 'idle'}
+                            onDropToBox={() => { if (status === 'idle') setSelectedCard(i); }}
+                            getBoxRect={() => cardBoxRect}
                           />
                         );
                       })}
@@ -422,5 +459,84 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
         <span className={`px-2 py-1 font-extrabold ${isResolved ? '' : 'text-white'}`}>{value}</span>
       )}
     </span>
+  );
+}
+
+function CardBox({ cardText, onRemove, setRect, status }: { cardText: string; onRemove: () => void; setRect: (r: DOMRect | null) => void; status: 'idle' | 'correct' | 'wrong' }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const update = () => { try { setRect(el.getBoundingClientRect()); } catch {} };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true } as any);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update as any); };
+  }, [setRect]);
+  const hasCard = !!cardText;
+  const resolvedClass = status === 'idle' ? 'border-white/10 bg-white/5' : (status === 'correct' ? 'border-green-500/60 bg-green-600/10 text-green-400' : 'border-red-500/60 bg-red-600/10 text-red-400');
+  return (
+    <div ref={ref} className={`inline-flex items-center justify-center align-middle rounded-xl border ${resolvedClass}`} style={{ minWidth: 96, minHeight: 56, padding: 6 }}>
+      {hasCard ? (
+        <button type="button" onClick={onRemove} className="rounded-lg px-2 py-1 text-sm font-semibold bg-white/10 border border-white/15">
+          {cardText}
+        </button>
+      ) : (
+        <span className="text-white/60 text-sm">Перетащи сюда</span>
+      )}
+    </div>
+  );
+}
+
+function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: string; disabled: boolean; onDropToBox: () => void; getBoxRect: () => DOMRect | null }) {
+  const [dragging, setDragging] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const origin = useRef<{ x: number; y: number } | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: PointerEvent) => {
+      if (!origin.current) return;
+      setPos({ x: e.clientX - origin.current.x, y: e.clientY - origin.current.y });
+    };
+    const up = (e: PointerEvent) => {
+      setDragging(false);
+      setPos(null);
+      // хит-тест бокса
+      const br = getBoxRect();
+      if (br) {
+        const cx = e.clientX, cy = e.clientY;
+        if (cx >= br.left && cx <= br.right && cy >= br.top && cy <= br.bottom) onDropToBox();
+      }
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [dragging, getBoxRect, onDropToBox]);
+
+  const onDown = (e: React.PointerEvent) => {
+    if (disabled) return;
+    const rect = cardRef.current?.getBoundingClientRect();
+    origin.current = { x: (e.clientX - (rect?.left || 0)), y: (e.clientY - (rect?.top || 0)) };
+    setDragging(true);
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onPointerDown={onDown}
+      className={`relative rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'}`}
+      style={dragging && pos ? { transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 50, position: 'relative' } as any : undefined}
+    >
+      {text}
+    </div>
   );
 }
