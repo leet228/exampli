@@ -151,7 +151,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         if (p.t === 'blank') {
                           return (status === 'idle')
                             ? <span key={i} className="px-1 font-semibold">____</span>
-                            : <span key={i} className="px-1 font-extrabold text-green-400">{task.correct}</span>;
+                            : <span key={i} className={`px-1 font-extrabold ${status === 'correct' ? 'text-green-400' : 'text-red-400'}`}>{task.correct}</span>;
                         }
                         // letter box
                         const selectedWord = (task.options || []) && lettersSel.length
@@ -376,12 +376,15 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
 
 function InputBox({ value, editable, onChange, status }: { value: string; editable: boolean; onChange: (v: string) => void; status: 'idle' | 'correct' | 'wrong' }) {
   const ref = useRef<HTMLInputElement | null>(null);
+  const measureRef = useRef<HTMLSpanElement | null>(null);
+  const [boxWidth, setBoxWidth] = useState<number>(72);
   const isResolved = status !== 'idle';
+  const hasText = (value || '').length > 0;
   const containerClass = isResolved
     ? (status === 'correct'
         ? 'border-green-500/60 bg-green-600/10 text-green-400'
         : 'border-red-500/60 bg-red-600/10 text-red-400')
-    : 'border-white/10 bg-white/5';
+    : (hasText ? 'border-transparent bg-transparent' : 'border-white/10 bg-white/5');
   const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     // только буквы (кириллица/латиница), без пробелов/цифр/символов
     const raw = e.target.value || '';
@@ -395,15 +398,22 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
       onChange(raw);
     }
   };
+  useEffect(() => {
+    // ширина = max(72px, текст + внутренние отступы ~16px)
+    const w = Math.max(72, Math.round(((measureRef.current?.offsetWidth as number) || 0) + 16));
+    setBoxWidth(w);
+  }, [value]);
   return (
-    <span className={`inline-flex items-center gap-1 align-middle rounded-xl border px-2 py-1 ${containerClass}`} style={{ minWidth: 72, minHeight: 42 }}>
+    <span className={`relative inline-flex items-center gap-1 align-middle rounded-xl border ${hasText ? 'px-0 py-0' : 'px-2 py-1'} ${containerClass}`} style={{ width: boxWidth, minWidth: 72, minHeight: 42 }}>
+      {/* невидимый измеритель ширины */}
+      <span ref={measureRef} className="invisible absolute -z-10 whitespace-pre font-extrabold px-1">{value || ' '}</span>
       {editable ? (
         <input
           ref={ref}
           value={value}
           onChange={onInput}
           placeholder=""
-          className="bg-transparent outline-none border-0 px-1 py-1 font-extrabold"
+          className="bg-transparent outline-none border-0 px-2 py-1 font-extrabold w-full caret-transparent"
           inputMode="text"
           autoCapitalize="none"
           autoCorrect="off"
