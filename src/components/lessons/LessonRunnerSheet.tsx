@@ -379,12 +379,11 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
   const measureRef = useRef<HTMLSpanElement | null>(null);
   const [boxWidth, setBoxWidth] = useState<number>(72);
   const isResolved = status !== 'idle';
-  const hasText = (value || '').length > 0;
   const containerClass = isResolved
     ? (status === 'correct'
         ? 'border-green-500/60 bg-green-600/10 text-green-400'
         : 'border-red-500/60 bg-red-600/10 text-red-400')
-    : (hasText ? 'border-transparent bg-transparent' : 'border-white/10 bg-white/5');
+    : 'border-white/10 bg-white/5';
   const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     // только буквы (кириллица/латиница), без пробелов/цифр/символов
     const raw = e.target.value || '';
@@ -404,7 +403,7 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
     setBoxWidth(w);
   }, [value]);
   return (
-    <span className={`relative inline-flex items-center gap-1 align-middle rounded-xl border ${hasText ? 'px-0 py-0' : 'px-2 py-1'} ${containerClass}`} style={{ width: boxWidth, minWidth: 72, minHeight: 42 }}>
+    <span className={`relative inline-flex items-center gap-1 align-middle rounded-xl border px-2 py-1 ${containerClass}`} style={{ width: boxWidth, minWidth: 72, minHeight: 42 }}>
       {/* невидимый измеритель ширины */}
       <span ref={measureRef} className="invisible absolute -z-10 whitespace-pre font-extrabold px-1">{value || ' '}</span>
       {editable ? (
@@ -413,7 +412,7 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
           value={value}
           onChange={onInput}
           placeholder=""
-          className="bg-transparent outline-none border-0 px-2 py-1 font-extrabold w-full caret-transparent"
+          className="bg-transparent outline-none border-0 px-2 py-1 font-extrabold w-full caret-transparent text-center"
           inputMode="text"
           autoCapitalize="none"
           autoCorrect="off"
