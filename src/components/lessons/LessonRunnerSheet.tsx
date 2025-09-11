@@ -10,6 +10,7 @@ type TaskRow = {
   lesson_id: number | string;
   prompt: string;
   task_text: string; // contains (underline)
+  order_index?: number | null;
   answer_type: 'choice' | 'text' | 'word_letters';
   options: string[] | null;
   correct: string;
@@ -21,6 +22,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [progress, setProgress] = useState<number>(0);
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState<string>('');
+  const [lettersSel, setLettersSel] = useState<number[]>([]); // индексы выбранных букв из options
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const task = tasks[idx];
@@ -30,26 +32,37 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     (async () => {
       const { data } = await supabase
         .from('tasks')
-        .select('id, lesson_id, prompt, task_text, answer_type, options, correct')
+        .select('id, lesson_id, prompt, task_text, answer_type, options, correct, order_index')
         .eq('lesson_id', lessonId)
+        .order('order_index', { ascending: true })
         .order('id', { ascending: true })
         .limit(15);
-      setTasks((data as any) || []);
+      const rows = (data as any[]) || [];
+      // страховка: отсортировать по order_index, затем id
+      rows.sort((a: any, b: any) => {
+        const ao = (a?.order_index ?? 0) as number; const bo = (b?.order_index ?? 0) as number;
+        if (ao !== bo) return ao - bo;
+        return Number(a?.id || 0) - Number(b?.id || 0);
+      });
+      setTasks(rows as any);
       setIdx(0);
       setProgress(0);
       setChoice(null);
       setText('');
+      setLettersSel([]);
       setStatus('idle');
     })();
   }, [open, lessonId]);
 
-  function partsWithUnderline(src: string): Array<{ t: 'text' | 'blank'; v: string }>{
-    const res: Array<{ t: 'text' | 'blank'; v: string }> = [];
-    const re = /(\(underline\))/g;
+  function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox'; v?: string }>{
+    const res: Array<{ t: 'text' | 'blank' | 'letterbox'; v?: string }> = [];
+    const re = /(\(underline\)|\(letter_box\))/g;
     let last = 0; let m: RegExpExecArray | null;
     while ((m = re.exec(src))){
       if (m.index > last) res.push({ t: 'text', v: src.slice(last, m.index) });
-      res.push({ t: 'blank', v: '____' });
+      const token = m[0];
+      if (token === '(underline)') res.push({ t: 'blank' });
+      else if (token === '(letter_box)') res.push({ t: 'letterbox' });
       last = m.index + m[0].length;
     }
     if (last < src.length) res.push({ t: 'text', v: src.slice(last) });
@@ -58,14 +71,21 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   const canAnswer = useMemo(() => {
     if (!task) return false;
-    if (task.answer_type === 'choice' || task.answer_type === 'word_letters') return !!choice;
+    if (task.answer_type === 'choice') return !!choice;
+    if (task.answer_type === 'word_letters') return (lettersSel.length > 0);
     if (task.answer_type === 'text') return text.trim().length > 0;
     return false;
-  }, [task, choice, text]);
+  }, [task, choice, text, lettersSel]);
 
   function check(){
     if (!task) return;
-    const user = (task.answer_type === 'text') ? text.trim() : (choice || '');
+    let user = '';
+    if (task.answer_type === 'text') user = text.trim();
+    else if (task.answer_type === 'choice') user = (choice || '');
+    else if (task.answer_type === 'word_letters') {
+      const opts = (task.options || []) as string[];
+      user = lettersSel.map(i => opts[i] ?? '').join('');
+    }
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
@@ -78,6 +98,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setIdx(idx + 1);
       setChoice(null);
       setText('');
+      setLettersSel([]);
       setStatus('idle');
     } else {
       onClose();
@@ -124,19 +145,37 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   <div className="text-sm text-muted">{task.prompt}</div>
                   <div className="card text-left">
                     <div className="text-lg leading-relaxed">
-                      {partsWithUnderline(task.task_text).map((p, i) => (
-                        p.t === 'text'
-                          ? <span key={i}>{p.v}</span>
-                          : (status === 'idle'
-                              ? <span key={i} className="px-1 font-semibold">____</span>
-                              : <span key={i} className="px-1 font-extrabold text-green-400">{task.correct}</span>
-                            )
-                        ))}
+                      {partsWithMarkers(task.task_text).map((p, i) => {
+                        if (p.t === 'text') return <span key={i}>{p.v}</span>;
+                        if (p.t === 'blank') {
+                          return (status === 'idle')
+                            ? <span key={i} className="px-1 font-semibold">____</span>
+                            : <span key={i} className="px-1 font-extrabold text-green-400">{task.correct}</span>;
+                        }
+                        // letter box
+                        const selectedWord = (task.options || []) && lettersSel.length
+                          ? lettersSel.map(j => (task.options as string[])[j] || '').join('')
+                          : '';
+                        return (
+                          <LetterBox
+                            key={`lb-${i}`}
+                            value={status === 'idle' ? selectedWord : (task.correct || '')}
+                            editable={status === 'idle' && task.answer_type === 'word_letters'}
+                            lettersSel={lettersSel}
+                            options={(task.options || []) as string[]}
+                            onRemove={(pos) => {
+                              // pos — позиция в выбранных, вернём конкретный индекс в пул
+                              setLettersSel(prev => prev.filter((_, k) => k !== pos));
+                            }}
+                            status={status}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* ответы */}
-                  {(task.answer_type === 'choice' || task.answer_type === 'word_letters') && (
+                  {(task.answer_type === 'choice') && (
                     <div className="grid gap-2 mt-auto mb-10">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
@@ -144,6 +183,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           <PressOption key={opt} active={active} onClick={() => { setChoice(opt); }}>
                             {opt}
                           </PressOption>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {task.answer_type === 'word_letters' && (
+                    <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(48px,1fr))' }}>
+                      {((task.options || []) as string[]).map((ch, i) => {
+                        const used = lettersSel.includes(i);
+                        if (used) return null;
+                        return (
+                          <PressLetter
+                            key={`${ch}-${i}`}
+                            letter={ch}
+                            onClick={() => { setLettersSel(prev => [...prev, i]); try { hapticSelect(); } catch {} }}
+                            disabled={status !== 'idle'}
+                          />
                         );
                       })}
                     </div>
@@ -235,5 +291,64 @@ function PressOption({ active, children, onClick }: { active: boolean; children:
     >
       {children}
     </motion.button>
+  );
+}
+
+function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: () => void; disabled?: boolean }) {
+  const [pressed, setPressed] = useState(false);
+  const base = '#2a3944';
+  const shadowHeight = 6;
+  function darken(hex: string, amount = 18) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  }
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => { if (!disabled) setPressed(true); }}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={() => { if (!disabled) onClick(); }}
+      className={`rounded-xl border text-center font-extrabold ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
+      transition={{ duration: 0 }}
+      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.10)', padding: '12px 0', minWidth: 48, minHeight: 48 }}
+    >
+      {letter}
+    </motion.button>
+  );
+}
+
+function LetterBox({ value, editable, lettersSel, options, onRemove, status }: { value: string; editable: boolean; lettersSel: number[]; options: string[]; onRemove: (pos: number) => void; status: 'idle' | 'correct' | 'wrong' }) {
+  const letters = editable ? lettersSel.map(i => options[i] ?? '') : (value || '').split('');
+  const isResolved = status !== 'idle';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 align-middle px-2 py-1 rounded-xl border ${isResolved ? (status === 'correct' ? 'border-green-500/60 bg-green-600/10 text-green-400' : 'border-red-500/60 bg-red-600/10 text-red-400') : 'border-white/10 bg-white/5'}`}
+      style={{ minWidth: 64, minHeight: 40 }}
+    >
+      {letters.length === 0 && !isResolved ? (
+        <span className="text-white/60 font-semibold">···</span>
+      ) : (
+        letters.map((ch, idx) => (
+          <motion.button
+            key={`${ch}-${idx}`}
+            type="button"
+            className={`min-w-7 h-7 px-2 rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold`}
+            onClick={() => { if (editable) { try { hapticSelect(); } catch {} onRemove(idx); } }}
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.85, opacity: 0 }}
+            transition={{ duration: 0.12 }}
+          >
+            {ch}
+          </motion.button>
+        ))
+      )}
+    </span>
   );
 }
