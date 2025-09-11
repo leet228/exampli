@@ -200,7 +200,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                               <button
                                 key={`cb-sel-${i}`}
                                 type="button"
-                                onClick={() => setSelectedCard(null)}
+                                onClick={() => { try { hapticTiny(); } catch {} setSelectedCard(null); }}
                                 className="rounded-lg px-2 py-1 text-sm font-semibold bg-white/10 border border-white/15"
                               >
                                 {txt}
@@ -262,7 +262,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             key={`${txt}-${i}`}
                             text={txt}
                             disabled={status !== 'idle'}
-                            onDropToBox={() => { if (status === 'idle') setSelectedCard(i); }}
+                            onDropToBox={() => { if (status === 'idle') { try { hapticSelect(); } catch {} setSelectedCard(i); } }}
                             getBoxRect={() => cardBoxRect}
                           />
                         );
@@ -552,6 +552,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
         ref={cardRef}
         onPointerDown={onDown}
         className={`rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-0' : 'opacity-100'}`}
+        style={{ width: 120, minHeight: 40 }}
       >
         {text}
       </div>
@@ -559,7 +560,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
       {dragging && pos && (
         <div
           className="fixed pointer-events-none rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 text-sm font-semibold"
-          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 9999 }}
+          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 9999, width: 120, minHeight: 40 }}
         >
           {text}
         </div>
