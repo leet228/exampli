@@ -167,7 +167,7 @@ export default function Home() {
 
   // ======== рендер =========
   return (
-    <div className="overflow-x-hidden">
+    <div className="overflow-x-hidden" style={{ overflow: 'visible' }}>
       {/* плавающая кнопка «Темы» и левая панель */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
 
@@ -176,8 +176,8 @@ export default function Home() {
         onClose={() => setOpenTopics(false)}
       />
 
-      {/* отступ, чтобы дорога не упиралась в кнопку тем */}
-      <div style={{ height: 64 }} />
+      {/* отступ, чтобы дорога не упиралась в фиксированный баннер Темы (80px) */}
+      <div style={{ height: 96 }} />
 
       {/* состояния */}
       {!activeCode && !loading && (

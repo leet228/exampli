@@ -10,7 +10,7 @@ type Props = {
 
 export default function LessonRoad({ lessons, onOpen }: Props) {
   return (
-    <div className="relative overflow-visible">
+    <div className="relative overflow-visible" style={{ paddingTop: 12 }}>
       {/* центральную вертикальную линию убрали */}
 
       <ul className="space-y-10 overflow-visible">
