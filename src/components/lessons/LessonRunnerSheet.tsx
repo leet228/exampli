@@ -313,10 +313,10 @@ function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: (
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => { if (!disabled) onClick(); }}
-      className={`rounded-xl border text-center font-extrabold ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+      className={`rounded-xl border font-extrabold grid place-items-center w-12 h-12 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
       transition={{ duration: 0 }}
-      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.10)', padding: '12px 0', minWidth: 48, minHeight: 48 }}
+      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.10)' }}
     >
       {letter}
     </motion.button>
@@ -331,14 +331,12 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
       className={`inline-flex items-center gap-1 align-middle px-2 py-1 rounded-xl border ${isResolved ? (status === 'correct' ? 'border-green-500/60 bg-green-600/10 text-green-400' : 'border-red-500/60 bg-red-600/10 text-red-400') : 'border-white/10 bg-white/5'}`}
       style={{ minWidth: 64, minHeight: 40 }}
     >
-      {letters.length === 0 && !isResolved ? (
-        <span className="text-white/60 font-semibold">···</span>
-      ) : (
+      {letters.length > 0 && (
         letters.map((ch, idx) => (
           <motion.button
             key={`${ch}-${idx}`}
             type="button"
-            className={`min-w-7 h-7 px-2 rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold`}
+            className={`w-10 h-10 grid place-items-center rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold`}
             onClick={() => { if (editable) { try { hapticSelect(); } catch {} onRemove(idx); } }}
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
