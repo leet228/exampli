@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny } from '../../lib/haptics';
 import BottomSheet from '../sheets/BottomSheet';
+import LessonButton from './LessonButton';
 
 type TaskRow = {
   id: number | string;
@@ -114,10 +115,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           >
             {/* верхняя панель: только прогресс, возврат через Telegram BackButton */}
             <div className="px-5 pt-2 pb-2 border-b border-white/10">
-              <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%` }} /></div>
+              <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
             </div>
 
-            <div className="p-4 grid gap-4">
+            <div className="p-4 grid gap-4 pb-28">
               {task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -133,15 +134,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setChoice(opt)}
-                            className={`w-full rounded-2xl px-4 py-3 border ${active ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-white/10 text-white'}`}
-                            style={{ background: active ? 'rgba(60,115,255,0.10)' : 'rgba(255,255,255,0.05)' }}
-                          >
+                          <PressOption key={opt} active={active} onClick={() => { hapticSelect(); setChoice(opt); }}>
                             {opt}
-                          </button>
+                          </PressOption>
                         );
                       })}
                     </div>
@@ -156,29 +151,22 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     />
                   )}
 
-                  {/* кнопка ответа и фидбек */}
-                  <div className="mt-2">
-                    {status === 'idle' ? (
-                      <button type="button" className={`btn w-full ${!canAnswer ? 'opacity-60 cursor-not-allowed' : ''}`} disabled={!canAnswer} onClick={check}>ПРОВЕРИТЬ</button>
-                    ) : (
-                      <div className="grid gap-3">
-                        <div className={`card flex items-center justify-between ${status === 'correct' ? 'text-green-400' : 'text-red-400'}`}>
-                          <div className="font-semibold flex items-center gap-2">
-                            <span>{status === 'correct' ? '✓' : '✕'}</span>
-                            <span>{status === 'correct' ? 'Sehr gut!' : 'Неправильно'}</span>
-                          </div>
-                          {status === 'wrong' && (
-                            <div className="text-sm">Правильный ответ: <span className="font-semibold">{task.correct}</span></div>
-                          )}
-                        </div>
-                        <button type="button" className="btn w-full" onClick={next}>ПРОДОЛЖИТЬ</button>
-                      </div>
-                    )}
-                  </div>
+                  {/* кнопка переехала вниз в фиксированный бар */}
                 </>
               ) : (
                 <div className="text-sm text-muted">Загрузка…</div>
               )}
+            </div>
+
+            {/* Нижняя фиксированная кнопка */}
+            <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
+              <div className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+                {status === 'idle' ? (
+                  <LessonButton text="ПРОВЕРИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
+                ) : (
+                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={next} baseColor="#3c73ff" />
+                )}
+              </div>
             </div>
           </motion.div>
           {/* подтверждение выхода */}
@@ -203,3 +191,32 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 }
 
 
+
+function PressOption({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+  const [pressed, setPressed] = useState(false);
+  const base = active ? '#3c73ff' : '#2a3944';
+  const shadowHeight = 6;
+  function darken(hex: string, amount = 18) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  }
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => { setPressed(true); hapticSelect(); }}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={onClick}
+      className={`w-full rounded-2xl px-4 py-3 border ${active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'}`}
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
+      transition={{ duration: 0 }}
+      style={{ background: active ? 'rgba(60,115,255,0.10)' : 'rgba(255,255,255,0.05)' }}
+    >
+      {children}
+    </motion.button>
+  );
+}
