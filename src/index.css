@@ -230,9 +230,8 @@ body,
     bottom: 0;
     /* не перекрываем HUD: начинаем ниже него */
     top: calc(var(--hud-top) + var(--hud-h));
-    /* Сплошная подложка, чтобы контент дороги не просвечивал под шторкой */
-    background: var(--bg);
-    backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(2px);
     z-index: var(--z-top-sheet);
 }
 
