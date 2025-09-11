@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
-import { hapticSelect, hapticTiny } from '../../lib/haptics';
+import { hapticSelect, hapticTiny, hapticSuccess, hapticError } from '../../lib/haptics';
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 
@@ -68,7 +68,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const user = (task.answer_type === 'text') ? text.trim() : (choice || '');
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
-    try { ok ? hapticSelect() : hapticTiny(); } catch {}
+    try { ok ? hapticSuccess() : hapticError(); } catch {}
   }
 
   function next(){
@@ -118,7 +118,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
             </div>
 
-            <div className="p-4 flex flex-col gap-4 pb-36 min-h-[60vh]">
+            <div className="p-4 flex flex-col gap-4 pb-36 min-h-[70vh]">
               {task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -137,7 +137,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {/* ответы */}
                   {(task.answer_type === 'choice' || task.answer_type === 'word_letters') && (
-                    <div className="grid gap-2 mt-auto mb-2">
+                    <div className="grid gap-2 mt-auto mb-4">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (

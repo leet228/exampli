@@ -82,3 +82,24 @@ export function hapticTypingTick() {
     if ('vibrate' in navigator) (navigator as any).vibrate(5);
   } catch {}
 }
+
+// Уведомления «успех/ошибка» для подтверждения ответа
+export function hapticSuccess() {
+  try {
+    if (typeof window === 'undefined') return;
+    const tg = (window as any)?.Telegram?.WebApp?.HapticFeedback;
+    if ((tg as any)?.notificationOccurred) { (tg as any).notificationOccurred('success'); return; }
+    if ((tg as any)?.impactOccurred) { (tg as any).impactOccurred('medium'); return; }
+    if ('vibrate' in navigator) (navigator as any).vibrate([10, 30, 10]);
+  } catch {}
+}
+
+export function hapticError() {
+  try {
+    if (typeof window === 'undefined') return;
+    const tg = (window as any)?.Telegram?.WebApp?.HapticFeedback;
+    if ((tg as any)?.notificationOccurred) { (tg as any).notificationOccurred('error'); return; }
+    if ((tg as any)?.impactOccurred) { (tg as any).impactOccurred('heavy'); return; }
+    if ('vibrate' in navigator) (navigator as any).vibrate([40]);
+  } catch {}
+}
