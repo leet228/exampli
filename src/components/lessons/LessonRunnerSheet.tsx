@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny, hapticSuccess, hapticError } from '../../lib/haptics';
@@ -54,15 +54,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     })();
   }, [open, lessonId]);
 
-  function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox'; v?: string }>{
-    const res: Array<{ t: 'text' | 'blank' | 'letterbox'; v?: string }> = [];
-    const re = /(\(underline\)|\(letter_box\))/g;
+  function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox'; v?: string }>{
+    const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox'; v?: string }> = [];
+    const re = /(\(underline\)|\(letter_box\)|\(input_box\))/g;
     let last = 0; let m: RegExpExecArray | null;
     while ((m = re.exec(src))){
       if (m.index > last) res.push({ t: 'text', v: src.slice(last, m.index) });
       const token = m[0];
       if (token === '(underline)') res.push({ t: 'blank' });
       else if (token === '(letter_box)') res.push({ t: 'letterbox' });
+      else if (token === '(input_box)') res.push({ t: 'inputbox' });
       last = m.index + m[0].length;
     }
     if (last < src.length) res.push({ t: 'text', v: src.slice(last) });
@@ -156,17 +157,28 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         const selectedWord = (task.options || []) && lettersSel.length
                           ? lettersSel.map(j => (task.options as string[])[j] || '').join('')
                           : '';
+                        if (p.t === 'letterbox') {
+                          return (
+                            <LetterBox
+                              key={`lb-${i}`}
+                              value={status === 'idle' ? selectedWord : (task.correct || '')}
+                              editable={status === 'idle' && task.answer_type === 'word_letters'}
+                              lettersSel={lettersSel}
+                              options={(task.options || []) as string[]}
+                              onRemove={(pos) => {
+                                setLettersSel(prev => prev.filter((_, k) => k !== pos));
+                              }}
+                              status={status}
+                            />
+                          );
+                        }
+                        // input box for text answer
                         return (
-                          <LetterBox
-                            key={`lb-${i}`}
-                            value={status === 'idle' ? selectedWord : (task.correct || '')}
-                            editable={status === 'idle' && task.answer_type === 'word_letters'}
-                            lettersSel={lettersSel}
-                            options={(task.options || []) as string[]}
-                            onRemove={(pos) => {
-                              // pos — позиция в выбранных, вернём конкретный индекс в пул
-                              setLettersSel(prev => prev.filter((_, k) => k !== pos));
-                            }}
+                          <InputBox
+                            key={`ib-${i}`}
+                            value={status === 'idle' ? text : (task.correct || '')}
+                            editable={status === 'idle' && task.answer_type === 'text'}
+                            onChange={(val) => setText(val)}
                             status={status}
                           />
                         );
@@ -205,7 +217,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
-                  {task.answer_type === 'text' && (
+                  {task.answer_type === 'text' && !/(\(input_box\))/.test(task.task_text || '') && (
                     <input
                       value={text}
                       onChange={(e) => setText(e.target.value)}
@@ -357,6 +369,48 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
             {ch}
           </motion.button>
         ))
+      )}
+    </span>
+  );
+}
+
+function InputBox({ value, editable, onChange, status }: { value: string; editable: boolean; onChange: (v: string) => void; status: 'idle' | 'correct' | 'wrong' }) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const isResolved = status !== 'idle';
+  const containerClass = isResolved
+    ? (status === 'correct'
+        ? 'border-green-500/60 bg-green-600/10 text-green-400'
+        : 'border-red-500/60 bg-red-600/10 text-red-400')
+    : 'border-white/10 bg-white/5';
+  const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // только буквы (кириллица/латиница), без пробелов/цифр/символов
+    const raw = e.target.value || '';
+    const filtered = raw.replace(/[^\p{L}]+/gu, '');
+    if (filtered !== raw) {
+      const el = e.target;
+      const pos = el.selectionStart || filtered.length;
+      onChange(filtered);
+      requestAnimationFrame(() => { try { el.setSelectionRange(pos - 1, pos - 1); } catch {} });
+    } else {
+      onChange(raw);
+    }
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 align-middle rounded-xl border px-2 py-1 ${containerClass}`} style={{ minWidth: 72, minHeight: 42 }}>
+      {editable ? (
+        <input
+          ref={ref}
+          value={value}
+          onChange={onInput}
+          placeholder=""
+          className="bg-transparent outline-none border-0 px-1 py-1 font-extrabold"
+          inputMode="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      ) : (
+        <span className={`px-2 py-1 font-extrabold ${isResolved ? '' : 'text-white'}`}>{value}</span>
       )}
     </span>
   );
