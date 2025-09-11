@@ -118,7 +118,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
             </div>
 
-            <div className="p-4 flex flex-col gap-4 pb-24 min-h-[70vh]">
+            <div className="p-4 flex flex-col gap-4 pb-16 min-h-[78vh]">
               {task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -169,14 +169,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
               {/* Фидбек появится над кнопкой */}
               {status !== 'idle' && (
-                <div className={`mx-4 mt-2 mb-2 rounded-2xl px-4 py-3 font-semibold flex items-center justify-between ${status === 'correct' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                <div className={`mx-4 mt-1 mb-1 rounded-2xl px-4 py-3 font-semibold flex items-center justify-between ${status === 'correct' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
                   <div className="flex items-center gap-2">
                     <span>{status === 'correct' ? '✓' : '✕'}</span>
                     <span>{status === 'correct' ? 'Правильно!' : 'Неправильно'}</span>
                   </div>
                 </div>
               )}
-              <div className="px-4 pt-1 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+              <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+10px)]">
                 {status === 'idle' ? (
                   <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                 ) : (
