@@ -29,26 +29,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const task = tasks[idx];
 
-  function normalizeOptions(input: any): string[] {
-    try {
-      if (!input) return [];
-      if (Array.isArray(input)) return (input as any[]).map((v) => String(v));
-      if (typeof input === 'string') {
-        const s = input.trim();
-        if (!s) return [];
-        try {
-          const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) return parsed.map((v: any) => String(v));
-        } catch {}
-        // fallback: split by common delimiters
-        if (s.includes('|')) return s.split('|').map(t => t.trim()).filter(Boolean);
-        if (s.includes(',')) return s.split(',').map(t => t.trim()).filter(Boolean);
-        return [s];
-      }
-    } catch {}
-    return [];
-  }
-
   useEffect(() => {
     if (!open) return;
     (async () => {
@@ -104,18 +84,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return false;
   }, [task, choice, text, lettersSel, selectedCard]);
 
-  const optionsArr = useMemo(() => normalizeOptions(task?.options), [task]);
-
   function check(){
     if (!task) return;
     let user = '';
     if (task.answer_type === 'text') user = text.trim();
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'word_letters') {
-      const opts = optionsArr;
+      const opts = (task.options || []) as string[];
       user = lettersSel.map(i => opts[i] ?? '').join('');
     } else if (task.answer_type === 'cards') {
-      const opts = optionsArr;
+      const opts = (task.options || []) as string[];
       user = (selectedCard != null) ? (opts[selectedCard] ?? '') : '';
     }
     const ok = user === (task.correct || '');
@@ -244,7 +222,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {task.answer_type === 'word_letters' && (
                     <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(48px,1fr))' }}>
-                      {optionsArr.map((ch, i) => {
+                      {((task.options || []) as string[]).map((ch, i) => {
                         const used = lettersSel.includes(i);
                         if (used) return null;
                         return (
@@ -261,7 +239,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {task.answer_type === 'cards' && (
                     <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(96px,1fr))' }}>
-                      {optionsArr.map((txt, i) => {
+                      {((task.options || []) as string[]).map((txt, i) => {
                         if (selectedCard === i) return null;
                         return (
                           <DraggableCard
