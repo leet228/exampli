@@ -194,7 +194,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         );
                         // card box marker
                         if (p.t === 'cardbox') {
-                          const txt = (selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : '';
+                          const chosen = (selectedCard != null) ? (((task.options || [])[selectedCard] as string) || '') : '';
+                          const txt = (status !== 'idle') ? (task.correct || '') : chosen;
                           if (selectedCard != null) {
                             const stateClass = (status === 'idle')
                               ? 'bg-white/10 border-white/15 text-white'
@@ -215,7 +216,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           return (
                             <CardBox
                               key={`cb-${i}`}
-                              cardText={''}
+                              cardText={status !== 'idle' ? (task.correct || '') : ''}
                               onRemove={() => setSelectedCard(null)}
                               setRect={(r) => setCardBoxRect(r)}
                               status={status}
