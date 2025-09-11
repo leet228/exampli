@@ -118,7 +118,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
             </div>
 
-            <div className="p-4 grid gap-4 pb-28">
+            <div className="p-4 grid gap-4 pb-36">
               {task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -130,11 +130,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {/* ответы */}
                   {(task.answer_type === 'choice' || task.answer_type === 'word_letters') && (
-                    <div className="grid gap-2">
+                    <div className="grid gap-2 mt-6">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
-                          <PressOption key={opt} active={active} onClick={() => { hapticSelect(); setChoice(opt); }}>
+                          <PressOption key={opt} active={active} onClick={() => { setChoice(opt); }}>
                             {opt}
                           </PressOption>
                         );
@@ -158,9 +158,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               )}
             </div>
 
-            {/* Нижняя фиксированная кнопка */}
+            {/* Нижний фиксированный блок: фидбек + кнопка */}
             <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
-              <div className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+              {/* Фидбек появится над кнопкой */}
+              {status !== 'idle' && (
+                <div className={`mx-4 mt-2 mb-2 rounded-2xl px-4 py-3 font-semibold flex items-center justify-between ${status === 'correct' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                  <div className="flex items-center gap-2">
+                    <span>{status === 'correct' ? '✓' : '✕'}</span>
+                    <span>{status === 'correct' ? 'Правильно!' : 'Неправильно'}</span>
+                  </div>
+                </div>
+              )}
+              <div className="px-4 pt-1 pb-[calc(env(safe-area-inset-bottom)+12px)]">
                 {status === 'idle' ? (
                   <LessonButton text="ПРОВЕРИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                 ) : (
@@ -207,7 +216,8 @@ function PressOption({ active, children, onClick }: { active: boolean; children:
   return (
     <motion.button
       type="button"
-      onPointerDown={() => { setPressed(true); hapticSelect(); }}
+      onPointerDown={(e) => { setPressed(true); /* дергаем хаптик только один раз */ try { hapticSelect(); } catch {} }}
+      onMouseDown={(e) => { e.preventDefault(); }}
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={onClick}
