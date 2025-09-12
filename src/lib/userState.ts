@@ -172,11 +172,24 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 // Возвращает текущую энергию и опционально next_at (время следующего восстановления)
 export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null; full_at?: string | null } | null> {
   try {
-    const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    // Получаем tg_id из Telegram или из кэша boot.user
+    let tgId: string | null = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id
+      ? String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id)
+      : null;
+    if (!tgId) {
+      try { tgId = String(cacheGet<any>(CACHE_KEYS.user)?.tg_id || ''); } catch {}
+    }
     if (!tgId) return null;
-    const { data, error } = await supabase.rpc('sync_energy', { p_tg_id: String(tgId), p_delta: delta });
+
+    // Пытаемся вызвать RPC с именованными параметрами (оба варианта)
+    let data: any = null; let error: any = null; let row: any = null;
+    ({ data, error } = await supabase.rpc('sync_energy', { p_tg_id: tgId, p_delta: delta }));
+    if (error || !data) {
+      // fallback: возможно, у функции параметры названы tg_id/delta
+      ({ data, error } = await supabase.rpc('sync_energy', { tg_id: tgId, delta } as any));
+    }
     if (error) { try { console.warn('[syncEnergy] rpc error', error); } catch {} return null; }
-    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+    row = Array.isArray(data) ? (data[0] as any) : (data as any);
     const energy = Number(row?.energy ?? NaN);
     if (!Number.isNaN(energy)) {
       try {
