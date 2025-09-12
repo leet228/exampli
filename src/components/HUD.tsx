@@ -6,7 +6,7 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import TopSheet from './sheets/TopSheet';
 import AddCourseSheet from './panels/AddCourseSheet';
 import AddCourseBlocking from './panels/AddCourseBlocking';
-import { setUserSubjects } from '../lib/userState';
+import { setUserSubjects, syncEnergy } from '../lib/userState';
 import { getActiveCourse, subscribeActiveCourse, setActiveCourse as storeSetActiveCourse } from '../lib/courseStore';
 import CoursesPanel from './sheets/CourseSheet';
 // CoinSheet более не используется; переход на страницу подписки
@@ -151,7 +151,12 @@ export default function HUD() {
     });
 
     let alive = true;
-    const refresh = async () => { if (alive) await loadUserSnapshot(); };
+    const refresh = async () => {
+      if (!alive) return;
+      // синхронизируем энергию (ленивая регенерация) и затем обновим снапшот
+      try { await syncEnergy(0); } catch {}
+      await loadUserSnapshot();
+    };
 
     refresh();
 
@@ -341,7 +346,7 @@ export default function HUD() {
           ? (anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).offsetWidth / 2)
           : undefined}
       >
-        <EnergySheetBody value={energy} onOpenSubscription={() => { setOpen(null); location.assign('/subscription'); }} />
+        <EnergySheetBody value={energy} onOpenSubscription={async () => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
       {/* Кошелёк удалён — используем страницу подписки */}

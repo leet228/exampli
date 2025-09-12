@@ -5,6 +5,7 @@ import { hapticSelect, hapticTiny, hapticSuccess, hapticError } from '../../lib/
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
+import { spendEnergy } from '../../lib/userState';
 
 type TaskRow = {
   id: number | string;
@@ -145,19 +146,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextVal });
         try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: nextVal } } as any)); } catch {}
-        // фоновое обновление в БД
-        (async () => {
-          try {
-            const cachedUser = cacheGet<any>(CACHE_KEYS.user);
-            const uid = cachedUser?.id;
-            if (uid) {
-              await supabase.from('users').update({ energy: nextVal }).eq('id', uid);
-            } else {
-              const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-              if (tgId) await supabase.from('users').update({ energy: nextVal }).eq('tg_id', String(tgId));
-            }
-          } catch {}
-        })();
+        // фоновое обновление на сервере (RPC с ленивой регенерацией)
+        (async () => { try { await spendEnergy(); } catch {} })();
       } catch {}
       // если 0 — выходим из урока сразу
       if (nextVal <= 0) {

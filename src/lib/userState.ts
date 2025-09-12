@@ -166,6 +166,34 @@ export async function finishLesson({ correct }: { correct: boolean }) {
   await supabase.from('users').update({ streak, energy, last_active_at }).eq('id', (u as any).id);
 }
 
+// ================== ЭНЕРГИЯ: ленивая регенерация через RPC ==================
+// Предполагается серверная функция public.sync_energy(delta int default 0)
+// Семантика: хранит очередь трат за последний час и восстанавливает по 1 ед/час
+// Возвращает текущую энергию и опционально next_at (время следующего восстановления)
+export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null } | null> {
+  try {
+    const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    if (!tgId) return null;
+    const { data, error } = await (supabase as any).rpc('sync_energy', { tg_id: String(tgId), delta }).single?.() || {};
+    if (error) { try { console.warn('[syncEnergy] rpc error', error); } catch {} return null; }
+    const energy = Number((data as any)?.energy ?? NaN);
+    if (!Number.isNaN(energy)) {
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, energy });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
+      } catch {}
+      return { energy, next_at: (data as any)?.next_at ?? null };
+    }
+  } catch (e) { try { console.warn('[syncEnergy] failed', e); } catch {} }
+  return null;
+}
+
+export async function spendEnergy(): Promise<number | null> {
+  const res = await syncEnergy(-1);
+  return res?.energy ?? null;
+}
+
 export async function setUserSubjects(subjectCodes: string[]) {
   // новая семантика: берём первый код и пишем его id в users.added_course
   const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
