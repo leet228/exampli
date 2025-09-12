@@ -170,7 +170,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 // Предполагается серверная функция public.sync_energy(delta int default 0)
 // Семантика: хранит очередь трат за последний час и восстанавливает по 1 ед/час
 // Возвращает текущую энергию и опционально next_at (время следующего восстановления)
-export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null } | null> {
+export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null; full_at?: string | null } | null> {
   try {
     const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!tgId) return null;
@@ -183,7 +183,7 @@ export async function syncEnergy(delta: number = 0): Promise<{ energy: number; n
         cacheSet(CACHE_KEYS.stats, { ...cs, energy });
         window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
       } catch {}
-      return { energy, next_at: (data as any)?.next_at ?? null };
+      return { energy, next_at: (data as any)?.next_at ?? null, full_at: (data as any)?.full_at ?? null };
     }
   } catch (e) { try { console.warn('[syncEnergy] failed', e); } catch {} }
   return null;

@@ -411,11 +411,49 @@ function StreakSheetBody() {
 }
 
 function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenSubscription: () => void }) {
-  const percent = Math.max(0, Math.min(100, Math.round((value / 25) * 100)));
-  const iconName = value >= 25 ? 'full' : 'none';
+  const [energy, setEnergy] = useState(value);
+  const [fullAt, setFullAt] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState<number>(Date.now());
+
+  useEffect(() => {
+    let timer: any;
+    (async () => {
+      const res = await syncEnergy(0);
+      if (res?.energy != null) setEnergy(res.energy);
+      if (res?.full_at) setFullAt(res.full_at);
+    })();
+    timer = setInterval(() => setNowTick(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => { setEnergy(value); }, [value]);
+
+  const percent = Math.max(0, Math.min(100, Math.round((energy / 25) * 100)));
+  const iconName = energy >= 25 ? 'full' : 'none';
+
+  const fullLeft = (() => {
+    if (!fullAt) return '';
+    const ms = new Date(fullAt).getTime() - nowTick;
+    if (ms <= 0) return '';
+    const totalMin = Math.ceil(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h <= 0) return `${m} МИН`;
+    if (m === 0) return `${h} Ч`;
+    return `${h} Ч ${m} МИН`;
+  })();
+
   return (
     <>
-      <div className="text-2xl font-extrabold">Энергия</div>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-2xl font-extrabold">Энергия</div>
+        {energy < 25 && fullLeft && (
+          <div className="text-[color:var(--muted)] font-extrabold flex items-center gap-1">
+            <span>⚡</span>
+            <span>{fullLeft}</span>
+          </div>
+        )}
+      </div>
       <div className="mt-4 relative">
         {/* Трек (уменьшенная ширина, чтобы оставить больше воздуха справа) */}
         <div className="relative h-7 rounded-full bg-white/10 overflow-hidden" style={{ width: 'calc(100% - 20px)' }}>
@@ -423,7 +461,7 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
             className="absolute left-0 top-0 h-full"
             style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
           />
-          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{value}/25</div>
+          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{energy}/25</div>
         </div>
         {/* Иконка поверх, крупнее полосы, чтобы визуально "обрезать" край */}
         <img
