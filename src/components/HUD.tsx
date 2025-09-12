@@ -346,7 +346,7 @@ export default function HUD() {
           ? (anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).offsetWidth / 2)
           : undefined}
       >
-        <EnergySheetBody value={energy} onOpenSubscription={async () => { setOpen(null); location.assign('/subscription'); }} />
+        <EnergySheetBody value={energy} isOpen={open === 'energy'} onOpenSubscription={async () => { setOpen(null); location.assign('/subscription'); }} />
       </TopSheet>
 
       {/* Кошелёк удалён — используем страницу подписки */}
@@ -410,7 +410,7 @@ function StreakSheetBody() {
   );
 }
 
-function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenSubscription: () => void }) {
+function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number; onOpenSubscription: () => void; isOpen?: boolean }) {
   const [energy, setEnergy] = useState(value);
   const [fullAt, setFullAt] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState<number>(Date.now());
@@ -431,8 +431,18 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
     }, 60000);
     const onSynced = (e: any) => { if (e?.detail?.full_at !== undefined) setFullAt(e.detail.full_at); };
     window.addEventListener('exampli:energySynced', onSynced as EventListener);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); window.removeEventListener('exampli:energySynced', onSynced as EventListener); };
   }, []);
+
+  // Каждый раз при открытии шторки — форсим свежую синхронизацию
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      const res = await syncEnergy(0);
+      if (res?.energy != null) setEnergy(res.energy);
+      if (res?.full_at != null) setFullAt(res.full_at);
+    })();
+  }, [isOpen]);
 
   useEffect(() => { setEnergy(value); }, [value]);
 
