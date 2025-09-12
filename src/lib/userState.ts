@@ -174,16 +174,17 @@ export async function syncEnergy(delta: number = 0): Promise<{ energy: number; n
   try {
     const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (!tgId) return null;
-    const { data, error } = await (supabase as any).rpc('sync_energy', { tg_id: String(tgId), delta }).single?.() || {};
+    const { data, error } = await supabase.rpc('sync_energy', { p_tg_id: String(tgId), p_delta: delta });
     if (error) { try { console.warn('[syncEnergy] rpc error', error); } catch {} return null; }
-    const energy = Number((data as any)?.energy ?? NaN);
+    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+    const energy = Number(row?.energy ?? NaN);
     if (!Number.isNaN(energy)) {
       try {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, energy });
         window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
       } catch {}
-      return { energy, next_at: (data as any)?.next_at ?? null, full_at: (data as any)?.full_at ?? null };
+      return { energy, next_at: row?.next_at ?? null, full_at: row?.full_at ?? null };
     }
   } catch (e) { try { console.warn('[syncEnergy] failed', e); } catch {} }
   return null;
