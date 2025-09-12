@@ -144,6 +144,20 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       try {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextVal });
+        try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: nextVal } } as any)); } catch {}
+        // фоновое обновление в БД
+        (async () => {
+          try {
+            const cachedUser = cacheGet<any>(CACHE_KEYS.user);
+            const uid = cachedUser?.id;
+            if (uid) {
+              await supabase.from('users').update({ energy: nextVal }).eq('id', uid);
+            } else {
+              const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+              if (tgId) await supabase.from('users').update({ energy: nextVal }).eq('tg_id', String(tgId));
+            }
+          } catch {}
+        })();
       } catch {}
       // если 0 — выходим из урока сразу
       if (nextVal <= 0) {
@@ -188,7 +202,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
             {!loading && (
               <div className="px-5 pt-2 pb-2 border-b border-white/10">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-end gap-2">
                   <div className="progress flex-1 max-w-[70%]">
                     <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} />
                   </div>

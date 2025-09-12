@@ -167,16 +167,29 @@ export default function HUD() {
     };
 
     const onVisible = () => { if (!document.hidden) refresh(); };
+    const onStatsChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ energy?: number; coins?: number; streak?: number }>;
+      const ne = e.detail?.energy;
+      if (typeof ne === 'number') {
+        setEnergy(ne);
+        try {
+          const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+          cacheSet(CACHE_KEYS.stats, { ...cs, energy: ne });
+        } catch {}
+      }
+    };
 
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
     window.addEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('exampli:statsChanged', onStatsChanged as EventListener);
 
     return () => {
       alive = false;
       window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
       window.removeEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('exampli:statsChanged', onStatsChanged as EventListener);
       try { unsub(); } catch {}
     };
   }, [loadUserSnapshot]);
