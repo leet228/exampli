@@ -417,6 +417,12 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
 
   useEffect(() => {
     let timer: any;
+    // моментальный снэпшот из кэша (если есть) — до RPC
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      if (cs?.energy != null) setEnergy(Number(cs.energy));
+      if (cs?.energy_full_at != null) setFullAt(String(cs.energy_full_at));
+    } catch {}
     (async () => {
       const res = await syncEnergy(0);
       if (res?.energy != null) setEnergy(res.energy);
