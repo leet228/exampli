@@ -407,11 +407,22 @@ function StreakSheetBody() {
 
 function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenSubscription: () => void }) {
   const percent = Math.max(0, Math.min(100, Math.round((value / 25) * 100)));
+  const iconNum = value >= 25 ? 25 : 0;
   return (
     <>
-      <div className="progress"><div style={{ width: `${percent}%` }} /></div>
-      <div className="mt-2 text-sm text-muted">{value}/25</div>
-      <div className="grid gap-3 mt-5">
+      <div className="text-2xl font-extrabold">Энергия</div>
+      <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-2">
+        <div className="relative h-9 w-full rounded-full bg-white/10 overflow-hidden">
+          <div
+            className="absolute left-0 top-0 h-full"
+            style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{value}/25</div>
+        </div>
+        <img src={`/stickers/battery/${iconNum}.svg`} alt="" aria-hidden className="w-9 h-9" />
+      </div>
+
+      <div className="grid gap-3 mt-6">
         <button type="button" className="card text-left" onClick={onOpenSubscription}>
           <div className="font-semibold">Безлимит (демо)</div>
           <div className="text-sm text-muted">Нажми, чтобы открыть «Абонемент»</div>

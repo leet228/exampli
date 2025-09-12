@@ -375,25 +375,27 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               )}
             </div>
 
-            {/* Нижний фиксированный блок: фидбек + кнопка */}
-            <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
-              {/* Фидбек появится над кнопкой */}
-              {status !== 'idle' && (
-                <div className={`mx-4 mt-1 mb-1 rounded-2xl px-4 py-3 font-semibold flex items-center justify-between ${status === 'correct' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
-                  <div className="flex items-center gap-2">
-                    <span>{status === 'correct' ? '✓' : '✕'}</span>
-                    <span>{status === 'correct' ? 'Правильно!' : 'Неправильно'}</span>
+            {/* Нижний фиксированный блок: фидбек + кнопка (скрыт во время загрузки) */}
+            {!loading && (
+              <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
+                {/* Фидбек появится над кнопкой */}
+                {status !== 'idle' && (
+                  <div className={`mx-4 mt-1 mb-1 rounded-2xl px-4 py-3 font-semibold flex items-center justify-between ${status === 'correct' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                    <div className="flex items-center gap-2">
+                      <span>{status === 'correct' ? '✓' : '✕'}</span>
+                      <span>{status === 'correct' ? 'Правильно!' : 'Неправильно'}</span>
+                    </div>
                   </div>
-                </div>
-              )}
-              <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+10px)]">
-                {status === 'idle' ? (
-                  <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
-                ) : (
-                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={onContinue} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
                 )}
+                <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+10px)]">
+                  {status === 'idle' ? (
+                    <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
+                  ) : (
+                    <LessonButton text="ПРОДОЛЖИТЬ" onClick={onContinue} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
           {/* подтверждение выхода */}
           <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="">
