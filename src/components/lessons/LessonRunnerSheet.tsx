@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny, hapticSuccess, hapticError } from '../../lib/haptics';
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 
 type TaskRow = {
   id: number | string;
@@ -27,25 +28,43 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [cardBoxRect, setCardBoxRect] = useState<DOMRect | null>(null);
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [energy, setEnergy] = useState<number>(25);
   const task = tasks[idx];
 
   useEffect(() => {
     if (!open) return;
+    // инициируем энергию из кэша
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      if (cs && typeof cs.energy === 'number') setEnergy(Math.max(0, Math.min(25, Number(cs.energy))));
+    } catch {}
+    // загрузочный экран и предзагрузка заданий
+    setLoading(true);
     (async () => {
-      const { data } = await supabase
-        .from('tasks')
-        .select('id, lesson_id, prompt, task_text, answer_type, options, correct, order_index')
-        .eq('lesson_id', lessonId)
-        .order('order_index', { ascending: true })
-        .order('id', { ascending: true })
-        .limit(15);
-      const rows = (data as any[]) || [];
-      // страховка: отсортировать по order_index, затем id
-      rows.sort((a: any, b: any) => {
-        const ao = (a?.order_index ?? 0) as number; const bo = (b?.order_index ?? 0) as number;
-        if (ao !== bo) return ao - bo;
-        return Number(a?.id || 0) - Number(b?.id || 0);
-      });
+      // сначала попробуем из localStorage (кеш урока)
+      let rows: any[] | null = null;
+      try {
+        const raw = localStorage.getItem(`exampli:lesson_tasks:${lessonId}`);
+        if (raw) rows = JSON.parse(raw) as any[];
+      } catch {}
+      if (!rows || !Array.isArray(rows) || rows.length === 0) {
+        const { data } = await supabase
+          .from('tasks')
+          .select('id, lesson_id, prompt, task_text, answer_type, options, correct, order_index')
+          .eq('lesson_id', lessonId)
+          .order('order_index', { ascending: true })
+          .order('id', { ascending: true })
+          .limit(50);
+        rows = (data as any[]) || [];
+        // страховка: отсортировать по order_index, затем id
+        rows.sort((a: any, b: any) => {
+          const ao = (a?.order_index ?? 0) as number; const bo = (b?.order_index ?? 0) as number;
+          if (ao !== bo) return ao - bo;
+          return Number(a?.id || 0) - Number(b?.id || 0);
+        });
+        try { localStorage.setItem(`exampli:lesson_tasks:${lessonId}`, JSON.stringify(rows)); } catch {}
+      }
       setTasks(rows as any);
       setIdx(0);
       setProgress(0);
@@ -55,6 +74,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setSelectedCard(null);
       setCardBoxRect(null);
       setStatus('idle');
+      setLoading(false);
     })();
   }, [open, lessonId]);
 
@@ -116,6 +136,26 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
+  function onContinue(){
+    try { hapticTiny(); } catch {}
+    // мгновенно уменьшаем энергию и иконку
+    setEnergy(prev => {
+      const nextVal = Math.max(0, Math.min(25, (prev || 0) - 1));
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextVal });
+      } catch {}
+      // если 0 — выходим из урока сразу
+      if (nextVal <= 0) {
+        onClose();
+        return nextVal;
+      }
+      // иначе двигаем к следующему заданию
+      next();
+      return nextVal;
+    });
+  }
+
   // Telegram BackButton: показать и перехватить для подтверждения выхода
   useEffect(() => {
     if (!open) return;
@@ -145,18 +185,45 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* верхняя панель: только прогресс, возврат через Telegram BackButton */}
-            <div className="px-5 pt-2 pb-2 border-b border-white/10">
-              <div className="progress"><div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} /></div>
-            </div>
+            {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
+            {!loading && (
+              <div className="px-5 pt-2 pb-2 border-b border-white/10">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="progress flex-1 max-w-[70%]">
+                    <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-8 h-8" />
+                    <span className={[
+                      'tabular-nums font-bold text-base',
+                      energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
+                    ].join(' ')}>{energy}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="p-4 flex flex-col gap-4 pb-16 min-h-[78vh]">
-              {task ? (
+              {loading ? (
+                <div className="flex flex-col items-center justify-center w-full min-h-[70vh]">
+                  <img src="/lessons/loading_lesson.svg" alt="" className="w-full h-auto" />
+                  <div className="mt-6 w-8 h-8 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+                </div>
+              ) : task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
-                  <div className="card text-left">
-                    <div className="text-lg leading-relaxed">
-                      {partsWithMarkers(task.task_text).map((p, i) => {
+                  <div className="relative overflow-hidden">
+                    <AnimatePresence initial={false} mode="wait">
+                      <motion.div
+                        key={`task-${idx}`}
+                        initial={{ x: '20%', opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: '-20%', opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        className="card text-left"
+                      >
+                        <div className="text-lg leading-relaxed">
+                          {partsWithMarkers(task.task_text).map((p, i) => {
                         if (p.t === 'text') return <span key={i}>{p.v}</span>;
                         if (p.t === 'blank') {
                           return (status === 'idle')
@@ -224,8 +291,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           );
                         }
                         return null;
-                      })}
-                    </div>
+                        })}
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
 
                   {/* ответы */}
@@ -307,7 +376,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 {status === 'idle' ? (
                   <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                 ) : (
-                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={() => { try { hapticTiny(); } catch {} next(); }} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
+                  <LessonButton text="ПРОДОЛЖИТЬ" onClick={onContinue} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
                 )}
               </div>
             </div>

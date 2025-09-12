@@ -207,7 +207,20 @@ export default function Home() {
         anchorEl={anchorEl}
         onClose={() => setLessonPreviewOpen(false)}
         title={courseTitle || 'Урок'}
-        onStart={() => { setLessonPreviewOpen(false); setRunnerOpen(true); }}
+        onStart={() => {
+          // блокируем старт при 0 энергии
+          try {
+            const stats = cacheGet<any>(CACHE_KEYS.stats);
+            const energy = Number(stats?.energy ?? 0);
+            if (!energy || energy <= 0) {
+              // просто закрываем поповер, можно показать тост позже
+              setLessonPreviewOpen(false);
+              return;
+            }
+          } catch {}
+          setLessonPreviewOpen(false);
+          setRunnerOpen(true);
+        }}
       />
 
       {/* раннер */}
