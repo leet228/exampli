@@ -412,8 +412,8 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
     <>
       <div className="text-2xl font-extrabold">Энергия</div>
       <div className="mt-4 relative">
-        {/* Трек */}
-        <div className="relative h-7 w-full rounded-full bg-white/10 overflow-hidden">
+        {/* Трек (уменьшенная ширина, чтобы оставить больше воздуха справа) */}
+        <div className="relative h-7 rounded-full bg-white/10 overflow-hidden" style={{ width: 'calc(100% - 100px)' }}>
           <div
             className="absolute left-0 top-0 h-full"
             style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
@@ -425,7 +425,7 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
           src={`/stickers/battery/${iconName}.svg`}
           alt=""
           aria-hidden
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-16 h-16 pointer-events-none"
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-20 h-20 pointer-events-none"
           style={{ zIndex: 2 }}
         />
       </div>
