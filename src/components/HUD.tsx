@@ -422,7 +422,13 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
       if (res?.energy != null) setEnergy(res.energy);
       if (res?.full_at) setFullAt(res.full_at);
     })();
-    timer = setInterval(() => setNowTick(Date.now()), 60000);
+    timer = setInterval(async () => {
+      setNowTick(Date.now());
+      // раз в минуту подтягиваем с сервера, чтобы сразу отображать full_at после трат
+      const res = await syncEnergy(0);
+      if (res?.energy != null) setEnergy(res.energy);
+      if (res?.full_at != null) setFullAt(res.full_at);
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 

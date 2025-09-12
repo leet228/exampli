@@ -181,94 +181,20 @@ export async function syncEnergy(delta: number = 0): Promise<{ energy: number; n
     }
     if (!tgId) return null;
 
-    // Пытаемся вызвать RPC с разными наборами имён (логируем каждую попытку)
-    let data: any = null; let error: any = null; let row: any = null;
-    try {
-      ({ data, error } = await supabase.rpc('sync_energy', { p_tg_id: tgId, p_delta: delta }));
-      if (error) console.warn('[syncEnergy] RPC attempt A failed', { args: { p_tg_id: tgId, p_delta: delta }, error });
-    } catch (eA) { console.warn('[syncEnergy] RPC attempt A threw', eA); }
-    if (error || !data) {
-      try {
-        ({ data, error } = await supabase.rpc('sync_energy', { p_delta: delta, p_tg_id: tgId } as any));
-        if (error) console.warn('[syncEnergy] RPC attempt B failed', { args: { p_delta: delta, p_tg_id: tgId }, error });
-      } catch (eB) { console.warn('[syncEnergy] RPC attempt B threw', eB); }
-    }
-    if (error || !data) {
-      try {
-        ({ data, error } = await supabase.rpc('sync_energy', { tg_id: tgId, delta } as any));
-        if (error) console.warn('[syncEnergy] RPC attempt C failed', { args: { tg_id: tgId, delta }, error });
-      } catch (eC) { console.warn('[syncEnergy] RPC attempt C threw', eC); }
-    }
-    if (error || !data) {
-      try {
-        ({ data, error } = await supabase.rpc('sync_energy', { delta, tg_id: tgId } as any));
-        if (error) console.warn('[syncEnergy] RPC attempt D failed', { args: { delta, tg_id: tgId }, error });
-      } catch (eD) { console.warn('[syncEnergy] RPC attempt D threw', eD); }
-    }
-    if (error) { try { console.warn('[syncEnergy] rpc error (final)', error); } catch {} }
-    row = Array.isArray(data) ? (data[0] as any) : (data as any);
+    // Вызов RPC с именованными параметрами
+    const { data, error } = await supabase.rpc('sync_energy', { p_tg_id: tgId, p_delta: delta });
+    if (error) { console.warn('[syncEnergy] rpc error', error); return null; }
+    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
     const energy = Number(row?.energy ?? NaN);
-    if (!Number.isNaN(energy)) {
-      try {
-        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-        cacheSet(CACHE_KEYS.stats, { ...cs, energy });
-        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
-      } catch {}
-      return { energy, next_at: row?.next_at ?? null, full_at: row?.full_at ?? null };
-    }
-    // Fallback: выполнить логику на клиенте и записать напрямую, если RPC не вернул данных
+    if (Number.isNaN(energy)) return null;
+
     try {
-      // найдём пользователя по tg_id или по id из кэша boot
-      let userRow: any = null;
-      if (tgId) {
-        const q1 = await supabase
-          .from('users')
-          .select('id, energy, energy_spent_times')
-          .eq('tg_id', tgId)
-          .single();
-        userRow = q1.data;
-        if (!userRow) console.warn('[syncEnergy:fallback] user by tg_id not found', { tgId, q1 });
-      }
-      if (!userRow) {
-        try {
-          const cachedId = cacheGet<any>(CACHE_KEYS.user)?.id || null;
-          if (cachedId) {
-            const q2 = await supabase
-              .from('users')
-              .select('id, energy, energy_spent_times')
-              .eq('id', cachedId)
-              .single();
-            userRow = q2.data;
-            if (!userRow) console.warn('[syncEnergy:fallback] user by id not found', { cachedId, q2 });
-          }
-        } catch {}
-      }
-      if (userRow?.id) {
-        const nowIso = new Date().toISOString();
-        const spent: string[] = Array.isArray(userRow.energy_spent_times) ? userRow.energy_spent_times : [];
-        const cutoffMs = Date.now() - 3600_000;
-        const cleaned = spent.filter((ts: string) => {
-          const t = Date.parse(ts); return Number.isFinite(t) && t > cutoffMs;
-        });
-        let currentEnergy = 25 - cleaned.length;
-        let newSpent = cleaned.slice();
-        if (delta < 0 && currentEnergy > 0) {
-          newSpent.push(nowIso);
-        }
-        currentEnergy = 25 - newSpent.length;
-        const upd = await supabase.from('users').update({ energy: currentEnergy, energy_spent_times: newSpent }).eq('id', userRow.id).select('id');
-        console.debug('[syncEnergy:fallback] wrote users row', { id: userRow.id, upd });
-        try {
-          const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-          cacheSet(CACHE_KEYS.stats, { ...cs, energy: currentEnergy });
-          window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: currentEnergy } } as any));
-        } catch {}
-        return { energy: currentEnergy, next_at: null, full_at: null };
-      }
-      console.warn('[syncEnergy:fallback] cannot update — userRow missing');
-    } catch (e2) { try { console.warn('[syncEnergy:fallback] failed', e2); } catch {} }
-  } catch (e) { try { console.warn('[syncEnergy] failed', e); } catch {} }
-  return null;
+      const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+      cacheSet(CACHE_KEYS.stats, { ...cs, energy });
+      window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
+    } catch {}
+    return { energy, next_at: row?.next_at ?? null, full_at: row?.full_at ?? null };
+  } catch (e) { console.warn('[syncEnergy] failed', e); return null; }
 }
 
 export async function spendEnergy(): Promise<number | null> {
