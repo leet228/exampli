@@ -429,6 +429,8 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
       if (res?.energy != null) setEnergy(res.energy);
       if (res?.full_at != null) setFullAt(res.full_at);
     }, 60000);
+    const onSynced = (e: any) => { if (e?.detail?.full_at !== undefined) setFullAt(e.detail.full_at); };
+    window.addEventListener('exampli:energySynced', onSynced as EventListener);
     return () => clearInterval(timer);
   }, []);
 

@@ -190,8 +190,9 @@ export async function syncEnergy(delta: number = 0): Promise<{ energy: number; n
 
     try {
       const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-      cacheSet(CACHE_KEYS.stats, { ...cs, energy });
+      cacheSet(CACHE_KEYS.stats, { ...cs, energy, energy_full_at: row?.full_at ?? null });
       window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
+      window.dispatchEvent(new CustomEvent('exampli:energySynced', { detail: { energy, next_at: row?.next_at ?? null, full_at: row?.full_at ?? null } } as any));
     } catch {}
     return { energy, next_at: row?.next_at ?? null, full_at: row?.full_at ?? null };
   } catch (e) { console.warn('[syncEnergy] failed', e); return null; }
