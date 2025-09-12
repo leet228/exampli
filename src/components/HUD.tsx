@@ -425,7 +425,7 @@ function EnergySheetBody({ value, onOpenSubscription }: { value: number; onOpenS
           src={`/stickers/battery/${iconName}.svg`}
           alt=""
           aria-hidden
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-12 h-12 pointer-events-none"
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-16 h-16 pointer-events-none"
           style={{ zIndex: 2 }}
         />
       </div>
