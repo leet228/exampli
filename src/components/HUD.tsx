@@ -469,7 +469,7 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
 
   return (
     <>
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-baseline justify-start gap-3">
         <div className="text-2xl font-extrabold">Энергия</div>
         {energy < 25 && fullLeft && (
           <div className="text-[color:var(--muted)] font-extrabold flex items-center gap-1">
@@ -485,12 +485,7 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
             className="absolute left-0 top-0 h-full"
             style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
           />
-          <div className="absolute inset-0 flex items-center justify-center font-extrabold">
-            <span className="mr-3">{energy}/25</span>
-            {energy < 25 && fullLeft && (
-              <span className="text-[color:var(--muted)] text-xs font-bold">{fullLeft}</span>
-            )}
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{energy}/25</div>
         </div>
         {/* Иконка поверх, крупнее полосы, чтобы визуально "обрезать" край */}
         <img

@@ -167,10 +167,9 @@ export default function AppLayout() {
         </div>
       )}
 
-      {/* Прогрев HUD и BottomNav (невидимые, чтобы просчитались стили/иконки) */}
+      {/* Прогрев BottomNav (невидимый), HUD монтируется постоянно ниже */}
       {bootReady && !bootDone && (
         <div className="prewarm-mount" aria-hidden="true">
-          <HUD />
           <BottomNav />
         </div>
       )}
@@ -203,12 +202,10 @@ export default function AppLayout() {
         </>
       )}
 
-      {/* Верхний HUD (после загрузки). Скрываем вне домашней без размонтирования */}
-      {bootDone && (
-        <div style={{ display: pathname === '/' ? 'block' : 'none' }}>
-          <HUD />
-        </div>
-      )}
+      {/* Верхний HUD: всегда смонтирован (даже под сплэшем), скрывается вне домашней без размонтирования */}
+      <div style={{ display: pathname === '/' ? 'block' : 'none' }}>
+        <HUD />
+      </div>
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
         {bootReady && (
