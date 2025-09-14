@@ -469,10 +469,10 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
 
   return (
     <>
-      <div className="flex items-baseline justify-start gap-3">
+      <div className="flex items-baseline justify-between gap-3">
         <div className="text-2xl font-extrabold">Энергия</div>
         {energy < 25 && fullLeft && (
-          <div className="text-[color:var(--muted)] font-extrabold flex items-center gap-1">
+          <div className="text-[color:var(--muted)] font-extrabold flex items-center gap-1 mr-6">
             <span>⚡</span>
             <span>{fullLeft}</span>
           </div>
