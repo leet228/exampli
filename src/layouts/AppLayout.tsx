@@ -7,7 +7,7 @@ import Splash from '../components/Splash';
 import type { BootData } from '../lib/boot';
 import Onboarding from '../components/Onboarding';
 import AddCourseBlocking from '../components/panels/AddCourseBlocking';
-import { setUserSubjects } from '../lib/userState';
+import { setUserSubjects, syncEnergy } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
 import Profile from '../pages/Profile';
@@ -139,6 +139,12 @@ export default function AppLayout() {
       return () => cancelAnimationFrame(id);
     }
   }, [bootReady, prewarmACDone]);
+
+  // Предпрогреваем энергию/таймеры под сплэшем
+  useEffect(() => {
+    if (!bootReady) return;
+    (async () => { try { await syncEnergy(0); } catch {} })();
+  }, [bootReady]);
 
   // После bootReady один раз прогреваем FriendsPanel и AddFriendsPanel, затем размонтируем
   useEffect(() => {
