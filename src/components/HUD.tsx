@@ -430,11 +430,11 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
     })();
     timer = setInterval(async () => {
       setNowTick(Date.now());
-      // раз в минуту подтягиваем с сервера, чтобы сразу отображать full_at после трат
+      // каждые 15 секунд подтягиваем с сервера, чтобы сразу отображать full_at после трат
       const res = await syncEnergy(0);
       if (res?.energy != null) setEnergy(res.energy);
       if (res?.full_at != null) setFullAt(res.full_at);
-    }, 60000);
+    }, 15000);
     const onSynced = (e: any) => { if (e?.detail?.full_at !== undefined) setFullAt(e.detail.full_at); };
     window.addEventListener('exampli:energySynced', onSynced as EventListener);
     return () => { clearInterval(timer); window.removeEventListener('exampli:energySynced', onSynced as EventListener); };
