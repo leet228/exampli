@@ -168,8 +168,8 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 
 // ================== ЭНЕРГИЯ: ленивая регенерация через RPC ==================
 // Предполагается серверная функция public.sync_energy(delta int default 0)
-// Семантика: хранит очередь трат за последний час и восстанавливает по 1 ед/час
-// Возвращает текущую энергию и опционально next_at (время следующего восстановления)
+// Боевое поведение: хранит очередь трат и восстанавливает по 1 ед/час (устойчивый график)
+// Возвращает текущую энергию и опционально next_at/full_at
 export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null; full_at?: string | null } | null> {
   try {
     // Получаем tg_id из Telegram или из кэша boot.user

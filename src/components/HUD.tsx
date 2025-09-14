@@ -430,11 +430,11 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
     })();
     timer = setInterval(async () => {
       setNowTick(Date.now());
-      // каждые 15 секунд подтягиваем с сервера, чтобы сразу отображать full_at после трат
+      // раз в минуту подтягиваем с сервера, чтобы сразу отображать full_at после трат
       const res = await syncEnergy(0);
       if (res?.energy != null) setEnergy(res.energy);
       if (res?.full_at != null) setFullAt(res.full_at);
-    }, 15000);
+    }, 60000);
     const onSynced = (e: any) => { if (e?.detail?.full_at !== undefined) setFullAt(e.detail.full_at); };
     window.addEventListener('exampli:energySynced', onSynced as EventListener);
     return () => { clearInterval(timer); window.removeEventListener('exampli:energySynced', onSynced as EventListener); };
@@ -485,7 +485,12 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
             className="absolute left-0 top-0 h-full"
             style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
           />
-          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{energy}/25</div>
+          <div className="absolute inset-0 flex items-center justify-center font-extrabold">
+            <span className="mr-3">{energy}/25</span>
+            {energy < 25 && fullLeft && (
+              <span className="text-[color:var(--muted)] text-xs font-bold">{fullLeft}</span>
+            )}
+          </div>
         </div>
         {/* Иконка поверх, крупнее полосы, чтобы визуально "обрезать" край */}
         <img

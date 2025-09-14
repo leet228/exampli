@@ -25,8 +25,8 @@ import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 export default function AppLayout() {
   const { pathname } = useLocation();
 
-  // HUD только на «Дороге»
-  const showHUD = pathname === '/';
+  // HUD всегда смонтирован, но скрывается вне «Дороги»
+  const showHUD = true;
   // нижняя навигация на этих маршрутах
   const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
   const isAI = pathname === '/ai';
@@ -203,8 +203,12 @@ export default function AppLayout() {
         </>
       )}
 
-      {/* Верхний HUD (после загрузки) */}
-      {showHUD && bootDone && <HUD />}
+      {/* Верхний HUD (после загрузки). Скрываем вне домашней без размонтирования */}
+      {bootDone && (
+        <div style={{ display: pathname === '/' ? 'block' : 'none' }}>
+          <HUD />
+        </div>
+      )}
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
         {bootReady && (
