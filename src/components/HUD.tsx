@@ -472,9 +472,9 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-2xl font-extrabold">Энергия</div>
         {energy < 25 && fullLeft && (
-          <div className="text-[color:var(--muted)] font-extrabold flex items-center gap-1 mr-4">
-            <span>⚡</span>
-            <span>{fullLeft}</span>
+          <div className="font-extrabold flex items-center gap-1 mr-4" style={{ color: '#45424' }}>
+            <img src="/stickers/energy.svg" alt="" aria-hidden className="w-4 h-4 opacity-80" />
+            <span className="leading-none">{fullLeft}</span>
           </div>
         )}
       </div>
