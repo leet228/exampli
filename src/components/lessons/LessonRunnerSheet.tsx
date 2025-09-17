@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
-import { hapticSelect, hapticTiny, hapticSuccess, hapticError } from '../../lib/haptics';
+import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMilestone } from '../../lib/haptics';
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
@@ -28,6 +28,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [cardBoxRect, setCardBoxRect] = useState<DOMRect | null>(null);
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [streakLocal, setStreakLocal] = useState<number>(0);
+  const [streakFlash, setStreakFlash] = useState<{ v: number; key: number } | null>(null);
+  const streakKeyRef = useRef<number>(0);
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
@@ -135,6 +138,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
+    // streak: только внутри урока, считаем подряд правильные ответы
+    if (ok) {
+      setStreakLocal((prev) => {
+        const next = prev + 1;
+        // показать флэш над прогрессом
+        streakKeyRef.current += 1;
+        setStreakFlash({ v: next, key: streakKeyRef.current });
+        // 5/10 — спец-анимация и хаптик
+        if (next === 5 || next === 10) {
+          try { hapticStreakMilestone(); } catch {}
+        }
+        return next;
+      });
+    } else {
+      setStreakLocal(0);
+      setStreakFlash(null);
+    }
   }
 
   function next(){
@@ -147,6 +167,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setLettersSel([]);
       setSelectedCard(null);
       setStatus('idle');
+      // скрываем флэш стрика между заданиями
+      setStreakFlash(null);
     } else {
       onClose();
     }
@@ -206,10 +228,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           >
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
             {!loading && (
-              <div className="px-5 pt-2 pb-2 border-b border-white/10">
+              <div className="px-5 pt-2 pb-2 border-b border-white/10 relative">
                 <div className="flex items-center justify-end gap-2">
                   <div className="progress flex-1 max-w-[70%]">
-                    <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: '#3c73ff' }} />
+                    <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                   <div className="flex items-center gap-1">
                     <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-8 h-8" />
@@ -219,6 +241,46 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     ].join(' ')}>{energy}</span>
                   </div>
                 </div>
+                {/* streak flash */}
+                <AnimatePresence>
+                  {streakFlash && (
+                    <motion.div
+                      key={`streak-${streakFlash.key}`}
+                      initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
+                      animate={(() => {
+                        if (streakLocal >= 10 || streakLocal >= 5) {
+                          return {
+                            opacity: 1,
+                            y: -6,
+                            scale: 1.0,
+                            rotate: 0,
+                            transition: { duration: 0.18 },
+                          };
+                        }
+                        return { opacity: 1, y: -2, scale: 1.0, rotate: 0, transition: { duration: 0.22 } };
+                      })()}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="absolute left-5 top-0 font-extrabold"
+                      style={{ color: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }}
+                    >
+                      <motion.span
+                        initial={{ scale: 1, rotate: 0 }}
+                        animate={(() => {
+                          if (streakLocal === 5 || streakLocal === 10) {
+                            return {
+                              scale: [1, 1.35, 1],
+                              rotate: [0, -6, 0],
+                              transition: { times: [0, 0.5, 1], duration: 0.66, ease: 'easeInOut' },
+                            };
+                          }
+                          return { scale: 1, rotate: 0 };
+                        })()}
+                      >
+                        {streakFlash.v} ПОДРЯД
+                      </motion.span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
 
@@ -447,7 +509,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   {status === 'idle' ? (
                     <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                   ) : (
-                    <LessonButton text="ПРОДОЛЖИТЬ" onClick={onContinue} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
+                    <LessonButton text="ПРОДОЛЖИТЬ" onClick={() => { setStreakFlash(null); onContinue(); }} baseColor={status === 'correct' ? '#16a34a' : '#dc2626'} />
                   )}
                 </div>
               </div>

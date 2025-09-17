@@ -103,3 +103,22 @@ export function hapticError() {
     if ('vibrate' in navigator) (navigator as any).vibrate([40]);
   } catch {}
 }
+
+// Усиленный «двойной» хаптик для стриков 5/10 подряд
+export function hapticStreakMilestone() {
+  try {
+    if (typeof window === 'undefined') return;
+    const tg = (window as any)?.Telegram?.WebApp?.HapticFeedback;
+    if (tg?.impactOccurred) {
+      tg.impactOccurred('heavy');
+      setTimeout(() => { try { tg.impactOccurred('heavy'); } catch {} }, 140);
+      return;
+    }
+    if (tg?.selectionChanged) {
+      tg.selectionChanged();
+      setTimeout(() => { try { tg.selectionChanged(); } catch {} }, 140);
+      return;
+    }
+    if ('vibrate' in navigator) (navigator as any).vibrate([0, 70, 60, 70]);
+  } catch {}
+}
