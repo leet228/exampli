@@ -460,7 +460,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
               <button
                 type="button"
-                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); onClose(); }}
+                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); setTimeout(() => { try { onClose(); } catch {} }, 220); }}
                 className="w-full py-2 text-red-400 font-extrabold"
                 style={{ background: 'transparent' }}
               >

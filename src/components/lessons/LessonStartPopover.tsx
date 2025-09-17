@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LessonButton from './LessonButton';
+import { hapticSelect } from '../../lib/haptics';
 
 type Props = {
   open: boolean;
@@ -75,7 +76,7 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
                   <div className="text-base opacity-90 mt-1">Лекция 1 из 4</div>
                 </div>
                 <div className="px-5 pb-5">
-                  <LessonButton text="НАЧАТЬ +20 XP" onClick={onStart} baseColor="#ffffff" textColor="#3c73ff" shadowColorOverride="rgba(0,0,0,0.12)" />
+                  <LessonButton text="НАЧАТЬ +20 XP" onClick={() => { try { hapticSelect(); } catch {} onStart(); }} baseColor="#ffffff" textColor="#3c73ff" shadowColorOverride="rgba(0,0,0,0.12)" />
                 </div>
               </div>
             </div>
