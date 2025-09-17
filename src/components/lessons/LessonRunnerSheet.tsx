@@ -454,10 +454,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             )}
           </motion.div>
           {/* подтверждение выхода */}
-          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="">
+          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop>
             <div className="grid gap-4 text-center">
               <div className="text-lg font-semibold">Если выйдешь, потеряешь XP этой лекции</div>
-              <button type="button" className="btn w-full" onClick={() => setConfirmExit(false)}>ПРОДОЛЖИТЬ</button>
+              <PressCta onClick={() => setConfirmExit(false)} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
               <button
                 type="button"
                 onClick={() => { setConfirmExit(false); onClose(); }}
@@ -534,6 +534,45 @@ function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: (
     </motion.button>
   );
 }
+// CTA с «нижней полоской» через box-shadow, мгновенная реакция
+function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6 }: { text: string; onClick?: () => void; baseColor?: string; shadowHeight?: number }) {
+  const [pressed, setPressed] = useState(false);
+  function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const h = hex.replace('#', '').trim();
+    if (h.length === 3) {
+      const r = parseInt(h[0] + h[0], 16), g = parseInt(h[1] + h[1], 16), b = parseInt(h[2] + h[2], 16);
+      return { r, g, b };
+    }
+    if (h.length === 6) {
+      const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+      return { r, g, b };
+    }
+    return null;
+  }
+  function darken(hex: string, amount = 18): string {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(rgb.r)}, ${f(rgb.g)}, ${f(rgb.b)})`;
+  }
+  const shadowColor = darken(baseColor, 18);
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={onClick}
+      className="w-full rounded-2xl px-5 py-4 font-extrabold"
+      animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${shadowColor}` : `0px ${shadowHeight}px 0px ${shadowColor}` }}
+      transition={{ duration: 0 }}
+      style={{ background: baseColor, color: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}
+    >
+      {text}
+    </motion.button>
+  );
+}
+
 
 function LetterBox({ value, editable, lettersSel, options, onRemove, status }: { value: string; editable: boolean; lettersSel: number[]; options: string[]; onRemove: (pos: number) => void; status: 'idle' | 'correct' | 'wrong' }) {
   const letters = editable ? lettersSel.map(i => options[i] ?? '') : (value || '').split('');
