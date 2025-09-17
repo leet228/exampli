@@ -105,6 +105,21 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return false;
   }, [task, choice, text, lettersSel, selectedCard]);
 
+  // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
+  function computeRows(count: number): number[] {
+    const n = Math.max(0, count | 0);
+    if (n <= 4) return [n];                 // 1 ряд, если <=4
+    if (n <= 8) {                            // 2 ряда ~поровну, 5 → 3+2, 6 → 3+3, 7 → 4+3, 8 → 4+4
+      const a = Math.ceil(n / 2);
+      const b = n - a;
+      return [a, b];
+    }
+    // 3 ряда как можно ровнее: 9→3+3+3, 10→4+3+3, 11→4+4+3, 12→4+4+4, ...
+    const base = Math.floor(n / 3);
+    const rem = n % 3; // 0..2
+    return [base + (rem > 0 ? 1 : 0), base + (rem > 1 ? 1 : 0), base];
+  }
+
   function check(){
     if (!task) return;
     let user = '';
@@ -316,36 +331,83 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {task.answer_type === 'word_letters' && (
-                    <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(48px,1fr))' }}>
-                      {((task.options || []) as string[]).map((ch, i) => {
-                        const used = lettersSel.includes(i);
-                        if (used) return null;
-                        return (
-                          <PressLetter
-                            key={`${ch}-${i}`}
-                            letter={ch}
-                            onClick={() => { setLettersSel(prev => [...prev, i]); try { hapticSelect(); } catch {} }}
-                            disabled={status !== 'idle'}
-                          />
-                        );
-                      })}
+                    <div className="grid gap-2 mt-auto mb-10">
+                      {(() => {
+                        const opts = ((task.options || []) as string[]) || [];
+                        const layout = computeRows(opts.length);
+                        let start = 0;
+                        return layout.map((cols, rowIdx) => {
+                          const slice = opts.slice(start, start + cols);
+                          const row = (
+                            <div key={`wl-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(56px, 1fr))` }}>
+                              {slice.map((ch, localIdx) => {
+                                const i = start + localIdx;
+                                const used = lettersSel.includes(i);
+                                if (used) {
+                                  return (
+                                    <div
+                                      key={`wl-imprint-${i}`}
+                                      className="rounded-xl border-2 border-dashed border-white/20 h-14"
+                                      aria-hidden
+                                    />
+                                  );
+                                }
+                                return (
+                                  <PressLetter
+                                    key={`${ch}-${i}`}
+                                    letter={ch}
+                                    onClick={() => { setLettersSel(prev => [...prev, i]); try { hapticSelect(); } catch {} }}
+                                    disabled={status !== 'idle'}
+                                  />
+                                );
+                              })}
+                            </div>
+                          );
+                          start += cols;
+                          return row;
+                        });
+                      })()}
                     </div>
                   )}
 
                   {task.answer_type === 'cards' && (
-                    <div className="grid gap-2 mt-auto mb-10" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(96px,1fr))' }}>
-                      {((task.options || []) as string[]).map((txt, i) => {
-                        if (selectedCard === i) return null;
-                        return (
-                          <DraggableCard
-                            key={`${txt}-${i}`}
-                            text={txt}
-                            disabled={status !== 'idle'}
-                            onDropToBox={() => { if (status === 'idle') { try { hapticSelect(); } catch {} setSelectedCard(i); } }}
-                            getBoxRect={() => cardBoxRect}
-                          />
-                        );
-                      })}
+                    <div className="grid gap-2 mt-auto mb-10">
+                      {(() => {
+                        const opts = ((task.options || []) as string[]) || [];
+                        const layout = computeRows(opts.length);
+                        let start = 0;
+                        return layout.map((cols, rowIdx) => {
+                          const slice = opts.slice(start, start + cols);
+                          const row = (
+                            <div key={`cd-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(96px, 1fr))` }}>
+                              {slice.map((txt, localIdx) => {
+                                const i = start + localIdx;
+                                if (selectedCard === i) {
+                                  return (
+                                    <div
+                                      key={`cd-imprint-${i}`}
+                                      className="rounded-xl border-2 border-dashed border-white/20"
+                                      style={{ minHeight: 40 }}
+                                      aria-hidden
+                                    />
+                                  );
+                                }
+                                return (
+                                  <DraggableCard
+                                    key={`${txt}-${i}`}
+                                    text={txt}
+                                    disabled={status !== 'idle'}
+                                    onDropToBox={() => { if (status === 'idle') { try { hapticSelect(); } catch {} setSelectedCard(i); } }}
+                                    getBoxRect={() => cardBoxRect}
+                                  />
+                                );
+                              })}
+                            </div>
+                          );
+                          start += cols;
+                          return row;
+                        });
+                      })()}
                     </div>
                   )}
 
@@ -459,12 +521,12 @@ function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: (
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => { if (!disabled) onClick(); }}
-      className={`rounded-xl border font-extrabold grid place-items-center w-12 h-12 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+      className={`rounded-xl border font-extrabold grid place-items-center h-14 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
       transition={{ duration: 0 }}
       style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.10)' }}
     >
-      {letter}
+      <span className="text-base">{letter}</span>
     </motion.button>
   );
 }
@@ -511,7 +573,7 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
 function InputBox({ value, editable, onChange, status }: { value: string; editable: boolean; onChange: (v: string) => void; status: 'idle' | 'correct' | 'wrong' }) {
   const ref = useRef<HTMLInputElement | null>(null);
   const measureRef = useRef<HTMLSpanElement | null>(null);
-  const [boxWidth, setBoxWidth] = useState<number>(72);
+  const [boxWidth, setBoxWidth] = useState<number>(64);
   const isResolved = status !== 'idle';
   const containerClass = isResolved
     ? (status === 'correct'
@@ -532,28 +594,28 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
     }
   };
   useEffect(() => {
-    // ширина = max(72px, текст + внутренние отступы ~16px)
-    const w = Math.max(72, Math.round(((measureRef.current?.offsetWidth as number) || 0) + 16));
+    // ширина = max(64px, текст + внутренние отступы ~12px)
+    const w = Math.max(64, Math.round(((measureRef.current?.offsetWidth as number) || 0) + 12));
     setBoxWidth(w);
   }, [value]);
   return (
-    <span className={`relative inline-flex items-center gap-1 align-middle rounded-xl border px-2 py-1 ${containerClass}`} style={{ width: boxWidth, minWidth: 72, minHeight: 42 }}>
+    <span className={`relative inline-flex items-center gap-1 align-middle rounded-xl border px-1.5 py-0.5 ${containerClass}`} style={{ width: boxWidth, minWidth: 64, minHeight: 36 }}>
       {/* невидимый измеритель ширины */}
-      <span ref={measureRef} className="invisible absolute -z-10 whitespace-pre font-extrabold px-1">{value || ' '}</span>
+      <span ref={measureRef} className="invisible absolute -z-10 whitespace-pre font-extrabold px-0.5 text-sm">{value || ' '}</span>
       {editable ? (
         <input
           ref={ref}
           value={value}
           onChange={onInput}
           placeholder=""
-          className="bg-transparent outline-none border-0 px-2 py-1 font-extrabold w-full caret-transparent text-center"
+          className="bg-transparent outline-none border-0 px-1.5 py-0.5 font-extrabold w-full caret-transparent text-center text-sm"
           inputMode="text"
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
         />
       ) : (
-        <span className={`px-2 py-1 font-extrabold ${isResolved ? '' : 'text-white'}`}>{value}</span>
+        <span className={`px-1.5 py-0.5 font-extrabold text-sm ${isResolved ? '' : 'text-white'}`}>{value}</span>
       )}
     </span>
   );
@@ -589,6 +651,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const [previewScale, setPreviewScale] = useState<number>(0.9);
 
   useEffect(() => {
     if (!dragging) return;
@@ -624,6 +687,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
     const rect = cardRef.current?.getBoundingClientRect();
     origin.current = { x: (e.clientX - (rect?.left || 0)), y: (e.clientY - (rect?.top || 0)) };
     setDragging(true);
+    setPreviewScale(0.9);
   };
 
   return (
@@ -641,7 +705,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
       {dragging && pos && (
         <div
           className="fixed pointer-events-none rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 text-sm font-semibold"
-          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 9999, width: 120, minHeight: 40 }}
+          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px) scale(${previewScale})`, zIndex: 9999, width: 120, minHeight: 40 }}
         >
           {text}
         </div>
