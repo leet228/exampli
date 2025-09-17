@@ -204,6 +204,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       // скрываем флэш стрика между заданиями
       setStreakFlash(null);
     } else {
+      // завершение урока — сбрасываем локальный стрик
+      setStreakLocal(0);
+      setStreakFlash(null);
       onClose();
     }
   }
@@ -222,6 +225,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       } catch {}
       // если 0 — выходим из урока сразу
       if (nextVal <= 0) {
+        // вылет из урока по нехватке энергии — сбросить стрик
+        setStreakLocal(0);
+        setStreakFlash(null);
         onClose();
         return nextVal;
       }
@@ -533,7 +539,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
               <button
                 type="button"
-                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); setTimeout(() => { try { onClose(); } catch {} }, 220); }}
+                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); setStreakLocal(0); setStreakFlash(null); setTimeout(() => { try { onClose(); } catch {} }, 220); }}
                 className="w-full py-2 text-red-400 font-extrabold"
                 style={{ background: 'transparent' }}
               >
