@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMilestone } from '../../lib/haptics';
 import BottomSheet from '../sheets/BottomSheet';
@@ -31,6 +31,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [streakLocal, setStreakLocal] = useState<number>(0);
   const [streakFlash, setStreakFlash] = useState<{ v: number; key: number } | null>(null);
   const streakKeyRef = useRef<number>(0);
+  const streakCtrl = useAnimation();
   const headerRef = useRef<HTMLDivElement | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
   const [streakLeft, setStreakLeft] = useState<number>(20);
@@ -171,6 +172,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         if (next >= 2) {
           streakKeyRef.current += 1;
           setStreakFlash({ v: next, key: streakKeyRef.current });
+          // Запускаем спец-анимацию через контроллер, чтобы она имела приоритет
+          if (next === 5 || next === 10) {
+            void streakCtrl.start({ scale: [1, 2.2, 0.9, 1], rotate: [0, -22, 14, 0], y: [-2, -16, -8, -2] }, { type: 'tween', ease: 'easeInOut', duration: 1.05 });
+          } else {
+            void streakCtrl.start({ scale: 1, rotate: 0, y: 0 }, { duration: 0.2 });
+          }
         }
         // 5/10 — спец-анимация и хаптик
         if (next === 5 || next === 10) {
@@ -279,20 +286,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       className="absolute top-0 font-extrabold text-xs"
                       style={{ color: ((streakFlash?.v ?? 0) >= 10 ? '#123ba3' : ((streakFlash?.v ?? 0) >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
                     >
-                      <motion.span
-                        initial={{ scale: 1, rotate: 0 }}
-                        animate={(() => {
-                          if ((streakFlash?.v === 5) || (streakFlash?.v === 10)) {
-                            return {
-                              scale: [1, 2.2, 0.9, 1],
-                              rotate: [0, -22, 14, 0],
-                              y: [-2, -16, -8, -2],
-                              transition: { times: [0, 0.42, 0.78, 1], duration: 1.05, ease: 'easeInOut' },
-                            };
-                          }
-                          return { scale: 1, rotate: 0, y: 0 };
-                        })()}
-                      >
+                      <motion.span initial={{ scale: 1, rotate: 0, y: 0 }} animate={streakCtrl}>
                         {streakFlash.v} ПОДРЯД
                       </motion.span>
                     </motion.div>
