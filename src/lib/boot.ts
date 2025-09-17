@@ -477,6 +477,22 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       preloadImage('/stickers/dead_fire.svg'),
       preloadImage('/stickers/coin_cat.svg'),
       preloadImage('/stickers/lightning.svg'),
+      // предзагрузка загрузочных svg для курсов, чтобы спец-сплэш показывался мгновенно
+      preloadImage('/loads/biology_load.svg'),
+      preloadImage('/loads/chemistry_load.svg'),
+      preloadImage('/loads/english_load.svg'),
+      preloadImage('/loads/french_load.svg'),
+      preloadImage('/loads/geography_load.svg'),
+      preloadImage('/loads/german_load.svg'),
+      preloadImage('/loads/history_load.svg'),
+      preloadImage('/loads/it_load.svg'),
+      preloadImage('/loads/literature_load.svg'),
+      preloadImage('/loads/math_basic_load.svg'),
+      preloadImage('/loads/math_profile_load.svg'),
+      preloadImage('/loads/physics_load.svg'),
+      preloadImage('/loads/rus_load.svg'),
+      preloadImage('/loads/social_science_load.svg'),
+      preloadImage('/loads/spanish_load.svg'),
     ]);
   } catch {}
   // финал boot
