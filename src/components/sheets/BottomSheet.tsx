@@ -42,7 +42,7 @@ export default function BottomSheet({ open, onClose, title, children, minHeightV
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ zIndex: 100, background: dimBackdrop ? 'rgba(0,0,0,0.45)' : undefined, backdropFilter: dimBackdrop ? 'blur(6px)' : undefined }}
+            style={{ zIndex: 100, background: dimBackdrop ? 'rgba(0,0,0,0.45)' : undefined, backdropFilter: dimBackdrop ? 'none' : undefined }}
           />
           <motion.div
             className="sheet-panel"

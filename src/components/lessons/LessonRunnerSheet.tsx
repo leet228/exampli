@@ -457,10 +457,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop>
             <div className="grid gap-4 text-center">
               <div className="text-lg font-semibold">Если выйдешь, потеряешь XP этой лекции</div>
-              <PressCta onClick={() => setConfirmExit(false)} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
+              <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
               <button
                 type="button"
-                onClick={() => { setConfirmExit(false); onClose(); }}
+                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); onClose(); }}
                 className="w-full py-2 text-red-400 font-extrabold"
                 style={{ background: 'transparent' }}
               >
