@@ -88,17 +88,24 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   useEffect(() => {
     const updatePos = () => {
       try {
-        const h = headerRef.current; const p = progressRef.current;
+        const h = headerRef.current as HTMLElement | null;
+        const p = progressRef.current as HTMLElement | null;
         if (!h || !p) return;
-        const hb = h.getBoundingClientRect();
-        const pb = p.getBoundingClientRect();
-        setStreakLeft(Math.max(0, Math.round(pb.left - hb.left)));
+        // сначала пробуем offsetLeft относительно ближайшего offsetParent
+        let left = p.offsetLeft;
+        // фолбэк через bounding rect, если offsetParent другой
+        if (!Number.isFinite(left) || left === 0) {
+          const hb = h.getBoundingClientRect();
+          const pb = p.getBoundingClientRect();
+          left = pb.left - hb.left;
+        }
+        setStreakLeft(Math.max(0, Math.round(left)));
       } catch {}
     };
-    updatePos();
+    const raf = requestAnimationFrame(updatePos);
     window.addEventListener('resize', updatePos);
-    return () => window.removeEventListener('resize', updatePos);
-  }, []);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updatePos); };
+  }, [open, loading, idx, status, streakFlash]);
 
   function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }>{
     const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }> = [];
@@ -269,18 +276,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
                       animate={{ opacity: 1, y: -2, scale: 1.0, rotate: 0 }}
                       exit={{ opacity: 0, y: -8 }}
-                      className="absolute top-0 font-extrabold text-sm"
-                      style={{ color: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
+                      className="absolute top-0 font-extrabold text-xs"
+                      style={{ color: ((streakFlash?.v ?? 0) >= 10 ? '#123ba3' : ((streakFlash?.v ?? 0) >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
                     >
                       <motion.span
                         initial={{ scale: 1, rotate: 0 }}
                         animate={(() => {
-                          if (streakLocal === 5 || streakLocal === 10) {
+                          if ((streakFlash?.v === 5) || (streakFlash?.v === 10)) {
                             return {
-                              scale: [1, 1.75, 0.9, 1],
-                              rotate: [0, -18, 12, 0],
-                              y: [-2, -12, -6, -2],
-                              transition: { times: [0, 0.4, 0.75, 1], duration: 0.9, ease: 'easeInOut' },
+                              scale: [1, 2.2, 0.9, 1],
+                              rotate: [0, -22, 14, 0],
+                              y: [-2, -16, -8, -2],
+                              transition: { times: [0, 0.42, 0.78, 1], duration: 1.05, ease: 'easeInOut' },
                             };
                           }
                           return { scale: 1, rotate: 0, y: 0 };
