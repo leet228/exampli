@@ -7,6 +7,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
   const [boot, setBoot] = useState<BootData | null>(null);
   const [done, setDone] = useState(false);
   const [phase, setPhase] = useState<string>('Подготовка…');
+  const [override, setOverride] = useState<{ src: string; bg: string; title: string } | null>(null);
 
   // Блокируем прокрутку и жесты, пока сплэш на экране
   useEffect(() => {
@@ -48,6 +49,37 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
 
   useEffect(() => {
     let live = true;
+    // проверим, не попросили ли показать спец-сплэш курса
+    try {
+      const over = (window as any).__exampliLoadingSubject as { code?: string; title?: string } | undefined;
+      if (over?.code) {
+        const codeRaw = String(over.code).toLowerCase();
+        const code = codeRaw.replace(/^(oge_|ege_)/, '');
+        const map: Record<string, string> = {
+          biology: '#a0a1a0',
+          chemistry: '#625b44',
+          english: '#a8a7a9',
+          french: '#978c72',
+          geography: '#babab9',
+          german: '#bbb49d',
+          history: '#dbc8a5',
+          it: '#b8b6b7',
+          literature: '#b4b5b5',
+          math_basic: '#d2c4a0',
+          math_profile: '#7e7651',
+          physics: '#c2b89c',
+          rus: '#60593e',
+          social_science: '#c3b699',
+          spanish: '#dacaac',
+        };
+        // код курсов у нас как в /subjects/<code>.svg, для загрузчика — <code>_load.svg с тем же кодом
+        const src = `/loads/${code}_load.svg`;
+        const bg = map[code] || '#004aad';
+        setOverride({ src, bg, title: over.title || 'КУРС' });
+        // очистим флаг, чтобы не оставался на следующий раз
+        try { (window as any).__exampliLoadingSubject = undefined; } catch {}
+      }
+    } catch {}
     const runBoot = async () => {
       const data = await bootPreload(undefined, (label) => setPhase(label || 'Загрузка…'));
       if (!live) return;
@@ -93,21 +125,30 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
     <AnimatePresence>
       {!done && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#004aad] touch-none select-none"
+          className="fixed inset-0 z-[60] flex items-center justify-center touch-none select-none"
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          // перестраховка: не даём wheel/touchmove чему-либо «пробиться» вниз
+          style={{ background: override?.bg || '#004aad' }}
           onWheel={(e) => e.preventDefault()}
           onTouchMove={(e) => e.preventDefault()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <img
-            src="/kursik.svg"
-            alt="Загрузка"
-            className="w-full h-full object-contain"
-            draggable={false}
-          />
+          {override ? (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <img src={override.src} alt="loading" className="w-[72%] max-w-[560px] h-auto object-contain" draggable={false} />
+              <div className="mt-4 font-extrabold text-white text-lg">
+                {`"${override.title}" грузится...`}
+              </div>
+            </div>
+          ) : (
+            <img
+              src="/kursik.svg"
+              alt="Загрузка"
+              className="w-full h-full object-contain"
+              draggable={false}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>

@@ -133,6 +133,8 @@ export default function CoursesPanel(props: Props) {
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 hapticTiny();
+                try { (window as any).__exampliLoadingSubject = { code: s.code, title: s.title }; } catch {}
+                try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
                 setActiveCode(s.code);
                 writeActiveToStorage(s.code);
                 if (typeof onPicked === 'function') onPicked(s);
