@@ -479,21 +479,6 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       preloadImage('/stickers/lightning.svg'),
     ]);
   } catch {}
-  // предзагрузка загрузочных svg для курсов — в фоне, НЕ блокируя boot
-  try {
-    // Стратегия: лениво подгружаем порциями, чтобы не бить по сети при первом кадре
-    const batches: string[][] = [
-      ['/loads/biology_load.svg', '/loads/chemistry_load.svg', '/loads/english_load.svg', '/loads/french_load.svg'],
-      ['/loads/geography_load.svg', '/loads/german_load.svg', '/loads/history_load.svg', '/loads/it_load.svg'],
-      ['/loads/literature_load.svg', '/loads/math_basic_load.svg', '/loads/math_profile_load.svg', '/loads/physics_load.svg'],
-      ['/loads/rus_load.svg', '/loads/social_science_load.svg', '/loads/spanish_load.svg'],
-    ];
-    let delay = 0;
-    batches.forEach((group) => {
-      setTimeout(() => { try { group.forEach((src) => { void preloadImage(src); }); } catch {} }, delay);
-      delay += 350; // небольшие интервалы между порциями
-    });
-  } catch {}
   // финал boot
   report(100);
 
