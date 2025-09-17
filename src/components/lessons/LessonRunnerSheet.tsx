@@ -454,7 +454,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             )}
           </motion.div>
           {/* подтверждение выхода */}
-          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop>
+          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop panelBg={'var(--bg)'}>
             <div className="grid gap-4 text-center">
               <div className="text-lg font-semibold">Если выйдешь, потеряешь XP этой лекции</div>
               <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />

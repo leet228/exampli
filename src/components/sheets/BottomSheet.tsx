@@ -11,9 +11,10 @@ type BottomSheetProps = {
   children: React.ReactNode;
   minHeightVh?: number; // минимальная высота шторки в процентах экрана (например, 65)
   dimBackdrop?: boolean; // затемнить фон контента вместо сплошного фона
+  panelBg?: string; // цвет фона панели (перекрывает CSS)
 };
 
-export default function BottomSheet({ open, onClose, title, children, minHeightVh, dimBackdrop }: BottomSheetProps) {
+export default function BottomSheet({ open, onClose, title, children, minHeightVh, dimBackdrop, panelBg }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   // Не трогаем Telegram BackButton здесь, чтобы не гасить его у родительской полноэкранной панели
 
@@ -42,7 +43,7 @@ export default function BottomSheet({ open, onClose, title, children, minHeightV
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ zIndex: 100, background: dimBackdrop ? 'rgba(0,0,0,0.45)' : undefined, backdropFilter: dimBackdrop ? 'none' : undefined }}
+            style={{ zIndex: 100, background: dimBackdrop ? 'rgba(0,0,0,0.6)' : undefined, backdropFilter: dimBackdrop ? 'none' : undefined }}
           />
           <motion.div
             className="sheet-panel"
@@ -59,7 +60,7 @@ export default function BottomSheet({ open, onClose, title, children, minHeightV
             onDragEnd={(_, info) => {
               if (info.offset.y > 80 || info.velocity.y > 600) { hapticTiny(); onClose(); }
             }}
-            style={{ zIndex: 101, minHeight: typeof minHeightVh === 'number' ? `${Math.max(0, Math.min(100, minHeightVh))}dvh` : undefined }}
+            style={{ zIndex: 101, minHeight: typeof minHeightVh === 'number' ? `${Math.max(0, Math.min(100, minHeightVh))}dvh` : undefined, background: panelBg || undefined }}
           >
             {title ? (
               <div className="px-5 pt-3 pb-2 border-b border-white/10">
