@@ -31,6 +31,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [streakLocal, setStreakLocal] = useState<number>(0);
   const [streakFlash, setStreakFlash] = useState<{ v: number; key: number } | null>(null);
   const streakKeyRef = useRef<number>(0);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+  const [streakLeft, setStreakLeft] = useState<number>(20);
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
@@ -81,6 +84,21 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setLoading(false);
     })();
   }, [open, lessonId]);
+
+  useEffect(() => {
+    const updatePos = () => {
+      try {
+        const h = headerRef.current; const p = progressRef.current;
+        if (!h || !p) return;
+        const hb = h.getBoundingClientRect();
+        const pb = p.getBoundingClientRect();
+        setStreakLeft(Math.max(0, Math.round(pb.left - hb.left)));
+      } catch {}
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    return () => window.removeEventListener('resize', updatePos);
+  }, []);
 
   function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }>{
     const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }> = [];
@@ -142,9 +160,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (ok) {
       setStreakLocal((prev) => {
         const next = prev + 1;
-        // показать флэш над прогрессом
-        streakKeyRef.current += 1;
-        setStreakFlash({ v: next, key: streakKeyRef.current });
+        // показать флэш над прогрессом, начиная со 2 подряд
+        if (next >= 2) {
+          streakKeyRef.current += 1;
+          setStreakFlash({ v: next, key: streakKeyRef.current });
+        }
         // 5/10 — спец-анимация и хаптик
         if (next === 5 || next === 10) {
           try { hapticStreakMilestone(); } catch {}
@@ -228,9 +248,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           >
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
             {!loading && (
-              <div className="px-5 pt-2 pb-2 border-b border-white/10 relative">
+              <div className="px-5 pt-2 pb-2 border-b border-white/10 relative" ref={headerRef}>
                 <div className="flex items-center justify-end gap-2">
-                  <div className="progress flex-1 max-w-[70%]">
+                  <div className="progress flex-1 max-w-[70%]" ref={progressRef}>
                     <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                   <div className="flex items-center gap-1">
@@ -247,33 +267,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     <motion.div
                       key={`streak-${streakFlash.key}`}
                       initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
-                      animate={(() => {
-                        if (streakLocal >= 10 || streakLocal >= 5) {
-                          return {
-                            opacity: 1,
-                            y: -6,
-                            scale: 1.0,
-                            rotate: 0,
-                            transition: { duration: 0.18 },
-                          };
-                        }
-                        return { opacity: 1, y: -2, scale: 1.0, rotate: 0, transition: { duration: 0.22 } };
-                      })()}
+                      animate={{ opacity: 1, y: -2, scale: 1.0, rotate: 0 }}
                       exit={{ opacity: 0, y: -8 }}
-                      className="absolute left-5 top-0 font-extrabold"
-                      style={{ color: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }}
+                      className="absolute top-0 font-extrabold text-sm"
+                      style={{ color: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
                     >
                       <motion.span
                         initial={{ scale: 1, rotate: 0 }}
                         animate={(() => {
                           if (streakLocal === 5 || streakLocal === 10) {
                             return {
-                              scale: [1, 1.35, 1],
-                              rotate: [0, -6, 0],
-                              transition: { times: [0, 0.5, 1], duration: 0.66, ease: 'easeInOut' },
+                              scale: [1, 1.75, 0.9, 1],
+                              rotate: [0, -18, 12, 0],
+                              y: [-2, -12, -6, -2],
+                              transition: { times: [0, 0.4, 0.75, 1], duration: 0.9, ease: 'easeInOut' },
                             };
                           }
-                          return { scale: 1, rotate: 0 };
+                          return { scale: 1, rotate: 0, y: 0 };
                         })()}
                       >
                         {streakFlash.v} ПОДРЯД
