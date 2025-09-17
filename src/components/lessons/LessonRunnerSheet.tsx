@@ -332,7 +332,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {task.answer_type === 'word_letters' && (
                     <div className="mt-auto mb-10">
-                      <div className="rounded-2xl bg-white/5 border border-white/10 p-2" style={{ overflowX: 'hidden' }}>
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-2 space-y-3" style={{ overflowX: 'hidden' }}>
                       {(() => {
                         const opts = ((task.options || []) as string[]) || [];
                         const layout = computeRows(opts.length);
