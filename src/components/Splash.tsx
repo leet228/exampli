@@ -125,7 +125,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
     <AnimatePresence>
       {!done && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center touch-none select-none"
+          className="fixed inset-0 z-[1000] flex items-center justify-center touch-none select-none"
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
