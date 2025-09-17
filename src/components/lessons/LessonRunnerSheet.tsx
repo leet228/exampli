@@ -331,15 +331,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {task.answer_type === 'word_letters' && (
-                    <div className="grid gap-2 mt-auto mb-10">
+                    <div className="mt-auto mb-10">
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-2" style={{ overflowX: 'hidden' }}>
                       {(() => {
                         const opts = ((task.options || []) as string[]) || [];
                         const layout = computeRows(opts.length);
                         let start = 0;
                         return layout.map((cols, rowIdx) => {
                           const slice = opts.slice(start, start + cols);
-                          const row = (
-                            <div key={`wl-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(56px, 1fr))` }}>
+                            const row = (
+                            <div key={`wl-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, 1fr)` }}>
                               {slice.map((ch, localIdx) => {
                                 const i = start + localIdx;
                                 const used = lettersSel.includes(i);
@@ -347,7 +348,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                                   return (
                                     <div
                                       key={`wl-imprint-${i}`}
-                                      className="rounded-xl border-2 border-dashed border-white/20 h-14"
+                                      className="rounded-xl border-2 border-dashed border-white/20 h-14 w-full"
                                       aria-hidden
                                     />
                                   );
@@ -367,27 +368,29 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           return row;
                         });
                       })()}
+                      </div>
                     </div>
                   )}
 
                   {task.answer_type === 'cards' && (
-                    <div className="grid gap-2 mt-auto mb-10">
+                    <div className="mt-auto mb-10">
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-2" style={{ overflowX: 'hidden' }}>
                       {(() => {
                         const opts = ((task.options || []) as string[]) || [];
                         const layout = computeRows(opts.length);
                         let start = 0;
                         return layout.map((cols, rowIdx) => {
                           const slice = opts.slice(start, start + cols);
-                          const row = (
-                            <div key={`cd-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(96px, 1fr))` }}>
+                            const row = (
+                            <div key={`cd-row-${rowIdx}`} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, 1fr)` }}>
                               {slice.map((txt, localIdx) => {
                                 const i = start + localIdx;
                                 if (selectedCard === i) {
                                   return (
                                     <div
                                       key={`cd-imprint-${i}`}
-                                      className="rounded-xl border-2 border-dashed border-white/20"
-                                      style={{ minHeight: 40 }}
+                                      className="rounded-xl border-2 border-dashed border-white/20 w-full"
+                                      style={{ minHeight: 44 }}
                                       aria-hidden
                                     />
                                   );
@@ -408,6 +411,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           return row;
                         });
                       })()}
+                      </div>
                     </div>
                   )}
 
@@ -555,7 +559,7 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
           <motion.button
             key={`${ch}-${idx}`}
             type="button"
-            className={`w-8 h-8 grid place-items-center rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold`}
+            className={`w-7 h-7 grid place-items-center rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold text-sm`}
             onClick={() => { if (editable) { try { hapticSelect(); } catch {} onRemove(idx); } }}
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -631,6 +635,13 @@ function CardBox({ cardText, onRemove, setRect, status }: { cardText: string; on
     window.addEventListener('scroll', update, { passive: true } as any);
     return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update as any); };
   }, [setRect]);
+  // Периодически обновляем rect во время DnD, чтобы хит-тест был точнее
+  useEffect(() => {
+    const id = setInterval(() => {
+      try { const el = ref.current; if (el) setRect(el.getBoundingClientRect()); } catch {}
+    }, 120);
+    return () => clearInterval(id as any);
+  }, [setRect]);
   const hasCard = !!cardText;
   const resolvedClass = status === 'idle' ? 'border-white/10 bg-white/5' : (status === 'correct' ? 'border-green-500/60 bg-green-600/10 text-green-400' : 'border-red-500/60 bg-red-600/10 text-red-400');
   return (
@@ -666,7 +677,8 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
       const br = getBoxRect();
       if (br) {
         const cx = e.clientX, cy = e.clientY;
-        if (cx >= br.left && cx <= br.right && cy >= br.top && cy <= br.bottom) onDropToBox();
+        const tol = 12; // небольшая толерантность, чтобы не «срывалась» у края
+        if (cx >= br.left - tol && cx <= br.right + tol && cy >= br.top - tol && cy <= br.bottom + tol) onDropToBox();
       }
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
@@ -696,8 +708,8 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
       <div
         ref={cardRef}
         onPointerDown={onDown}
-        className={`rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-0' : 'opacity-100'}`}
-        style={{ width: 120, minHeight: 40 }}
+        className={`rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold select-none w-full ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-0' : 'opacity-100'}`}
+        style={{ minHeight: 40 }}
       >
         {text}
       </div>
@@ -705,7 +717,7 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
       {dragging && pos && (
         <div
           className="fixed pointer-events-none rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 text-sm font-semibold"
-          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px) scale(${previewScale})`, zIndex: 9999, width: 120, minHeight: 40 }}
+          style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px) scale(${previewScale})`, zIndex: 9999, minWidth: 80, minHeight: 36 }}
         >
           {text}
         </div>
