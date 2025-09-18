@@ -204,12 +204,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               const res = await syncEnergy(bonus);
               const serverEnergy = res?.energy;
               if (typeof serverEnergy === 'number') {
-                try {
-                  const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-                  cacheSet(CACHE_KEYS.stats, { ...cs, energy: serverEnergy, energy_full_at: res?.full_at ?? null });
-                  window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: serverEnergy } } as any));
-                } catch {}
-                setEnergy(Math.max(0, Math.min(25, Number(serverEnergy))));
+                const clamped = Math.max(0, Math.min(25, Number(serverEnergy)));
+                setEnergy((prevE) => {
+                  const nextE = Math.max(prevE || 0, clamped);
+                  try {
+                    const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+                    cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextE, energy_full_at: res?.full_at ?? null });
+                    window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: nextE } } as any));
+                  } catch {}
+                  return nextE;
+                });
               }
             } catch {}
           })();
