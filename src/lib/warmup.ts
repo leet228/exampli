@@ -1,4 +1,6 @@
 let started = false;
+const warmedMap: Record<string, string> = (window as any).__exampliSvgWarmMap || {};
+try { (window as any).__exampliSvgWarmMap = warmedMap; } catch {}
 
 function requestIdle(cb: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void, timeout = 1200) {
   try {
@@ -28,6 +30,22 @@ function preloadImage(url: string): Promise<void> {
       img.src = url;
     } catch { resolve(); }
   });
+}
+
+async function preloadSvgToMemory(url: string): Promise<void> {
+  try {
+    if (warmedMap[url]) return; // уже в памяти
+    const res = await fetch(url, { cache: 'force-cache' });
+    if (!res.ok) return;
+    const text = await res.text();
+    // data URL безопасен и не требует отдельного запроса
+    const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
+    warmedMap[url] = dataUrl;
+  } catch {}
+}
+
+export function getWarmedSvg(url: string): string | null {
+  try { return warmedMap[url] || null; } catch { return null; }
 }
 
 export function warmupLoadSvgs(): void {
@@ -60,7 +78,9 @@ export function warmupLoadSvgs(): void {
         const end = Math.min(urls.length, index + batchSize);
         const slice = urls.slice(index, end);
         index = end;
-        try { await Promise.all(slice.map((u) => preloadImage(u))); } catch {}
+        try {
+          await Promise.all(slice.map((u) => Promise.all([preloadImage(u), preloadSvgToMemory(u)])));
+        } catch {}
         // планируем следующий батч с лёгкой паузой
         window.setTimeout(step, 180);
       });

@@ -5,6 +5,7 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { motion } from 'framer-motion';
 import { hapticTiny } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
+import { getWarmedSvg } from '../../lib/warmup';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -154,12 +155,18 @@ export default function CoursesPanel(props: Props) {
                   ].join(' ')}
                   style={{ width: 78, height: 56 }}
                 >
-                  <img
-                    src={`/subjects/${s.code}.svg`}
-                    alt={s.title}
-                    className="w-[62px] h-auto object-contain relative -translate-y-0"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
+                  {(() => {
+                    const warmed = getWarmedSvg(`/loads/${String(s.code).replace(/^(oge_|ege_)/,'')}_load.svg`);
+                    const src = warmed || `/subjects/${s.code}.svg`;
+                    return (
+                      <img
+                        src={src}
+                        alt={s.title}
+                        className="w-[62px] h-auto object-contain relative -translate-y-0"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    );
+                  })()}
                 </div>
               </div>
               <div className="text-[10px] text-muted uppercase tracking-wide mt-1">{s.level}</div>

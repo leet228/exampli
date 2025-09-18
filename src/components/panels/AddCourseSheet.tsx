@@ -5,6 +5,7 @@ import FullScreenSheet from '../sheets/FullScreenSheet';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
+import { getWarmedSvg } from '../../lib/warmup';
 import { precacheTopicsForSubject } from '../../lib/boot';
 
 type Subject = { id: number; code: string; title: string; level: string };
@@ -227,7 +228,8 @@ export default function AddCourseSheet({
                   <div className="grid gap-2">
                   {items.map((s) => {
                     const active = s.id === pickedId;
-                    const imgSrc = `/subjects/${s.code}.svg`;
+                    const warmed = getWarmedSvg(`/loads/${String(s.code).replace(/^(oge_|ege_)/,'')}_load.svg`);
+                    const imgSrc = warmed || `/subjects/${s.code}.svg`;
                     return (
                       <motion.button
                         key={s.id}
