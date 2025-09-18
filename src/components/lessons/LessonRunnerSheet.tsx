@@ -22,6 +22,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [idx, setIdx] = useState<number>(0);
   const [progress, setProgress] = useState<number>(0);
+  // Поведенческий режим урока: сначала 15 базовых, затем — повторы ошибок
+  const PLANNED_COUNT = 15;
+  const [planned, setPlanned] = useState<TaskRow[]>([]);
+  const [baseIdx, setBaseIdx] = useState<number>(0);
+  const [mode, setMode] = useState<'base' | 'repeat'>('base');
+  const [repeatQueue, setRepeatQueue] = useState<TaskRow[]>([]);
+  const [progressCount, setProgressCount] = useState<number>(0); // число плановых, решённых правильно хотя бы раз
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState<string>('');
   const [lettersSel, setLettersSel] = useState<number[]>([]); // индексы выбранных букв из options
@@ -40,7 +47,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [energy, setEnergy] = useState<number>(25);
   const [rewardBonus, setRewardBonus] = useState<0 | 2 | 5>(0);
   const rewardKeyRef = useRef<number>(0);
-  const task = tasks[idx];
+  const solvedRef = useRef<Set<string | number>>(new Set());
+  const [viewKey, setViewKey] = useState<number>(0);
+  const task = (mode === 'base') ? planned[baseIdx] : (repeatQueue[0] as any);
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +85,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         try { localStorage.setItem(`exampli:lesson_tasks:${lessonId}`, JSON.stringify(rows)); } catch {}
       }
       setTasks(rows as any);
+      const base = (rows as any[]).slice(0, Math.min(PLANNED_COUNT, (rows as any[]).length));
+      setPlanned(base as any);
+      setBaseIdx(0);
+      setMode('base');
+      setRepeatQueue([]);
+      setProgressCount(0);
+      solvedRef.current = new Set();
       setIdx(0);
       setProgress(0);
       setChoice(null);
@@ -166,76 +182,78 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
-    // streak: только внутри урока, считаем подряд правильные ответы
+
+    // Режим повторов: стрик не считаем, управляем очередью
+    if (mode === 'repeat') {
+      setStreakLocal(0); setStreakFlash(null);
+      setRepeatQueue((prev) => {
+        if (!prev.length) return prev;
+        if (ok) return prev.slice(1);
+        return [...prev.slice(1), prev[0]];
+      });
+      if (ok) {
+        try {
+          const id = (task as any)?.id;
+          if (!solvedRef.current.has(id)) {
+            solvedRef.current.add(id);
+            setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1));
+          }
+        } catch {}
+      }
+      return;
+    }
+
+    // Базовая фаза: считаем стрик и копим ошибки в очередь
     if (ok) {
       setStreakLocal((prev) => {
         const next = prev + 1;
-        // показать флэш над прогрессом, начиная со 2 подряд
         if (next >= 2) {
           streakKeyRef.current += 1;
           setStreakFlash({ v: next, key: streakKeyRef.current });
-          // Запускаем спец-анимацию через контроллер, чтобы она имела приоритет
           if (next === 5 || next === 10) {
             void streakCtrl.start({ scale: [1, 2.2, 0.9, 1], rotate: [0, -22, 14, 0], y: [-2, -16, -8, -2] }, { type: 'tween', ease: 'easeInOut', duration: 1.05 });
           } else {
             void streakCtrl.start({ scale: 1, rotate: 0, y: 0 }, { duration: 0.2 });
           }
         }
-        // 5/10 — спец-анимация и хаптик
         if (next === 5 || next === 10) {
           try { hapticStreakMilestone(); } catch {}
-          // бонус энергии немедленно при достижении 5/10
           const bonus: 2 | 5 = next === 5 ? 2 : 5;
           rewardKeyRef.current += 1;
           setRewardBonus(bonus);
-          // локально увеличиваем энергию и кэш/события
           setEnergy((prevE) => {
             const n = Math.max(0, Math.min(25, (prevE || 0) + bonus));
-            try {
-              const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-              cacheSet(CACHE_KEYS.stats, { ...cs, energy: n });
-              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any));
-            } catch {}
+            try { const cs = cacheGet<any>(CACHE_KEYS.stats) || {}; cacheSet(CACHE_KEYS.stats, { ...cs, energy: n }); window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any)); } catch {}
             return n;
           });
-          // сервер: удалим последние 2/5 трат через RPC положительной дельтой и синхронизируем энергию
-          (async () => {
-            try {
-              const res = await rewardEnergy(bonus);
-              const serverEnergy = res?.energy;
-              if (typeof serverEnergy === 'number') {
-                const clamped = Math.max(0, Math.min(25, Number(serverEnergy)));
-                setEnergy((prevE) => Math.max(prevE || 0, clamped));
-              }
-            } catch {}
-          })();
+          (async () => { try { const res = await rewardEnergy(bonus); const serverEnergy = res?.energy; if (typeof serverEnergy === 'number') { const clamped = Math.max(0, Math.min(25, Number(serverEnergy))); setEnergy((prevE) => Math.max(prevE || 0, clamped)); } } catch {} })();
         }
         return next;
       });
+      try { const id = (task as any)?.id; if (!solvedRef.current.has(id)) { solvedRef.current.add(id); setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1)); } } catch {}
     } else {
-      setStreakLocal(0);
-      setStreakFlash(null);
+      setStreakLocal(0); setStreakFlash(null);
+      setRepeatQueue((prev) => { const exists = prev.some((t) => String((t as any)?.id) === String((task as any)?.id)); return exists ? prev : [...prev, task]; });
     }
   }
 
   function next(){
-    const total = Math.max(1, tasks.length || 1);
-    setProgress(Math.min(total, progress + 1));
-    if (idx + 1 < tasks.length){
-      setIdx(idx + 1);
-      setChoice(null);
-      setText('');
-      setLettersSel([]);
-      setSelectedCard(null);
-      setStatus('idle');
-      // скрываем флэш стрика между заданиями
-      setStreakFlash(null);
+    if (mode === 'base') {
+      if (baseIdx + 1 < planned.length) {
+        setBaseIdx(baseIdx + 1);
+      } else {
+        if (repeatQueue.length > 0) setMode('repeat'); else { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
+      }
     } else {
-      // завершение урока — сбрасываем локальный стрик
-      setStreakLocal(0);
-      setStreakFlash(null);
-      onClose();
+      if (repeatQueue.length <= 0) { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
     }
+    setChoice(null);
+    setText('');
+    setLettersSel([]);
+    setSelectedCard(null);
+    setStatus('idle');
+    setStreakFlash(null);
+    setViewKey((k) => k + 1);
   }
 
   function onContinue(){
@@ -298,7 +316,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               <div className="px-5 pt-2 pb-2 border-b border-white/10 relative" ref={headerRef}>
                 <div className="flex items-center justify-end gap-2">
                   <div className="progress flex-1 max-w-[70%]" ref={progressRef}>
-                    <div style={{ width: `${Math.round(((idx + (status !== 'idle' ? 1 : 0)) / Math.max(1, tasks.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
+                    <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                   <div className="flex items-center gap-1">
                     <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-8 h-8" />
@@ -310,7 +328,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 </div>
                 {/* streak flash */}
                 <AnimatePresence>
-                  {streakFlash && (
+                  {streakFlash && mode !== 'repeat' && (
                     <motion.div
                       key={`streak-${streakFlash.key}`}
                       initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
@@ -325,6 +343,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {mode === 'repeat' && repeatQueue.length > 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-6 h-6" />
+                    <span className="text-sm font-extrabold tracking-wide" style={{ color: '#ff9107' }}>ранее допущены ошибки</span>
+                  </div>
+                )}
                 {/* reward overlay +2/+5 — по центру экрана */}
                 <AnimatePresence>
                   {rewardBonus > 0 && (
@@ -364,7 +388,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   <div className="relative overflow-hidden">
                     <AnimatePresence initial={false} mode="wait">
                       <motion.div
-                        key={`task-${idx}`}
+                        key={`task-${viewKey}`}
                         initial={{ x: '20%', opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: '-20%', opacity: 0 }}
