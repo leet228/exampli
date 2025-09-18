@@ -337,7 +337,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                   <div className="flex items-center gap-1">
-                    <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-8 h-8" />
+                    <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-6 h-6" />
                     <span className={[
                       'tabular-nums font-bold text-base',
                       energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
