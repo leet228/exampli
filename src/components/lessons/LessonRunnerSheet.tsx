@@ -184,6 +184,35 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         // 5/10 — спец-анимация и хаптик
         if (next === 5 || next === 10) {
           try { hapticStreakMilestone(); } catch {}
+          // бонус энергии немедленно при достижении 5/10
+          const bonus: 2 | 5 = next === 5 ? 2 : 5;
+          rewardKeyRef.current += 1;
+          setRewardBonus(bonus);
+          // локально увеличиваем энергию и кэш/события
+          setEnergy((prevE) => {
+            const n = Math.max(0, Math.min(25, (prevE || 0) + bonus));
+            try {
+              const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+              cacheSet(CACHE_KEYS.stats, { ...cs, energy: n });
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any));
+            } catch {}
+            return n;
+          });
+          // сервер: удалим последние 2/5 трат через RPC положительной дельтой и синхронизируем энергию
+          (async () => {
+            try {
+              const res = await syncEnergy(bonus);
+              const serverEnergy = res?.energy;
+              if (typeof serverEnergy === 'number') {
+                try {
+                  const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+                  cacheSet(CACHE_KEYS.stats, { ...cs, energy: serverEnergy, energy_full_at: res?.full_at ?? null });
+                  window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: serverEnergy } } as any));
+                } catch {}
+                setEnergy(Math.max(0, Math.min(25, Number(serverEnergy))));
+              }
+            } catch {}
+          })();
         }
         return next;
       });
@@ -215,30 +244,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   function onContinue(){
     try { hapticTiny(); } catch {}
-    // Бонус за стрик 5/10 при нажатии «Продолжить» после правильного ответа
-    const milestoneReward: 0 | 2 | 5 = (status === 'correct' && (streakLocal === 5 || streakLocal === 10))
-      ? (streakLocal === 5 ? 2 : 5)
-      : 0;
-    if (milestoneReward > 0) {
-      rewardKeyRef.current += 1;
-      setRewardBonus(milestoneReward);
-    }
     // мгновенно уменьшаем энергию и иконку
     setEnergy(prev => {
-      const spentVal = Math.max(0, Math.min(25, (prev || 0) - 1));
-      const nextVal = Math.max(0, Math.min(25, spentVal + (milestoneReward || 0)));
+      const nextVal = Math.max(0, Math.min(25, (prev || 0) - 1));
       try {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextVal });
         try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: nextVal } } as any)); } catch {}
         // фоновое обновление на сервере (RPC с ленивой регенерацией)
-        (async () => {
-          try { await spendEnergy(); } catch {}
-          // Возврат энергии за стрик: удалим последние 2/5 трат на сервере и синхронизируем энергию
-          if (milestoneReward > 0) {
-            try { await syncEnergy(milestoneReward); } catch {}
-          }
-        })();
+        (async () => { try { await spendEnergy(); } catch {} })();
       } catch {}
       // если 0 — выходим из урока сразу (с учётом возможного бонуса)
       if (nextVal <= 0) {
@@ -315,7 +329,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* reward overlay +2/+5 */}
+                {/* reward overlay +2/+5 — по центру экрана */}
                 <AnimatePresence>
                   {rewardBonus > 0 && (
                     <motion.div
