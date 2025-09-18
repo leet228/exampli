@@ -361,7 +361,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 {mode === 'repeat' && repeatQueue.length > 0 && (
                   <div
                     className="absolute flex items-center gap-1"
-                    style={{ left: streakLeft, top: 26 }}
+                    style={{ left: streakLeft, top: 34 }}
                   >
                     <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-4 h-4" />
                     <span className="font-extrabold leading-none" style={{ color: '#ff9107', fontSize: 15 }}>ранее допущены ошибки</span>
