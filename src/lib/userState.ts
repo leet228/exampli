@@ -203,6 +203,33 @@ export async function spendEnergy(): Promise<number | null> {
   return res?.energy ?? null;
 }
 
+// Бонус за стрик: удалить первые p_bonus из очереди трат и прибавить энергию
+export async function rewardEnergy(bonus: number): Promise<{ energy: number } | null> {
+  try {
+    if (!Number.isFinite(bonus) || bonus <= 0) return null;
+    let tgId: string | null = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id
+      ? String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id)
+      : null;
+    if (!tgId) {
+      try { tgId = String(cacheGet<any>(CACHE_KEYS.user)?.tg_id || ''); } catch {}
+    }
+    if (!tgId) return null;
+
+    const { data, error } = await supabase.rpc('reward_energy', { p_tg_id: tgId, p_bonus: Math.min(25, Math.max(1, Math.floor(bonus))) });
+    if (error) { console.warn('[rewardEnergy] rpc error', error); return null; }
+    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+    const energy = Number(row?.energy ?? NaN);
+    if (!Number.isFinite(energy)) return null;
+
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+      cacheSet(CACHE_KEYS.stats, { ...cs, energy });
+      window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
+    } catch {}
+    return { energy };
+  } catch (e) { console.warn('[rewardEnergy] failed', e); return null; }
+}
+
 export async function setUserSubjects(subjectCodes: string[]) {
   // новая семантика: берём первый код и пишем его id в users.added_course
   const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
