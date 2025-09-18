@@ -1,6 +1,7 @@
 let started = false;
 const warmedMap: Record<string, string> = (window as any).__exampliSvgWarmMap || {};
 try { (window as any).__exampliSvgWarmMap = warmedMap; } catch {}
+const inflight: Record<string, Promise<void>> = {};
 
 function requestIdle(cb: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void, timeout = 1200) {
   try {
@@ -10,36 +11,19 @@ function requestIdle(cb: (deadline: { didTimeout: boolean; timeRemaining: () => 
   return window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 50 }), Math.min(600, Math.max(120, Math.floor(timeout / 3))));
 }
 
-function preloadImage(url: string): Promise<void> {
-  return new Promise((resolve) => {
-    try {
-      // Попробуем через <link rel="preload">, если поддерживается
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = url;
-      link.onload = () => resolve();
-      link.onerror = () => resolve();
-      document.head.appendChild(link);
-      // Дополнительно создадим объект Image для заполнения кэша точно
-      const img = new Image();
-      (img as any).decoding = 'async';
-      (img as any).loading = 'eager';
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-      img.src = url;
-    } catch { resolve(); }
-  });
-}
-
 async function preloadSvgToMemory(url: string): Promise<void> {
   try {
     if (warmedMap[url]) return; // уже есть
-    const res = await fetch(url, { cache: 'force-cache' });
-    if (!res.ok) return;
-    const text = await res.text();
-    const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
-    warmedMap[url] = dataUrl;
+    if (inflight[url]) { await inflight[url]; return; }
+    inflight[url] = (async () => {
+      const res = await fetch(url, { cache: 'force-cache' });
+      if (!res.ok) return;
+      const text = await res.text();
+      const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
+      warmedMap[url] = dataUrl;
+    })();
+    await inflight[url];
+    delete inflight[url];
   } catch {}
 }
 
@@ -77,7 +61,7 @@ export function warmupLoadSvgs(): void {
         const end = Math.min(urls.length, index + batchSize);
         const slice = urls.slice(index, end);
         index = end;
-        try { await Promise.all(slice.map((u) => Promise.all([preloadImage(u), preloadSvgToMemory(u)]))); } catch {}
+        try { await Promise.all(slice.map((u) => preloadSvgToMemory(u))); } catch {}
         // планируем следующий батч с лёгкой паузой
         window.setTimeout(step, 180);
       });
