@@ -5,7 +5,7 @@ import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMiles
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
-import { spendEnergy } from '../../lib/userState';
+import { spendEnergy, syncEnergy } from '../../lib/userState';
 
 type TaskRow = {
   id: number | string;
@@ -38,6 +38,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
+  const [rewardBonus, setRewardBonus] = useState<0 | 2 | 5>(0);
+  const rewardKeyRef = useRef<number>(0);
   const task = tasks[idx];
 
   useEffect(() => {
@@ -213,17 +215,32 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   function onContinue(){
     try { hapticTiny(); } catch {}
+    // Бонус за стрик 5/10 при нажатии «Продолжить» после правильного ответа
+    const milestoneReward: 0 | 2 | 5 = (status === 'correct' && (streakLocal === 5 || streakLocal === 10))
+      ? (streakLocal === 5 ? 2 : 5)
+      : 0;
+    if (milestoneReward > 0) {
+      rewardKeyRef.current += 1;
+      setRewardBonus(milestoneReward);
+    }
     // мгновенно уменьшаем энергию и иконку
     setEnergy(prev => {
-      const nextVal = Math.max(0, Math.min(25, (prev || 0) - 1));
+      const spentVal = Math.max(0, Math.min(25, (prev || 0) - 1));
+      const nextVal = Math.max(0, Math.min(25, spentVal + (milestoneReward || 0)));
       try {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, energy: nextVal });
         try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: nextVal } } as any)); } catch {}
         // фоновое обновление на сервере (RPC с ленивой регенерацией)
-        (async () => { try { await spendEnergy(); } catch {} })();
+        (async () => {
+          try { await spendEnergy(); } catch {}
+          // Возврат энергии за стрик: удалим последние 2/5 трат на сервере и синхронизируем энергию
+          if (milestoneReward > 0) {
+            try { await syncEnergy(milestoneReward); } catch {}
+          }
+        })();
       } catch {}
-      // если 0 — выходим из урока сразу
+      // если 0 — выходим из урока сразу (с учётом возможного бонуса)
       if (nextVal <= 0) {
         // вылет из урока по нехватке энергии — сбросить стрик
         setStreakLocal(0);
@@ -295,6 +312,30 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       <motion.span initial={{ scale: 1, rotate: 0, y: 0 }} animate={streakCtrl}>
                         {streakFlash.v} ПОДРЯД
                       </motion.span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {/* reward overlay +2/+5 */}
+                <AnimatePresence>
+                  {rewardBonus > 0 && (
+                    <motion.div
+                      key={`reward-${rewardKeyRef.current}`}
+                      className="fixed inset-0 flex items-center justify-center pointer-events-none"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      style={{ zIndex: 1000 }}
+                    >
+                      <motion.div
+                        initial={{ scale: 0.4, opacity: 0 }}
+                        animate={{ scale: [0.4, 1.6, 1.0], opacity: [0, 1, 1, 0] }}
+                        transition={{ duration: 1.1, times: [0, 0.32, 0.8, 1] }}
+                        onAnimationComplete={() => { setRewardBonus(0); }}
+                        className="font-extrabold"
+                        style={{ fontSize: 'min(22vw, 160px)', color: (rewardBonus === 5 ? '#123ba3' : '#2c58c7'), textShadow: '0 8px 0 rgba(0,0,0,0.18)' }}
+                      >
+                        +{rewardBonus}
+                      </motion.div>
                     </motion.div>
                   )}
                 </AnimatePresence>
