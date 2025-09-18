@@ -28,6 +28,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [baseIdx, setBaseIdx] = useState<number>(0);
   const [mode, setMode] = useState<'base' | 'repeat'>('base');
   const [repeatQueue, setRepeatQueue] = useState<TaskRow[]>([]);
+  const [repeatCurrent, setRepeatCurrent] = useState<TaskRow | null>(null);
+  const lastRepeatOkRef = useRef<boolean | null>(null);
   const [progressCount, setProgressCount] = useState<number>(0); // число плановых, решённых правильно хотя бы раз
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState<string>('');
@@ -49,7 +51,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const rewardKeyRef = useRef<number>(0);
   const solvedRef = useRef<Set<string | number>>(new Set());
   const [viewKey, setViewKey] = useState<number>(0);
-  const task = (mode === 'base') ? planned[baseIdx] : (repeatQueue[0] as any);
+  const task = (mode === 'base') ? planned[baseIdx] : (repeatCurrent as any);
 
   useEffect(() => {
     if (!open) return;
@@ -90,6 +92,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setBaseIdx(0);
       setMode('base');
       setRepeatQueue([]);
+      setRepeatCurrent(null);
       setProgressCount(0);
       solvedRef.current = new Set();
       setIdx(0);
@@ -186,11 +189,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     // Режим повторов: стрик не считаем, управляем очередью
     if (mode === 'repeat') {
       setStreakLocal(0); setStreakFlash(null);
-      setRepeatQueue((prev) => {
-        if (!prev.length) return prev;
-        if (ok) return prev.slice(1);
-        return [...prev.slice(1), prev[0]];
-      });
+      // Не меняем очередь до нажатия «Продолжить», чтобы не прыгал вопрос
+      lastRepeatOkRef.current = ok;
       if (ok) {
         try {
           const id = (task as any)?.id;
@@ -242,10 +242,25 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       if (baseIdx + 1 < planned.length) {
         setBaseIdx(baseIdx + 1);
       } else {
-        if (repeatQueue.length > 0) setMode('repeat'); else { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
+        if (repeatQueue.length > 0) { setMode('repeat'); setRepeatCurrent(repeatQueue[0] || null); } else { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
       }
     } else {
-      if (repeatQueue.length <= 0) { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
+      // Применяем результат последнего ответа к очереди
+      const ok = lastRepeatOkRef.current === true;
+      lastRepeatOkRef.current = null;
+      setRepeatQueue((prev) => {
+        if (prev.length === 0) return prev;
+        const next = ok ? prev.slice(1) : [...prev.slice(1), prev[0]];
+        // Обновим текущий вопрос синхронно
+        setRepeatCurrent(next[0] || null);
+        return next;
+      });
+      // Если после применения очередь пуста — завершаем
+      if ((repeatQueue.length === 0) || (ok && repeatQueue.length === 1)) {
+        // после setRepeatQueue next будет пуст — закроем на следующем кадре
+        setTimeout(() => { if ((repeatQueue.length === 0) || (ok && repeatQueue.length === 1)) { setStreakLocal(0); setStreakFlash(null); onClose(); } }, 0);
+        // продолжаем reset стейтов ниже
+      }
     }
     setChoice(null);
     setText('');
@@ -344,8 +359,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
                 </AnimatePresence>
                 {mode === 'repeat' && repeatQueue.length > 0 && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-6 h-6" />
+                  <div className="mt-2 flex items-center gap-3" style={{ marginLeft: 24 }}>
+                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-14 h-14" />
                     <span className="text-sm font-extrabold tracking-wide" style={{ color: '#ff9107' }}>ранее допущены ошибки</span>
                   </div>
                 )}
