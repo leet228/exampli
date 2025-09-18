@@ -359,9 +359,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
                 </AnimatePresence>
                 {mode === 'repeat' && repeatQueue.length > 0 && (
-                  <div className="mt-2 flex items-center gap-3" style={{ marginLeft: 24 }}>
-                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-8 h-8" />
-                    <span className="text-sm font-extrabold tracking-wide" style={{ color: '#ff9107' }}>ранее допущены ошибки</span>
+                  <div
+                    className="absolute flex items-center gap-1"
+                    style={{ left: streakLeft, top: 26 }}
+                  >
+                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-4 h-4" />
+                    <span className="font-extrabold leading-none" style={{ color: '#ff9107', fontSize: 15 }}>ранее допущены ошибки</span>
                   </div>
                 )}
                 {/* reward overlay +2/+5 — по центру экрана */}
