@@ -360,7 +360,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 </AnimatePresence>
                 {mode === 'repeat' && repeatQueue.length > 0 && (
                   <div className="mt-2 flex items-center gap-3" style={{ marginLeft: 24 }}>
-                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-14 h-14" />
+                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-8 h-8" />
                     <span className="text-sm font-extrabold tracking-wide" style={{ color: '#ff9107' }}>ранее допущены ошибки</span>
                   </div>
                 )}
