@@ -19,7 +19,8 @@ async function preloadSvgToMemory(url: string): Promise<void> {
       const res = await fetch(url, { cache: 'force-cache' });
       if (!res.ok) return;
       const text = await res.text();
-      const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
+      const min = minifySvg(text);
+      const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(min)}`;
       warmedMap[url] = dataUrl;
     })();
     await inflight[url];
@@ -72,5 +73,27 @@ export function warmupLoadSvgs(): void {
       requestAnimationFrame(() => requestAnimationFrame(step));
     }, 400);
   } catch {}
+}
+
+// Очень лёгкий и безопасный минификатор SVG (безопасный набор правил)
+function minifySvg(svg: string): string {
+  try {
+    let s = svg;
+    // убрать XML-декларацию и комментарии
+    s = s.replace(/<\?xml[\s\S]*?\?>/g, '');
+    s = s.replace(/<!--([\s\S]*?)-->/g, '');
+    // убрать metadata/desc/title (часто лишние для иконок)
+    s = s.replace(/<metadata[\s\S]*?<\/metadata>/gi, '');
+    s = s.replace(/<desc[\s\S]*?<\/desc>/gi, '');
+    s = s.replace(/<title[\s\S]*?<\/title>/gi, '');
+    // схлопнуть пробелы и переносы
+    s = s.replace(/\s{2,}/g, ' ');
+    s = s.replace(/>\s+</g, '><');
+    // убрать лишние пробелы вокруг = в атрибутах
+    s = s.replace(/\s*=\s*"/g, '="');
+    // финальный trim
+    s = s.trim();
+    return s;
+  } catch { return svg; }
 }
 
