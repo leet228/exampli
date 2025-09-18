@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { bootPreload, BootData, bootPreloadBackground } from '../lib/boot';
+import { warmupLoadSvgs } from '../lib/warmup';
 
 export default function Splash({ onReady }: { onReady: (boot: BootData) => void }) {
   const [boot, setBoot] = useState<BootData | null>(null);
@@ -87,6 +88,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
       setTimeout(() => {
         setDone(true);
         onReady(data);
+        try { warmupLoadSvgs(); } catch {}
       }, 250);
       // Фоновый ШАГ 2: один запрос на тяжелые данные
       try { const uid = (data?.user as any)?.id as string | undefined; const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null; if (uid) void bootPreloadBackground(uid, activeId); } catch {}
@@ -105,6 +107,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
           setTimeout(() => {
             setDone(true);
             onReady(data);
+            try { warmupLoadSvgs(); } catch {}
           }, 100);
         } else {
           // нет данных — просто скрываем сплэш без апдейта
