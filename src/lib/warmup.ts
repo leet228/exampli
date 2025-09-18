@@ -34,11 +34,10 @@ function preloadImage(url: string): Promise<void> {
 
 async function preloadSvgToMemory(url: string): Promise<void> {
   try {
-    if (warmedMap[url]) return; // уже в памяти
+    if (warmedMap[url]) return; // уже есть
     const res = await fetch(url, { cache: 'force-cache' });
     if (!res.ok) return;
     const text = await res.text();
-    // data URL безопасен и не требует отдельного запроса
     const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
     warmedMap[url] = dataUrl;
   } catch {}
@@ -78,9 +77,7 @@ export function warmupLoadSvgs(): void {
         const end = Math.min(urls.length, index + batchSize);
         const slice = urls.slice(index, end);
         index = end;
-        try {
-          await Promise.all(slice.map((u) => Promise.all([preloadImage(u), preloadSvgToMemory(u)])));
-        } catch {}
+        try { await Promise.all(slice.map((u) => Promise.all([preloadImage(u), preloadSvgToMemory(u)]))); } catch {}
         // планируем следующий батч с лёгкой паузой
         window.setTimeout(step, 180);
       });
@@ -92,5 +89,4 @@ export function warmupLoadSvgs(): void {
     }, 400);
   } catch {}
 }
-
 

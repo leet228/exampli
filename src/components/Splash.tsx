@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { bootPreload, BootData, bootPreloadBackground } from '../lib/boot';
-import { warmupLoadSvgs } from '../lib/warmup';
+import { getWarmedSvg, warmupLoadSvgs } from '../lib/warmup';
 
 export default function Splash({ onReady }: { onReady: (boot: BootData) => void }) {
   const [boot, setBoot] = useState<BootData | null>(null);
@@ -74,7 +74,8 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
           spanish: '#dacaac',
         };
         // код курсов у нас как в /subjects/<code>.svg, для загрузчика — <code>_load.svg с тем же кодом
-        const src = `/loads/${code}_load.svg`;
+        const warmed = getWarmedSvg(`/loads/${code}_load.svg`);
+        const src = warmed || `/loads/${code}_load.svg`;
         const bg = map[code] || '#004aad';
         setOverride({ src, bg, title: over.title || 'КУРС' });
         // очистим флаг, чтобы не оставался на следующий раз
