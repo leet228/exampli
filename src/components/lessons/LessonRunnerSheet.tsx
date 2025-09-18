@@ -329,7 +329,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
             {!loading && (
               <div className="px-5 pt-2 pb-2 border-b border-white/10 relative" ref={headerRef}>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  {mode === 'repeat' && repeatQueue.length > 0 && (
+                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-8 h-8" />
+                  )}
                   <div className="progress flex-1 max-w-[70%]" ref={progressRef}>
                     <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
@@ -358,15 +361,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {mode === 'repeat' && repeatQueue.length > 0 && (
-                  <div
-                    className="absolute flex items-center gap-1"
-                    style={{ left: streakLeft, top: 34 }}
-                  >
-                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-4 h-4" />
-                    <span className="font-extrabold leading-none" style={{ color: '#ff9107', fontSize: 15 }}>ранее допущены ошибки</span>
-                  </div>
-                )}
+                {/* Текст для повторов убран — только иконка слева от прогресса */}
                 {/* reward overlay +2/+5 — по центру экрана */}
                 <AnimatePresence>
                   {rewardBonus > 0 && (
