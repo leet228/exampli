@@ -166,7 +166,12 @@ export default function Home() {
     const onLessonsChanged = () => { fetchLessons(); };
     window.addEventListener('exampli:lessonsChanged', onLessonsChanged as EventListener);
     const onHomeReselect = () => {
-      try { scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+      try {
+        const container = scrollRef.current;
+        const canUseContainer = !!container && container.scrollHeight > container.clientHeight + 1;
+        if (canUseContainer) container.scrollTo({ top: 0, behavior: 'smooth' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch {}
     };
     window.addEventListener('exampli:homeReselect', onHomeReselect as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
@@ -204,16 +209,17 @@ export default function Home() {
               try {
                 const anchor = el as HTMLElement | null;
                 const container = scrollRef.current;
-                if (anchor && container) {
+                const bottomNavHeight = 92; // как в .safe-bottom
+                const popoverHeight = 220; // приблизительная высота поповера
+                const margin = 16;
+                if (anchor) {
                   const rect = anchor.getBoundingClientRect();
-                  const containerRect = container.getBoundingClientRect();
-                  const bottomNavHeight = 92; // как в .safe-bottom
-                  const popoverHeight = 220; // приблизительная высота поповера
-                  const margin = 16;
-                  const overlap = (rect.bottom + popoverHeight + margin) - (window.innerHeight - bottomNavHeight);
+                  const viewportBottom = window.innerHeight - bottomNavHeight;
+                  const overlap = (rect.bottom + popoverHeight + margin) - viewportBottom;
                   if (overlap > 0) {
-                    const current = container.scrollTop;
-                    container.scrollTo({ top: current + overlap, behavior: 'smooth' });
+                    const canUseContainer = !!container && container.scrollHeight > container.clientHeight + 1;
+                    if (canUseContainer) container.scrollTo({ top: container.scrollTop + overlap, behavior: 'smooth' });
+                    else window.scrollTo({ top: window.scrollY + overlap, behavior: 'smooth' });
                   }
                 }
               } catch {}
