@@ -168,9 +168,17 @@ export default function Home() {
     const onHomeReselect = () => {
       try {
         const container = scrollRef.current;
-        const canUseContainer = !!container && container.scrollHeight > container.clientHeight + 1;
-        if (canUseContainer) container.scrollTo({ top: 0, behavior: 'smooth' });
-        else window.scrollTo({ top: 0, behavior: 'smooth' });
+        const road = listRef.current;
+        if (container && road) {
+          const cRect = container.getBoundingClientRect();
+          const rRect = road.getBoundingClientRect();
+          const offsetInContainer = rRect.top - cRect.top; // сколько до начала дороги от верха контейнера
+          const targetTop = container.scrollTop + offsetInContainer - 8; // небольшой отступ
+          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+          return;
+        }
+        // fallback
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch {}
     };
     window.addEventListener('exampli:homeReselect', onHomeReselect as EventListener);
