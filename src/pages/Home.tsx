@@ -51,6 +51,28 @@ export default function Home() {
     return null;
   }, []);
 
+  // быстрый плавный скролл на заданное дельта-расстояние и ожидание завершения
+  const scrollByAndWait = useCallback(async (delta: number): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      try {
+        const container = getScrollContainer();
+        const start = container ? container.scrollTop : window.scrollY;
+        const target = Math.max(0, start + delta);
+        const t0 = Date.now();
+        const timeoutMs = 600; // быстрый, но с запасом
+        if (container) container.scrollTo({ top: target, behavior: 'smooth' });
+        else window.scrollTo({ top: target, behavior: 'smooth' });
+        const tick = () => {
+          const pos = container ? container.scrollTop : window.scrollY;
+          if (Math.abs(pos - target) < 2) return resolve();
+          if (Date.now() - t0 > timeoutMs) return resolve();
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      } catch { resolve(); }
+    });
+  }, [getScrollContainer]);
+
   // ======== helpers: localStorage =========
   const readActiveFromStorage = useCallback((): string | null => {
     try { return localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || null; } catch { return null; }
@@ -183,17 +205,11 @@ export default function Home() {
     const onHomeReselect = () => {
       try {
         const container = getScrollContainer();
-        const road = listRef.current as HTMLElement | null;
-        if (container && road) {
-          const cRect = container.getBoundingClientRect();
-          const rRect = road.getBoundingClientRect();
-          const offsetInContainer = rRect.top - cRect.top; // сколько до начала дороги от верха контейнера
-          const targetTop = container.scrollTop + offsetInContainer - 8; // небольшой отступ
-          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-          return;
+        if (container) {
+          if ((container.scrollTop || 0) > 1) container.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          if ((window.scrollY || 0) > 1) window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        // fallback
-        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch {}
     };
     window.addEventListener('exampli:homeReselect', onHomeReselect as EventListener);
@@ -228,26 +244,26 @@ export default function Home() {
           <LessonRoad
             lessons={lessons}
             onOpen={(id, el) => {
-              // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
-              try {
-                const anchor = el as HTMLElement | null;
-                const container = getScrollContainer();
-                const bottomNavHeight = 92; // как в .safe-bottom
-                const popoverHeight = 220; // приблизительная высота поповера
-                const margin = 16;
-                if (anchor) {
-                  const rect = anchor.getBoundingClientRect();
-                  const viewportBottom = window.innerHeight - bottomNavHeight;
-                  const overlap = (rect.bottom + popoverHeight + margin) - viewportBottom;
-                  if (overlap > 0) {
-                    if (container) container.scrollTo({ top: container.scrollTop + overlap, behavior: 'smooth' });
-                    else window.scrollTo({ top: window.scrollY + overlap, behavior: 'smooth' });
+              (async () => {
+                // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
+                try {
+                  const anchor = el as HTMLElement | null;
+                  const bottomNavHeight = 92; // как в .safe-bottom
+                  const popoverHeight = 220; // приблизительная высота поповера
+                  const margin = 16;
+                  if (anchor) {
+                    const rect = anchor.getBoundingClientRect();
+                    const viewportBottom = window.innerHeight - bottomNavHeight;
+                    const overlap = (rect.bottom + popoverHeight + margin) - viewportBottom;
+                    if (overlap > 0) {
+                      await scrollByAndWait(overlap);
+                    }
                   }
-                }
-              } catch {}
-              setCurrentLessonId(id);
-              setAnchorEl(el);
-              setLessonPreviewOpen(true);
+                } catch {}
+                setCurrentLessonId(id);
+                setAnchorEl(el);
+                setLessonPreviewOpen(true);
+              })();
             }}
           />
         </div>
