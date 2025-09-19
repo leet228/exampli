@@ -13,8 +13,8 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
   const pattern = useMemo(() => {
     // Центр → влево (малый) → влево (большой) → влево (малый) → центр → вправо (малый) → вправо (большой) → вправо (малый) → центр …
     // Значения в px; можно подправить под визуал
-    const small = 80;
-    const big = 140;
+    const small = 40;
+    const big = 72;
     return [0, -small, -big, -small, 0, small, big, small, 0];
   }, []);
 
@@ -24,7 +24,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* центральную вертикальную линию убрали */}
 
-      <ul className="space-y-10 overflow-visible">
+      <ul className="space-y-6 overflow-visible">
         {lessons.map((l, idx) => {
           const offsetX = getOffsetX(idx);
           return (
