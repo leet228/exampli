@@ -30,6 +30,8 @@ html,
 body,
 #root {
     height: 100%;
+    /* чтобы скролл был у внутреннего контейнера, а не у body */
+    overflow: hidden;
 }
 
 body {
@@ -152,6 +154,8 @@ body,
 }
 
 .main-scroll {
+    height: 100%;
+    overflow-y: auto;
     touch-action: pan-y;
     overscroll-behavior-x: none;
     /* скрыть вертикальную полосу прокрутки, сохранив скролл */
