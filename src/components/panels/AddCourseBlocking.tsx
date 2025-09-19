@@ -81,7 +81,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
                             cacheSet(CACHE_KEYS.activeCourseCode, s.code);
-                            // Автовыбор первой темы и подтемы + запись в БД
+                            // Автовыбор первой темы + запись в БД
                             try {
                               const { data: topics } = await supabase
                                 .from('topics')
@@ -90,16 +90,6 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                                 .order('order_index', { ascending: true })
                                 .limit(1);
                               const firstTopic = (topics as any[])?.[0] || null;
-                              let firstSub: any = null;
-                              if (firstTopic?.id) {
-                                const { data: subs } = await supabase
-                                  .from('subtopics')
-                                  .select('id,title')
-                                  .eq('topic_id', firstTopic.id)
-                                  .order('order_index', { ascending: true })
-                                  .limit(1);
-                                firstSub = (subs as any[])?.[0] || null;
-                              }
                               // persist to users
                               try {
                                 const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -108,7 +98,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                                   if (user?.id) {
                                     await supabase
                                       .from('users')
-                                      .update({ added_course: s.id, current_topic: firstTopic?.id ?? null, current_subtopic: firstSub?.id ?? null })
+                                      .update({ added_course: s.id, current_topic: firstTopic?.id ?? null })
                                       .eq('id', user.id);
                                   }
                                 }
@@ -119,16 +109,10 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                                   localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
                                   localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
                                 }
-                                if (firstSub?.id) {
-                                  localStorage.setItem('exampli:currentSubtopicId', String(firstSub.id));
-                                  localStorage.setItem('exampli:currentSubtopicTitle', String(firstSub.title || ''));
-                                }
                               } catch {}
                               // update TopicsButton immediately
                               try {
-                                if (firstTopic?.title || firstSub?.title) {
-                                  window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title, subtopicTitle: firstSub?.title } } as any));
-                                }
+                                if (firstTopic?.title) window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title } } as any));
                               } catch {}
                             } catch {}
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);

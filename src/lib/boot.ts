@@ -12,7 +12,7 @@ export type SubjectRow = {
 
 export type LessonRow = {
   id: number | string;
-  subtopic_id: number | string;
+  topic_id: number | string;
   order_index: number | string;
 };
 
@@ -26,14 +26,11 @@ export type BootData = {
   subjectsAll?: SubjectRow[];    // все курсы (для AddCourseSheet)
   // onboarding больше не используем в логике, оставляем опционально для обратной совместимости
   onboarding?: { phone_given: boolean; course_taken: boolean } | null;
-  // новые поля для восстановления выбранной темы/подтемы
+  // выбранная тема
   current_topic_id?: string | number | null;
-  current_subtopic_id?: string | number | null;
   current_topic_title?: string | null;
-  current_subtopic_title?: string | null;
-  // предзагруженные данные для мгновенного открытия панелей
+  // предзагруженные данные для мгновенного открытия панели тем
   topicsBySubject?: Record<string, { id: number | string; subject_id: number | string; title: string; order_index: number }[]>;
-  subtopicsByTopic?: Record<string, { id: number | string; topic_id: number | string; title: string; order_index: number }[]>;
 };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
@@ -422,30 +419,22 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 6) уроки активной подтемы (если выбрана) — приходят из step1
-  const currentSubIdBoot: string | number | null = userRow?.current_subtopic ?? null;
-  let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, subtopic_id: l.subtopic_id, order_index: l.order_index }));
-  if (currentSubIdBoot != null) {
-    try { cacheSet(CACHE_KEYS.lessonsBySubtopic(currentSubIdBoot), lessonsArr as any); } catch {}
+  // 6) уроки активной темы (если выбрана) — приходят из step1
+  const currentTopicIdBoot: string | number | null = userRow?.current_topic ?? null;
+  let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, topic_id: l.topic_id, order_index: l.order_index }));
+  if (currentTopicIdBoot != null) {
+    try { cacheSet(CACHE_KEYS.lessonsByTopic(currentTopicIdBoot), lessonsArr as any); } catch {}
   }
   // (скрытый шаг)
   step(++i, 1);
 
-  // 7) Темы/подтемы активного курса — cache-first + прогрев; а также заранее прогреем иконки
+  // 7) Темы активного курса — cache-first + прогрев иконок
   phase('Темы и иконки');
   let topicsBySubject: Record<string, any[]> = {};
-  let subtopicsByTopic: Record<string, any[]> = {};
   if (activeId) {
     try {
       const cachedT = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(activeId)) || [];
       if (cachedT.length) topicsBySubject[String(activeId)] = cachedT;
-      const cachedS = cacheGet<any[]>(CACHE_KEYS.subtopicsBySubject(activeId)) || [];
-      if (cachedS.length) {
-        cachedS.forEach((s: any) => {
-          const key = String(s.topic_id);
-          (subtopicsByTopic[key] ||= []).push(s);
-        });
-      }
     } catch {}
   }
   // Прогрев лого/иконок, важных для первого кадра
@@ -482,16 +471,12 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // финал boot
   report(100);
 
-  // Попробуем восстановить названия выбранных темы/подтемы
+  // Попробуем восстановить название выбранной темы
   let currentTopicTitle: string | null = null;
-  let currentSubtopicTitle: string | null = null;
   const currentTopicId: string | number | null = userRow?.current_topic ?? null;
-  const currentSubtopicId: string | number | null = userRow?.current_subtopic ?? null;
   try {
     const t = localStorage.getItem('exampli:currentTopicTitle');
-    const s = localStorage.getItem('exampli:currentSubtopicTitle');
     if (t) currentTopicTitle = t;
-    if (s) currentSubtopicTitle = s;
   } catch {}
 
   const boot: BootData = {
@@ -505,11 +490,8 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     subjectsAll,
     onboarding,
     current_topic_id: currentTopicId,
-    current_subtopic_id: currentSubtopicId,
     current_topic_title: currentTopicTitle,
-    current_subtopic_title: currentSubtopicTitle,
     topicsBySubject,
-    subtopicsByTopic,
   };
 
   (window as any).__exampliBoot = boot;
@@ -545,12 +527,7 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
     try { cacheSet(CACHE_KEYS.subjectsAll, data.subjectsAll || []); } catch {}
     try {
       const topicsBySubject = data.topicsBySubject || {};
-      const subtopicsByTopic = data.subtopicsByTopic || {};
       Object.entries(topicsBySubject).forEach(([sid, arr]) => cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any));
-      // В subtopics кешируем агрегированно по subjectId (как и раньше)
-      const compact: any[] = [];
-      Object.values<any[]>(subtopicsByTopic).forEach((arr) => { compact.push(...(arr || [])); });
-      if (activeId) cacheSet(CACHE_KEYS.subtopicsBySubject(activeId), compact);
     } catch {}
   } catch {}
 }
@@ -567,19 +544,6 @@ export async function precacheTopicsForSubject(subjectId: number | string): Prom
       .order('order_index', { ascending: true });
     const tlist = (topics as any[]) || [];
     try { cacheSet(CACHE_KEYS.topicsBySubject(subjectId), tlist); } catch {}
-
-    // Подтемы
-    const topicIds = tlist.map((t: any) => t.id);
-    if (topicIds.length) {
-      const { data: subs } = await supabase
-        .from('subtopics')
-        .select('id, topic_id, title, order_index')
-        .in('topic_id', topicIds)
-        .order('topic_id', { ascending: true })
-        .order('order_index', { ascending: true });
-      const slist = (subs as any[]) || [];
-      try { cacheSet(CACHE_KEYS.subtopicsBySubject(subjectId), slist); } catch {}
-    }
 
     // Иконки тем → data URL в localStorage (до 42)
     await Promise.all(

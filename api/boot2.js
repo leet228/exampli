@@ -33,12 +33,11 @@ export default async function handler(req, res) {
         invites: [],
         subjectsAll: [],
         topicsBySubject: {},
-        subtopicsByTopic: {},
       });
       return;
     }
 
-    const [friendsList, invites, subjectsAll, topicsAndSubs] = await Promise.all([
+    const [friendsList, invites, subjectsAll, topicsOnly] = await Promise.all([
       supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
@@ -49,8 +48,7 @@ export default async function handler(req, res) {
       friends: friendsList,
       invites,
       subjectsAll,
-      topicsBySubject: topicsAndSubs.topicsBySubject,
-      subtopicsByTopic: topicsAndSubs.subtopicsByTopic,
+      topicsBySubject: topicsOnly.topicsBySubject,
     });
   } catch (e) {
     console.error('[api/boot2] error', e);
@@ -60,8 +58,7 @@ export default async function handler(req, res) {
 
 async function fetchTopics(supabase, subjectId) {
   const topicsBySubject = {};
-  const subtopicsByTopic = {};
-  if (!subjectId) return { topicsBySubject, subtopicsByTopic };
+  if (!subjectId) return { topicsBySubject };
   const { data: topics } = await supabase
     .from('topics')
     .select('id, subject_id, title, order_index')
@@ -69,20 +66,7 @@ async function fetchTopics(supabase, subjectId) {
     .order('order_index', { ascending: true });
   const tlist = topics || [];
   if (tlist.length) topicsBySubject[String(subjectId)] = tlist;
-  const topicIds = tlist.map(t => t.id);
-  if (topicIds.length) {
-    const { data: subs } = await supabase
-      .from('subtopics')
-      .select('id, topic_id, title, order_index')
-      .in('topic_id', topicIds)
-      .order('topic_id', { ascending: true })
-      .order('order_index', { ascending: true });
-    (subs || []).forEach(s => {
-      const key = String(s.topic_id);
-      (subtopicsByTopic[key] ||= []).push(s);
-    });
-  }
-  return { topicsBySubject, subtopicsByTopic };
+  return { topicsBySubject };
 }
 
 async function safeJson(req) {

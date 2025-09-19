@@ -98,7 +98,7 @@ export default function AddCourseSheet({
 
   const save = async () => {
     if (!picked) return;
-    // запишем выбранный курс в users.added_course и сразу выберем первую тему/подтему
+    // запишем выбранный курс в users.added_course и сразу выберем первую тему
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (tgId) {
       const { data: user } = await supabase
@@ -107,7 +107,7 @@ export default function AddCourseSheet({
         .eq('tg_id', String(tgId))
         .single();
       if (user?.id) {
-        // first topic/subtopic of this subject
+        // first topic of this subject
         const { data: topics } = await supabase
           .from('topics')
           .select('id,title')
@@ -115,30 +115,20 @@ export default function AddCourseSheet({
           .order('order_index', { ascending: true })
           .limit(1);
         const firstTopic = (topics as any[])?.[0] || null;
-        let firstSub: any = null;
-        if (firstTopic?.id) {
-          const { data: subs } = await supabase
-            .from('subtopics')
-            .select('id,title')
-            .eq('topic_id', firstTopic.id)
-            .order('order_index', { ascending: true })
-            .limit(1);
-          firstSub = (subs as any[])?.[0] || null;
-        }
         await supabase
           .from('users')
-          .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null, current_subtopic: firstSub?.id ?? null })
+          .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null })
           .eq('id', user.id);
-        // lessons for first subtopic — cache & notify
+        // lessons for first topic — cache & notify
         try {
-          if (firstSub?.id) {
+          if (firstTopic?.id) {
             const { data: lessons } = await supabase
               .from('lessons')
-              .select('id, subtopic_id, order_index')
-              .eq('subtopic_id', firstSub.id)
+              .select('id, topic_id, order_index')
+              .eq('topic_id', firstTopic.id)
               .order('order_index', { ascending: true });
             const list = (lessons as any[]) || [];
-            cacheSet(CACHE_KEYS.lessonsBySubtopic(firstSub.id), list as any);
+            cacheSet(CACHE_KEYS.lessonsByTopic(firstTopic.id), list as any);
             try { window.dispatchEvent(new Event('exampli:lessonsChanged')); } catch {}
           }
         } catch {}
@@ -148,14 +138,10 @@ export default function AddCourseSheet({
             localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
             localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
           }
-          if (firstSub?.id) {
-            localStorage.setItem('exampli:currentSubtopicId', String(firstSub.id));
-            localStorage.setItem('exampli:currentSubtopicTitle', String(firstSub.title || ''));
-          }
         } catch {}
         try {
-          if (firstTopic?.title || firstSub?.title) {
-            window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title, subtopicTitle: firstSub?.title } } as any));
+          if (firstTopic?.title) {
+            window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title } } as any));
           }
         } catch {}
       }

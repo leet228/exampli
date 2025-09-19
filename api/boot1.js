@@ -147,20 +147,19 @@ async function fetchActiveSubjectAndLessons(supabase, userRow, activeCodeFromCli
     const { data: subj } = await supabase.from('subjects').select('id,code,title,level').eq('id', activeId).single();
     subject = subj || null;
   }
-  // lessons are per subtopic now; take current_subtopic if exists
+  // lessons are per topic now; take current_topic if exists
   let lessons = [];
   if (subject?.id) {
-    const currentSubId = userRow?.current_subtopic || null;
-    if (currentSubId) {
+    const currentTopicId = userRow?.current_topic || null;
+    if (currentTopicId) {
       const { data: rows } = await supabase
         .from('lessons')
-        .select('id, subtopic_id, order_index')
-        .eq('subtopic_id', currentSubId)
+        .select('id, topic_id, order_index')
+        .eq('topic_id', currentTopicId)
         .order('order_index', { ascending: true })
         .limit(50);
-      lessons = (rows || []).map(l => ({ id: l.id, subtopic_id: l.subtopic_id, order_index: l.order_index }));
+      lessons = (rows || []).map(l => ({ id: l.id, topic_id: l.topic_id, order_index: l.order_index }));
     } else {
-      // fallback: no subtopic selected yet – empty lessons
       lessons = [];
     }
   }

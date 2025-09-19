@@ -50,11 +50,10 @@ export const CACHE_KEYS = {
   invitesIncomingList: 'invites_incoming_list',
   subjectByCode: (code: string) => `subject_code:${code}`,
   lessonsByCode: (code: string) => `lessons_code:${code}`,
-  // lessons cache keyed by subtopic (новый формат для уроков, привязанных к подтеме)
-  lessonsBySubtopic: (subtopicId: string | number) => `lessons_sub:${subtopicId}`,
-  // topics/subtopics cache per subject for offline usage
+  // lessons cache keyed by topic (новый формат: уроки принадлежат теме)
+  lessonsByTopic: (topicId: string | number) => `lessons_topic:${topicId}`,
+  // topics cache per subject for offline usage
   topicsBySubject: (subjectId: string | number) => `topics_by_subject:${subjectId}`,
-  subtopicsBySubject: (subjectId: string | number) => `subtopics_by_subject:${subjectId}`,
   // cached SVG data URL for topic icons by order_index (1..N)
   topicIconSvg: (orderIndex: number | string) => `topic_icon_svg:${orderIndex}`,
 };

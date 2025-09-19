@@ -106,15 +106,14 @@ export default function Home() {
         }
         if (title) setCourseTitle(title);
       }
-
-      // уроки подтемы: читаем из кэша по current_subtopic
-      let subId: string | number | null = null;
+      // уроки темы: читаем из кэша по current_topic
+      let topicId: string | number | null = null;
       try {
         const boot: any = (window as any).__exampliBoot;
-        subId = boot?.current_subtopic_id ?? boot?.user?.current_subtopic ?? null;
+        topicId = boot?.current_topic_id ?? boot?.user?.current_topic ?? null;
       } catch {}
-      if (subId != null) {
-        const data = cacheGet<any[]>(CACHE_KEYS.lessonsBySubtopic(subId)) || [];
+      if (topicId != null) {
+        const data = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(topicId)) || [];
         const nodes: LessonNode[] = (data || []).map((l: any) => ({ id: l.id, order_index: Number(l.order_index || 0) }));
         setLessons(nodes);
       } else {
@@ -158,8 +157,8 @@ export default function Home() {
       fetchLessons(code);
     };
     window.addEventListener('exampli:courseChanged', onChanged as EventListener);
-    const onSubtopic = () => { fetchLessons(); };
-    window.addEventListener('exampli:subtopicChanged', onSubtopic as EventListener);
+    const onTopic = () => { fetchLessons(); };
+    window.addEventListener('exampli:topicChanged', onTopic as EventListener);
     const onLessonsChanged = () => { fetchLessons(); };
     window.addEventListener('exampli:lessonsChanged', onLessonsChanged as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
@@ -198,7 +197,7 @@ export default function Home() {
           }}
         />
       ) : (
-        <div className="card">В этой подтеме пока нет уроков.</div>
+        <div className="card">В этой теме пока нет уроков.</div>
       )}
 
       {/* поповер старта под узлом урока */}
