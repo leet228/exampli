@@ -36,6 +36,21 @@ export default function Home() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // выбираем реальный скролл-контейнер страницы (учитываем контейнер из AppLayout)
+  const getScrollContainer = useCallback((): HTMLElement | null => {
+    // 1) локальный контейнер
+    const local = scrollRef.current as HTMLElement | null;
+    if (local && local.scrollHeight > local.clientHeight + 1) return local;
+    // 2) любой .main-scroll повыше
+    try {
+      const nodes = Array.from(document.querySelectorAll('.main-scroll')) as HTMLElement[];
+      const cand = nodes.find((el) => el.scrollHeight > el.clientHeight + 1);
+      if (cand) return cand;
+    } catch {}
+    // 3) фолбэк — окно
+    return null;
+  }, []);
+
   // ======== helpers: localStorage =========
   const readActiveFromStorage = useCallback((): string | null => {
     try { return localStorage.getItem(ACTIVE_KEY) || cacheGet<string>(CACHE_KEYS.activeCourseCode) || null; } catch { return null; }
@@ -167,8 +182,8 @@ export default function Home() {
     window.addEventListener('exampli:lessonsChanged', onLessonsChanged as EventListener);
     const onHomeReselect = () => {
       try {
-        const container = scrollRef.current;
-        const road = listRef.current;
+        const container = getScrollContainer();
+        const road = listRef.current as HTMLElement | null;
         if (container && road) {
           const cRect = container.getBoundingClientRect();
           const rRect = road.getBoundingClientRect();
@@ -216,7 +231,7 @@ export default function Home() {
               // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
               try {
                 const anchor = el as HTMLElement | null;
-                const container = scrollRef.current;
+                const container = getScrollContainer();
                 const bottomNavHeight = 92; // как в .safe-bottom
                 const popoverHeight = 220; // приблизительная высота поповера
                 const margin = 16;
@@ -225,8 +240,7 @@ export default function Home() {
                   const viewportBottom = window.innerHeight - bottomNavHeight;
                   const overlap = (rect.bottom + popoverHeight + margin) - viewportBottom;
                   if (overlap > 0) {
-                    const canUseContainer = !!container && container.scrollHeight > container.clientHeight + 1;
-                    if (canUseContainer) container.scrollTo({ top: container.scrollTop + overlap, behavior: 'smooth' });
+                    if (container) container.scrollTo({ top: container.scrollTop + overlap, behavior: 'smooth' });
                     else window.scrollTo({ top: window.scrollY + overlap, behavior: 'smooth' });
                   }
                 }
