@@ -20,6 +20,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [pressedId, setPressedId] = useState<string | number | null>(null);
+  const [lessonCounts, setLessonCounts] = useState<Record<string | number, number>>({});
   const [currentTopicId, setCurrentTopicId] = useState<string | number | null>(null);
 
   const readActiveCode = useCallback(() => {
@@ -62,6 +63,35 @@ export default function TopicsPanel({ open, onClose }: Props) {
   }, [readActiveCode]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+  
+  // Подгружаем количество уроков для каждой темы (0/Н)
+  useEffect(() => {
+    (async () => {
+      if (!Array.isArray(topics) || !topics.length) { setLessonCounts({}); return; }
+      const res: Record<string | number, number> = {};
+      // 1) сначала из локального кэша
+      topics.forEach((t) => {
+        try {
+          const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(t.id));
+          if (Array.isArray(cached)) res[t.id] = cached.length;
+        } catch {}
+      });
+      // 2) для отсутствующих — лёгкие head-запросы с count
+      const missing = topics.filter(t => res[t.id] == null);
+      if (missing.length) {
+        await Promise.all(missing.map(async (t) => {
+          try {
+            const { count } = await supabase
+              .from('lessons')
+              .select('id', { count: 'exact', head: true })
+              .eq('topic_id', t.id);
+            res[t.id] = Number(count ?? 0);
+          } catch { res[t.id] = 0; }
+        }));
+      }
+      setLessonCounts(res);
+    })();
+  }, [topics]);
   useEffect(() => {
     const onCourseChanged = () => { void loadData(); };
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
@@ -180,6 +210,14 @@ export default function TopicsPanel({ open, onClose }: Props) {
             />
             <div className="flex-1 text-left">
               <div className="text-base font-semibold" style={{ color: selected ? accentColor : undefined }}>{t.title}</div>
+              {/* Прогресс-бар под названием — старт ровно под началом текста */}
+              <div className="mt-2 relative h-5 rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.06)' }}>
+                {/* Пустой (но с маленьким стартом) прогресс */}
+                <div className="absolute left-0 top-0 bottom-0 rounded-2xl" style={{ width: 22, background: '#57cc02' }} />
+                <div className="absolute inset-0 flex items-center justify-center text-[13px] font-extrabold" style={{ color: 'rgba(255,255,255,0.38)' }}>
+                  {`0/${Number(lessonCounts[t.id] ?? 0)}`}
+                </div>
+              </div>
             </div>
             <span className="opacity-90" style={{ color: selected ? accentColor : undefined }}>›</span>
           </motion.button>
