@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
@@ -24,31 +24,10 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
   }, []);
   const getOffsetX = (idx: number): number => pattern[idx % pattern.length];
 
-  // Глобальная линия на 100vw: вычисляем позицию через якорь и рисуем fixed-элемент
-  const lineAnchorRef = useRef<HTMLDivElement | null>(null);
-  const [lineTop, setLineTop] = useState<number | null>(null);
-  useEffect(() => {
-    const update = () => {
-      try {
-        const el = lineAnchorRef.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        // Для fixed-элемента используем координату относительно вьюпорта
-        setLineTop(Math.round(r.top));
-      } catch {}
-    };
-    update();
-    window.addEventListener('scroll', update, { passive: true } as any);
-    window.addEventListener('resize', update);
-    return () => { window.removeEventListener('scroll', update as any); window.removeEventListener('resize', update); };
-  }, [lessons?.length]);
+  // линия будет локальной (в ширину контейнера) с «размытием» по краям через градиент
 
   return (
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
-      {/* Глобальная линия 100vw */}
-      {lineTop != null && (
-        <div className="pointer-events-none fixed left-0" style={{ top: lineTop, width: '100vw', height: 2, background: 'rgba(255,255,255,0.18)', zIndex: 10 }} />
-      )}
       {/* центральную вертикальную линию убрали */}
 
       <ul className="overflow-visible">
@@ -88,8 +67,16 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          {/* Якорь для глобальной линии */}
-          <div ref={lineAnchorRef} style={{ height: 2 }} />
+          {/* Разделительная линия «как было», но с мягким затуханием по краям */}
+          <div className="flex justify-center px-0">
+            <div
+              className="h-[2px] w-full"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 10%, rgba(255,255,255,0.18) 90%, rgba(255,255,255,0) 100%)',
+              }}
+            />
+          </div>
 
           <div className="mt-5 px-5 text-center">
             {/* Пилюля с текущей темой */}
