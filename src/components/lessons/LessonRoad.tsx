@@ -10,25 +10,28 @@ type Props = {
 };
 
 export default function LessonRoad({ lessons, onOpen }: Props) {
+  // Горизонтальные смещения
+  const small = 40;
+  const big = 58;
   const pattern = useMemo(() => {
-    // Центр → влево (малый) → влево (большой) → влево (малый) → центр → вправо (малый) → вправо (большой) → вправо (малый) → центр …
-    // Значения в px; можно подправить под визуал
-    const small = 40;
-    const big = 58;
+    // Центр → влево(мал) → влево(больш) → влево(мал) → центр → вправо(мал) → вправо(больш) → вправо(мал) → центр …
     return [0, -small, -big, -small, 0, small, big, small, 0];
   }, []);
-
   const getOffsetX = (idx: number): number => pattern[idx % pattern.length];
 
   return (
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* центральную вертикальную линию убрали */}
 
-      <ul className="space-y-2 overflow-visible">
+      <ul className="overflow-visible">
         {lessons.map((l, idx) => {
           const offsetX = getOffsetX(idx);
+          const prev = idx > 0 ? getOffsetX(idx - 1) : 0;
+          const gapPx = idx === 0
+            ? 0
+            : (Math.abs(prev) === small && Math.abs(offsetX) === big ? 16 : 8); // small→big = 4, иначе = 2
           return (
-            <li key={l.id}>
+            <li key={l.id} style={{ marginTop: gapPx }}>
               <div className={`flex justify-center`} style={{ overflow: 'visible' }}>
                 <motion.div
                   initial={{ opacity: 0, y: 12, x: 0 }}
