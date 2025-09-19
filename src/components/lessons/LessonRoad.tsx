@@ -64,39 +64,43 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          <div className="flex justify-center">
-            {/* отчерчивающая линия */}
-            <div className="h-px w-4/5 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="flex justify-center px-4">
+            {/* чёткая разделительная линия без градиента */}
+            <div className="h-[2px] w-full bg-white/10" />
           </div>
-          <div className="mt-4 px-5">
-            {/* Текущая тема */}
+
+          <div className="mt-5 px-5 text-center">
+            {/* Пилюля с текущей темой */}
             {currentTopicTitle ? (
-              <div className="mb-3">
-                <div className="text-xs uppercase tracking-wide opacity-70 mb-1">Текущая тема</div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 font-semibold">
-                  {currentTopicTitle}
+              <div className="mb-3 flex justify-center">
+                <div
+                  className="inline-flex rounded-xl px-3 py-1 text-[12px] font-extrabold uppercase tracking-[0.08em]"
+                  style={{ color: '#3c73ff', background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)' }}
+                >
+                  {String(currentTopicTitle)}
                 </div>
               </div>
             ) : null}
 
-            {/* Следующая тема */}
+            {/* Крупный заголовок — следующая тема */}
             {nextTopicTitle ? (
-              <div className="mb-4">
-                <div className="text-xs uppercase tracking-wide opacity-70 mb-1">Следующая тема</div>
-                <div className="rounded-2xl border border-white/10 px-4 py-3 font-semibold" style={{ color: '#3c73ff', background: 'rgba(60,115,255,0.08)' }}>
-                  {nextTopicTitle}
-                </div>
+              <div className="mb-5 px-2 text-white text-2xl sm:text-3xl font-extrabold leading-snug">
+                {nextTopicTitle}
               </div>
             ) : null}
 
             {/* Кнопка перехода */}
             {nextTopicTitle && onNextTopic ? (
-              <LessonButton
-                text="Перейти на следующую тему"
-                baseColor="#3c73ff"
-                shadowHeight={6}
-                onClick={onNextTopic}
-              />
+              <>
+                <LessonButton
+                  text="Перейти на следующую тему"
+                  baseColor="#3c73ff"
+                  shadowHeight={6}
+                  onClick={onNextTopic}
+                />
+                {/* дополнительный большой отступ до низа */}
+                <div style={{ height: 96 }} />
+              </>
             ) : null}
           </div>
         </li>
