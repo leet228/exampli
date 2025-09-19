@@ -1,5 +1,5 @@
 // src/pages/Home.tsx
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import SkillRoad from '../components/SkillRoad';
 import LessonRoad from '../components/lessons/LessonRoad';
@@ -31,6 +31,10 @@ export default function Home() {
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState<string>('');
 
+
+  // refs для скролла
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   // ======== helpers: localStorage =========
   const readActiveFromStorage = useCallback((): string | null => {
@@ -161,12 +165,16 @@ export default function Home() {
     window.addEventListener('exampli:topicChanged', onTopic as EventListener);
     const onLessonsChanged = () => { fetchLessons(); };
     window.addEventListener('exampli:lessonsChanged', onLessonsChanged as EventListener);
+    const onHomeReselect = () => {
+      try { scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+    };
+    window.addEventListener('exampli:homeReselect', onHomeReselect as EventListener);
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
   }, [fetchLessons, writeActiveToStorage]);
 
   // ======== рендер =========
   return (
-    <div className="overflow-x-hidden" style={{ overflow: 'visible' }}>
+    <div ref={scrollRef} className="main-scroll overflow-x-hidden" style={{ overflowX: 'hidden' }}>
       {/* плавающая кнопка «Темы» и левая панель */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
 
@@ -188,14 +196,33 @@ export default function Home() {
       {loading ? (
         <div className="card">Загружаем уроки…</div>
       ) : lessons.length > 0 ? (
-        <LessonRoad
-          lessons={lessons}
-          onOpen={(id, el) => {
-            setCurrentLessonId(id);
-            setAnchorEl(el);
-            setLessonPreviewOpen(true);
-          }}
-        />
+        <div ref={listRef}>
+          <LessonRoad
+            lessons={lessons}
+            onOpen={(id, el) => {
+              // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
+              try {
+                const anchor = el as HTMLElement | null;
+                const container = scrollRef.current;
+                if (anchor && container) {
+                  const rect = anchor.getBoundingClientRect();
+                  const containerRect = container.getBoundingClientRect();
+                  const bottomNavHeight = 92; // как в .safe-bottom
+                  const popoverHeight = 220; // приблизительная высота поповера
+                  const margin = 16;
+                  const overlap = (rect.bottom + popoverHeight + margin) - (window.innerHeight - bottomNavHeight);
+                  if (overlap > 0) {
+                    const current = container.scrollTop;
+                    container.scrollTo({ top: current + overlap, behavior: 'smooth' });
+                  }
+                }
+              } catch {}
+              setCurrentLessonId(id);
+              setAnchorEl(el);
+              setLessonPreviewOpen(true);
+            }}
+          />
+        </div>
       ) : (
         <div className="card">В этой теме пока нет уроков.</div>
       )}
