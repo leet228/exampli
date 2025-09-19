@@ -154,6 +154,12 @@ body,
 .main-scroll {
     touch-action: pan-y;
     overscroll-behavior-x: none;
+    /* скрыть вертикальную полосу прокрутки, сохранив скролл */
+    -ms-overflow-style: none; /* IE/Edge */
+    scrollbar-width: none;     /* Firefox */
+}
+.main-scroll::-webkit-scrollbar { /* Chrome/Safari */
+    display: none;
 }
 
 
@@ -393,6 +399,12 @@ body,
 .side-panel-body {
     padding: 12px 12px max(env(safe-area-inset-bottom), 16px) 12px;
     overflow: auto;
+    /* скрыть вертикальную полосу прокрутки, сохранив скролл */
+    -ms-overflow-style: none; /* IE/Edge */
+    scrollbar-width: none;     /* Firefox */
+}
+.side-panel-body::-webkit-scrollbar { /* Chrome/Safari */
+    display: none;
 }
 
 
