@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
+import { hapticSelect } from '../../lib/haptics';
 
 export type LessonNode = { id: string | number; order_index: number };
 
@@ -64,9 +65,9 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          {/* чёткая разделительная линия на всю ширину экрана */}
+          {/* чёткая разделительная линия на всю ширину видимой области приложения */}
           <div className="relative" style={{ height: 2 }}>
-            <div className="absolute left-1/2 -translate-x-1/2 top-0 h-[2px] bg-white/10" style={{ width: '100vw' }} />
+            <div className="absolute top-0 h-[2px] bg-white/10" style={{ left: -20, right: -20 }} />
           </div>
 
           <div className="mt-5 px-5 text-center">
@@ -98,7 +99,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                     text="ПЕРЕЙТИ НА СЛЕДУЮЩУЮ ТЕМУ"
                     baseColor="#3c73ff"
                     shadowHeight={6}
-                    onClick={onNextTopic}
+                    onClick={() => { try { hapticSelect(); } catch {} if (onNextTopic) onNextTopic(); }}
                   />
                 </div>
                 {/* дополнительный большой отступ до низа */}
