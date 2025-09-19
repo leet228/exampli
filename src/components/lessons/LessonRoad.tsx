@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
@@ -24,8 +24,30 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
   }, []);
   const getOffsetX = (idx: number): number => pattern[idx % pattern.length];
 
+  // Глобальная линия на 100vw: вычисляем позицию через якорь и рисуем fixed-элемент
+  const lineAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [lineTop, setLineTop] = useState<number | null>(null);
+  useEffect(() => {
+    const update = () => {
+      try {
+        const el = lineAnchorRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setLineTop(Math.round(r.top + window.scrollY));
+      } catch {}
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true } as any);
+    window.addEventListener('resize', update);
+    return () => { window.removeEventListener('scroll', update as any); window.removeEventListener('resize', update); };
+  }, [lessons?.length]);
+
   return (
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
+      {/* Глобальная линия 100vw */}
+      {lineTop != null && (
+        <div className="pointer-events-none fixed left-0" style={{ top: lineTop, width: '100vw', height: 2, background: 'rgba(255,255,255,0.1)', zIndex: 1 }} />
+      )}
       {/* центральную вертикальную линию убрали */}
 
       <ul className="overflow-visible">
@@ -65,10 +87,8 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          {/* чёткая разделительная линия на всю ширину видимой области приложения */}
-          <div className="relative" style={{ height: 2 }}>
-            <div className="absolute top-0 h-[2px] bg-white/10" style={{ left: -20, right: -20 }} />
-          </div>
+          {/* Якорь для глобальной линии */}
+          <div ref={lineAnchorRef} style={{ height: 2 }} />
 
           <div className="mt-5 px-5 text-center">
             {/* Пилюля с текущей темой */}
