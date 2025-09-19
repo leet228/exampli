@@ -109,6 +109,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                     icon={'★'}
                     baseColor={nodeBase}
                     innerIconBg={nodeInner}
+                    dataLessonId={l.id}
                     onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
                   />
                 </motion.div>
