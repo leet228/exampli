@@ -180,13 +180,7 @@ export default function AppLayout() {
         </div>
       )}
 
-      {/* Прогрев FriendsPanel и AddFriendsPanel (один раз, затем размонтируем) */}
-      {bootReady && !bootDone && !prewarmFriendsDone && (
-        <div className="prewarm-mount" aria-hidden="true">
-          <FriendsPanel open onClose={() => {}} />
-          <AddFriendsPanel open onClose={() => {}} />
-        </div>
-      )}
+      {/* Убрали прогрев FriendsPanel/AddFriendsPanel, данные для них прогреваются через boot2 в фоне */}
 
       {/* Постоянный прогрев AddCourseSheet (без сайд‑эффектов и в отдельном руте) */}
       {bootReady && (

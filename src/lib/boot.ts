@@ -201,10 +201,10 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 2d) количество друзей — cache-first, обновление в фоне
+  // 2d) количество друзей — cache-first, обновление в фоне (не блокируем UI)
   let friendsCountBoot: number | null = null;
   try { friendsCountBoot = cacheGet<number>(CACHE_KEYS.friendsCount) ?? null; } catch {}
-  (async () => {
+  setTimeout(() => (async () => {
     try {
       const rpc = await supabase.rpc('rpc_friend_count', { caller: userRow?.id } as any);
       if (!rpc.error) {
@@ -222,7 +222,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
         try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: cnt } } as any)); } catch {}
       }
     } catch {}
-  })();
+  })(), 0);
   // (скрытый шаг)
   step(++i, 1);
 
