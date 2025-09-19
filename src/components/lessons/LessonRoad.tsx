@@ -52,8 +52,8 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   <LessonRoundButton
                     size={70}
                     icon={'★'}
-                    baseColor="#3c73ff"
-                    innerIconBg="#2b57e6"
+                    baseColor="#fc86d0"
+                    innerIconBg="#e45fb8"
                     onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
                   />
                 </motion.div>
@@ -64,12 +64,9 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          <div className="flex justify-center">
-            {/* чёткая разделительная линия на всю ширину экрана */}
-            <div
-              className="h-[2px] bg-white/10"
-              style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }}
-            />
+          {/* чёткая разделительная линия на всю ширину экрана */}
+          <div className="relative" style={{ height: 2 }}>
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 h-[2px] bg-white/10" style={{ width: '100vw' }} />
           </div>
 
           <div className="mt-5 px-5 text-center">
