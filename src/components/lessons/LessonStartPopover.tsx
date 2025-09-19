@@ -89,12 +89,20 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
       const idx = Math.max(0, ((orderIndex || 1) - 1) % 3);
       setBaseColor(palette[idx]);
 
-      // «Урок X из N»
+      // «Урок X из N» — X берём из order_index урока под поповером
       try {
         const tid = localStorage.getItem('exampli:currentTopicId');
         const cached = tid ? cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(tid)) : null;
         const total = Array.isArray(cached) ? cached.length : 0;
-        const current = 1; // пока без реального прогресса
+        let current = 1;
+        try {
+          const idAttr = (anchorEl as any)?.getAttribute?.('data-lesson-id');
+          const lessonId = idAttr || null;
+          if (lessonId && Array.isArray(cached)) {
+            const found = cached.find((l: any) => String(l.id) === String(lessonId));
+            if (found?.order_index != null) current = Number(found.order_index) || 1;
+          }
+        } catch {}
         setProgressLabel(`Урок ${current} из ${total || 1}`);
       } catch { setProgressLabel('Урок 1 из 1'); }
     } catch {}

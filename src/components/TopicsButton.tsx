@@ -151,7 +151,7 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     >
       <div className="text-left leading-tight">
         <div className="text-[18px] font-extrabold leading-tight">{topicTitle}</div>
-        <div className="text-[13px] font-extrabold opacity-90">{`0/${lessonCount}`}</div>
+        <div className="mt-1 text-[13px] font-extrabold" style={{ color: 'rgba(255,255,255,0.55)' }}>{`0/${lessonCount}`}</div>
       </div>
       <span className="ml-2 text-[18px] opacity-90">▾</span>
     </motion.button>
