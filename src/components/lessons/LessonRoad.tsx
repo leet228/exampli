@@ -1,15 +1,19 @@
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import LessonRoundButton from './LessonRoundButton';
+import LessonButton from './LessonButton';
 
 export type LessonNode = { id: string | number; order_index: number };
 
 type Props = {
   lessons: LessonNode[];
   onOpen: (lessonId: string | number, anchorEl: HTMLElement | null) => void;
+  currentTopicTitle?: string | null;
+  nextTopicTitle?: string | null;
+  onNextTopic?: () => void;
 };
 
-export default function LessonRoad({ lessons, onOpen }: Props) {
+export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTopicTitle, onNextTopic }: Props) {
   // Горизонтальные смещения
   const small = 40;
   const big = 58;
@@ -57,6 +61,45 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
             </li>
           );
         })}
+
+        {/* Финальный блок под последним уроком */}
+        <li style={{ marginTop: 24 }}>
+          <div className="flex justify-center">
+            {/* отчерчивающая линия */}
+            <div className="h-px w-4/5 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          </div>
+          <div className="mt-4 px-5">
+            {/* Текущая тема */}
+            {currentTopicTitle ? (
+              <div className="mb-3">
+                <div className="text-xs uppercase tracking-wide opacity-70 mb-1">Текущая тема</div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 font-semibold">
+                  {currentTopicTitle}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Следующая тема */}
+            {nextTopicTitle ? (
+              <div className="mb-4">
+                <div className="text-xs uppercase tracking-wide opacity-70 mb-1">Следующая тема</div>
+                <div className="rounded-2xl border border-white/10 px-4 py-3 font-semibold" style={{ color: '#3c73ff', background: 'rgba(60,115,255,0.08)' }}>
+                  {nextTopicTitle}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Кнопка перехода */}
+            {nextTopicTitle && onNextTopic ? (
+              <LessonButton
+                text="Перейти на следующую тему"
+                baseColor="#3c73ff"
+                shadowHeight={6}
+                onClick={onNextTopic}
+              />
+            ) : null}
+          </div>
+        </li>
       </ul>
     </div>
   );

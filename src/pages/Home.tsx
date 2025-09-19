@@ -1,6 +1,7 @@
 // src/pages/Home.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
+import { supabase } from '../lib/supabase';
 import SkillRoad from '../components/SkillRoad';
 import LessonRoad from '../components/lessons/LessonRoad';
 import LessonStartPopover from '../components/lessons/LessonStartPopover';
@@ -10,6 +11,7 @@ import TopicsPanel from '../components/panels/TopicsPanel';
 
 type RoadItem = { id: string; title: string; subtitle?: string };
 type LessonNode = { id: string | number; order_index: number };
+type Topic = { id: string | number; subject_id: string | number; title: string; order_index: number };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
 
@@ -26,6 +28,8 @@ export default function Home() {
   const [currentLessonId, setCurrentLessonId] = useState<string | number | null>(null);
   const [lessons, setLessons] = useState<LessonNode[]>([]);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [currentTopicTitle, setCurrentTopicTitle] = useState<string | null>(null);
+  const [nextTopicTitle, setNextTopicTitle] = useState<string | null>(null);
 
   // активный курс
   const [activeCode, setActiveCode] = useState<string | null>(null);
@@ -149,16 +153,65 @@ export default function Home() {
       }
       // уроки темы: читаем из кэша по current_topic
       let topicId: string | number | null = null;
+      let topicTitleLocal: string | null = null;
       try {
         const boot: any = (window as any).__exampliBoot;
         topicId = boot?.current_topic_id ?? boot?.user?.current_topic ?? null;
+        topicTitleLocal = boot?.current_topic_title ?? null;
       } catch {}
+      // также попробуем из localStorage (самый свежий выбор из TopicsPanel)
+      try {
+        const savedId = localStorage.getItem('exampli:currentTopicId');
+        const savedTitle = localStorage.getItem('exampli:currentTopicTitle');
+        if (savedId != null) topicId = savedId;
+        if (savedTitle != null) topicTitleLocal = savedTitle;
+      } catch {}
+      setCurrentTopicTitle(topicTitleLocal || null);
       if (topicId != null) {
         const data = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(topicId)) || [];
         const nodes: LessonNode[] = (data || []).map((l: any) => ({ id: l.id, order_index: Number(l.order_index || 0) }));
         setLessons(nodes);
+        // посчитаем «следующую тему» на основе списка тем активного предмета
+        try {
+          // найдём id активного предмета по коду
+          let subjectId: string | number | null = null;
+          try {
+            const boot: any = (window as any).__exampliBoot;
+            const inUser = (boot?.subjects || []).find((s: any) => s.code === code);
+            if (inUser?.id != null) subjectId = inUser.id;
+            if (subjectId == null) {
+              const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+              const found = all.find((s) => s.code === code);
+              if (found?.id != null) subjectId = found.id;
+            }
+          } catch {}
+          let topics: Topic[] = [];
+          if (subjectId != null) {
+            const cached = cacheGet<Topic[]>(CACHE_KEYS.topicsBySubject(subjectId));
+            if (cached && Array.isArray(cached) && cached.length) {
+              topics = cached;
+            } else {
+              try {
+                const boot: any = (window as any).__exampliBoot;
+                const by = (boot?.topicsBySubject || {}) as Record<string, Topic[]>;
+                const list = by?.[String(subjectId)] || [];
+                topics = (list as any[]) as Topic[];
+              } catch {}
+            }
+          }
+          if (Array.isArray(topics) && topics.length) {
+            const idx = topics.findIndex(t => String(t.id) === String(topicId));
+            const next = idx >= 0 ? topics[idx + 1] : null;
+            setNextTopicTitle(next?.title ?? null);
+          } else {
+            setNextTopicTitle(null);
+          }
+        } catch {
+          setNextTopicTitle(null);
+        }
       } else {
         setLessons([]);
+        setNextTopicTitle(null);
       }
       // placeholder карточка «нет уроков» через старый список
       const mapped: RoadItem[] = [];
@@ -243,6 +296,99 @@ export default function Home() {
         <div ref={listRef}>
           <LessonRoad
             lessons={lessons}
+            currentTopicTitle={currentTopicTitle}
+            nextTopicTitle={nextTopicTitle}
+            onNextTopic={async () => {
+              // найдём следующую тему ещё раз и применим, чтобы не расходиться со стейтом
+              try {
+                // активный код и subject id
+                const sel = await ensureActiveCourse();
+                const codeNow = sel.code;
+                let subjectId: string | number | null = null;
+                try {
+                  const boot: any = (window as any).__exampliBoot;
+                  const inUser = (boot?.subjects || []).find((s: any) => s.code === codeNow);
+                  if (inUser?.id != null) subjectId = inUser.id;
+                  if (subjectId == null) {
+                    const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+                    const found = all.find((s) => s.code === codeNow);
+                    if (found?.id != null) subjectId = found.id;
+                  }
+                } catch {}
+                let topics: Topic[] = [];
+                if (subjectId != null) {
+                  const cached = cacheGet<Topic[]>(CACHE_KEYS.topicsBySubject(subjectId));
+                  if (cached && Array.isArray(cached) && cached.length) {
+                    topics = cached;
+                  } else {
+                    try {
+                      const boot: any = (window as any).__exampliBoot;
+                      const by = (boot?.topicsBySubject || {}) as Record<string, Topic[]>;
+                      const list = by?.[String(subjectId)] || [];
+                      topics = (list as any[]) as Topic[];
+                    } catch {}
+                  }
+                }
+                // текущая тема
+                let curId: string | number | null = null;
+                try {
+                  const boot: any = (window as any).__exampliBoot;
+                  curId = boot?.current_topic_id ?? boot?.user?.current_topic ?? null;
+                } catch {}
+                try {
+                  const savedId = localStorage.getItem('exampli:currentTopicId');
+                  if (savedId != null) curId = savedId;
+                } catch {}
+                const idx = topics.findIndex(t => String(t.id) === String(curId));
+                const next = idx >= 0 ? topics[idx + 1] : null;
+                if (!next) return;
+                // мгновенно применим в локальном UI
+                try {
+                  localStorage.setItem('exampli:currentTopicId', String(next.id));
+                  localStorage.setItem('exampli:currentTopicTitle', String(next.title || ''));
+                } catch {}
+                setCurrentTopicTitle(String(next.title || ''));
+                setNextTopicTitle(() => {
+                  const nn = topics[topics.findIndex(t => String(t.id) === String(next.id)) + 1];
+                  return nn?.title ?? null;
+                });
+                try { window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: next.title } } as any)); } catch {}
+                try { window.dispatchEvent(new CustomEvent('exampli:topicChanged', { detail: { subjectId, topicId: next.id, topicTitle: next.title } } as any)); } catch {}
+                // запишем в БД и предзагрузим уроки для кеша
+                try {
+                  const boot: any = (window as any).__exampliBoot;
+                  let userId: string | number | null = boot?.user?.id ?? null;
+                  if (!userId) {
+                    const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                    if (tgId) {
+                      const { data: urow } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('tg_id', String(tgId))
+                        .single();
+                      userId = (urow as any)?.id ?? null;
+                    }
+                  }
+                  if (userId) {
+                    await supabase.from('users').update({ current_topic: next.id }).eq('id', userId);
+                  }
+                } catch {}
+                try {
+                  const { data: lessons } = await supabase
+                    .from('lessons')
+                    .select('id, topic_id, order_index')
+                    .eq('topic_id', next.id)
+                    .order('order_index', { ascending: true });
+                  const list = (lessons as any[]) || [];
+                  try {
+                    const key = CACHE_KEYS.lessonsByTopic(next.id as any);
+                    const payload = { v: list, e: null } as any;
+                    localStorage.setItem(`exampli:${key}`, JSON.stringify(payload));
+                  } catch {}
+                  try { window.dispatchEvent(new Event('exampli:lessonsChanged')); } catch {}
+                } catch {}
+              } catch {}
+            }}
             onOpen={(id, el) => {
               (async () => {
                 // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
