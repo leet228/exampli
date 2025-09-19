@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
+import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 
 export type LessonNode = { id: string | number; order_index: number };
 
@@ -25,6 +26,57 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
   const getOffsetX = (idx: number): number => pattern[idx % pattern.length];
 
   // линия будет локальной (в ширину контейнера) с «размытием» по краям через градиент
+
+  // Цвет узлов уроков зависит от порядка текущей темы (1 → синий, 2 → розовый, 3 → зелёный и по кругу)
+  const { nodeBase, nodeInner } = useMemo(() => {
+    const palette = ['#3c73ff', '#fc86d0', '#57cc02'];
+    const darken = (hex: string, amount = 18) => {
+      const h = hex.replace('#', '');
+      const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+      const n = parseInt(full, 16);
+      const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+      return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+    };
+    let orderIndex: number | null = null;
+    // 1) из localStorage
+    try {
+      const savedId = localStorage.getItem('exampli:currentTopicId');
+      const savedOrder = localStorage.getItem('exampli:currentTopicOrder');
+      if (savedOrder) orderIndex = Number(savedOrder);
+      if (!orderIndex && savedId) {
+        // попробуем найти по списку тем активного предмета
+        let subjectId: any = null;
+        try {
+          const boot: any = (window as any).__exampliBoot;
+          const code = localStorage.getItem('exampli:activeSubjectCode') || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
+          const inUser = (boot?.subjects || []).find((s: any) => s.code === code);
+          subjectId = inUser?.id ?? null;
+          if (!subjectId) {
+            const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+            const found = all.find((s) => s.code === code);
+            subjectId = found?.id ?? null;
+          }
+        } catch {}
+        if (subjectId != null) {
+          let topics: any[] = [];
+          const cached = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(subjectId));
+          if (cached && cached.length) topics = cached as any[];
+          else {
+            try {
+              const boot: any = (window as any).__exampliBoot;
+              topics = (boot?.topicsBySubject || {})[String(subjectId)] || [];
+            } catch {}
+          }
+          const found = (topics || []).find((t: any) => String(t.id) === String(savedId));
+          if (found?.order_index != null) orderIndex = Number(found.order_index);
+        }
+      }
+    } catch {}
+    const idx = Math.max(0, ((orderIndex || 1) - 1) % 3);
+    const base = palette[idx];
+    return { nodeBase: base, nodeInner: darken(base, 22) };
+  }, [lessons?.length, currentTopicTitle]);
 
   return (
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
@@ -55,8 +107,8 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   <LessonRoundButton
                     size={70}
                     icon={'★'}
-                    baseColor="#fc86d0"
-                    innerIconBg="#e45fb8"
+                    baseColor={nodeBase}
+                    innerIconBg={nodeInner}
                     onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
                   />
                 </motion.div>

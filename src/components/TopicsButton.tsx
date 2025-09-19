@@ -1,13 +1,47 @@
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
+import { cacheGet, CACHE_KEYS } from '../lib/cache';
 import { hapticTiny } from '../lib/haptics';
 
 export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
   const [topicTitle, setTopicTitle] = useState<string>('Выбрать тему');
   const [pressed, setPressed] = useState(false);
 
-  // Базовый цвет кнопки — синхронизируем с текущим стилем (fallback к #306bff)
-  const baseColor = '#306bff';
+  // Базовый цвет кнопки — зависит от порядка текущей темы (1/2/3)
+  const baseColor = useMemo(() => {
+    const palette = ['#3c73ff', '#fc86d0', '#57cc02'];
+    let orderIndex: number | null = null;
+    try {
+      const savedOrder = localStorage.getItem('exampli:currentTopicOrder');
+      if (savedOrder) orderIndex = Number(savedOrder);
+      if (!orderIndex) {
+        const savedId = localStorage.getItem('exampli:currentTopicId');
+        if (savedId) {
+          // найдём по списку тем активного предмета
+          let subjectId: any = null;
+          const code = localStorage.getItem('exampli:activeSubjectCode') || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
+          try {
+            const boot: any = (window as any).__exampliBoot;
+            const inUser = (boot?.subjects || []).find((s: any) => s.code === code);
+            subjectId = inUser?.id ?? null;
+            if (!subjectId) {
+              const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+              const found = all.find((s) => s.code === code);
+              subjectId = found?.id ?? null;
+            }
+            let topics: any[] = [];
+            const cached = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(subjectId));
+            if (cached && cached.length) topics = cached as any[];
+            else topics = (boot?.topicsBySubject || {})[String(subjectId)] || [];
+            const found = (topics || []).find((t: any) => String(t.id) === String(savedId));
+            if (found?.order_index != null) orderIndex = Number(found.order_index);
+          } catch {}
+        }
+      }
+    } catch {}
+    const idx = Math.max(0, ((orderIndex || 1) - 1) % 3);
+    return palette[idx];
+  }, [topicTitle]);
   const shadowHeight = 6; // высота «нижней полоски» в px
 
   const darkColor = useMemo(() => {

@@ -73,6 +73,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
     try {
       localStorage.setItem(CUR_TOPIC_ID_KEY, String(t.id));
       localStorage.setItem(CUR_TOPIC_TITLE_KEY, t.title);
+      localStorage.setItem('exampli:currentTopicOrder', String(t.order_index ?? ''));
     } catch {}
     try { setCurrentTopicId(t.id); } catch {}
     try { window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: t.title } } as any)); } catch {}
