@@ -173,7 +173,8 @@ export default function TopicsPanel({ open, onClose }: Props) {
                 return `/topics/${t.order_index}.svg`;
               })()}
               alt=""
-              className="w-12 h-12 rounded-xl bg-white/10 object-contain p-1"
+              className="w-12 h-12 rounded-xl bg-white/10 object-contain p-1 border"
+              style={{ borderColor: selected ? accentColor : 'rgba(255,255,255,0.1)' }}
               loading="lazy"
             />
             <div className="flex-1 text-left">
