@@ -14,7 +14,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
     // Центр → влево (малый) → влево (большой) → влево (малый) → центр → вправо (малый) → вправо (большой) → вправо (малый) → центр …
     // Значения в px; можно подправить под визуал
     const small = 40;
-    const big = 72;
+    const big = 58;
     return [0, -small, -big, -small, 0, small, big, small, 0];
   }, []);
 
@@ -24,7 +24,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* центральную вертикальную линию убрали */}
 
-      <ul className="space-y-4 overflow-visible">
+      <ul className="space-y-2 overflow-visible">
         {lessons.map((l, idx) => {
           const offsetX = getOffsetX(idx);
           return (
@@ -37,7 +37,7 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
                   className={`relative`}
                 >
                   <LessonRoundButton
-                    size={64}
+                    size={70}
                     icon={'★'}
                     baseColor="#3c73ff"
                     innerIconBg="#2b57e6"
