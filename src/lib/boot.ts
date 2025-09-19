@@ -532,7 +532,7 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
   } catch {}
 }
 
-// Локальный прогрев тем/подтем и SVG‑иконок для указанного предмета.
+// Локальный прогрев тем и SVG‑иконок для указанного предмета.
 // Используется при смене/добавлении курса, чтобы сразу положить всё в localStorage.
 export async function precacheTopicsForSubject(subjectId: number | string): Promise<void> {
   try {

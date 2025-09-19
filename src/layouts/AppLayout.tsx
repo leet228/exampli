@@ -98,7 +98,7 @@ export default function AppLayout() {
         const activeCode = localStorage.getItem('exampli:active_course_code');
         const active = (boot?.subjects || []).find((s) => s.code === activeCode);
         const rest = (boot?.subjectsAll || []).filter((s) => s.id !== active?.id).slice(0, 2);
-        // прогреем темы/подтемы для пары курсов в фоне
+        // прогреем темы для пары курсов в фоне
         import('../lib/boot').then((m) => {
           rest.forEach((s) => { try { m.precacheTopicsForSubject(s.id); } catch {} });
         });

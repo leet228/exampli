@@ -20,6 +20,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [pressedId, setPressedId] = useState<string | number | null>(null);
+  const [currentTopicId, setCurrentTopicId] = useState<string | number | null>(null);
 
   const readActiveCode = useCallback(() => {
     try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
@@ -44,6 +45,17 @@ export default function TopicsPanel({ open, onClose }: Props) {
         if (cached && Array.isArray(cached)) tlist = cached;
       } catch {}
       setTopics(tlist);
+
+      // восстановим выбранную тему из localStorage/boot
+      try {
+        const saved = localStorage.getItem('exampli:currentTopicId');
+        if (saved) setCurrentTopicId(saved);
+        else {
+          const boot: any = (window as any).__exampliBoot;
+          const ct = boot?.current_topic_id ?? boot?.user?.current_topic ?? null;
+          if (ct != null) setCurrentTopicId(ct);
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -62,6 +74,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
       localStorage.setItem(CUR_TOPIC_ID_KEY, String(t.id));
       localStorage.setItem(CUR_TOPIC_TITLE_KEY, t.title);
     } catch {}
+    try { setCurrentTopicId(t.id); } catch {}
     try { window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: t.title } } as any)); } catch {}
     try { window.dispatchEvent(new CustomEvent('exampli:topicChanged', { detail: { subjectId: subject?.id, topicId: t.id, topicTitle: t.title } } as any)); } catch {}
 
@@ -114,8 +127,8 @@ export default function TopicsPanel({ open, onClose }: Props) {
     const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
     return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
   }, []);
-
-  const baseColor = '#306bff';
+  const baseGrey = '#22313a';
+  const accentColor = '#3c73ff';
   const shadowHeight = 6;
 
   const body = useMemo(() => {
@@ -131,7 +144,10 @@ export default function TopicsPanel({ open, onClose }: Props) {
 
     return (
       <div className="space-y-2" style={{ overscrollBehaviorY: 'contain' }}>
-        {topics.map((t) => (
+        {topics.map((t) => {
+          const selected = String(currentTopicId ?? '') === String(t.id);
+          const shade = darken(selected ? accentColor : baseGrey, 18);
+          return (
           <motion.button
             key={t.id}
             type="button"
@@ -139,13 +155,13 @@ export default function TopicsPanel({ open, onClose }: Props) {
             onPointerUp={() => setPressedId(null)}
             onPointerCancel={() => setPressedId(null)}
             onClick={() => { hapticTiny(); pickTopic(t); }}
-            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 border border-white/10 bg-white/5"
+            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 border bg-white/5"
             animate={{
               y: pressedId === t.id ? shadowHeight : 0,
-              boxShadow: pressedId === t.id ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`,
+              boxShadow: pressedId === t.id ? `0px 0px 0px ${shade}` : `0px ${shadowHeight}px 0px ${shade}`,
             }}
             transition={{ duration: 0 }}
-            style={{ background: baseColor, border: '1px solid rgba(0,0,0,0.08)' }}
+            style={{ background: baseGrey, border: `1px solid ${selected ? accentColor : 'rgba(255,255,255,0.1)'}` }}
           >
             <img
               src={(() => {
@@ -161,11 +177,12 @@ export default function TopicsPanel({ open, onClose }: Props) {
               loading="lazy"
             />
             <div className="flex-1 text-left">
-              <div className="text-base font-semibold">{t.title}</div>
+              <div className="text-base font-semibold" style={{ color: selected ? accentColor : undefined }}>{t.title}</div>
             </div>
-            <span className="opacity-90">›</span>
+            <span className="opacity-90" style={{ color: selected ? accentColor : undefined }}>›</span>
           </motion.button>
-        ))}
+          );
+        })}
       </div>
     );
   }, [loading, subject, topics, pressedId, pickTopic, darken]);

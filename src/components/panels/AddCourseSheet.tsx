@@ -278,7 +278,7 @@ export default function AddCourseSheet({
             try { (window as any).__exampliLoadingSubject = { code: String(picked.code || '').replace(/^(oge_|ege_)/,'').toLowerCase(), title: picked.title }; } catch {}
               try { (window as any).__exampliBootLocked = true; } catch {}
               try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
-              // параллельно: кэш тем/подтем/иконок и запись нового курса в БД/лок кэши
+              // параллельно: кэш тем/иконок и запись нового курса в БД/лок кэши
               try {
                 await Promise.all([
                   precacheTopicsForSubject(picked.id),
