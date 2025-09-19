@@ -37,11 +37,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    const [friendsList, invites, subjectsAll, topicsOnly] = await Promise.all([
+  const [friendsList, invites, subjectsAll, topicsOnly, lessonsByTopic] = await Promise.all([
       supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
-      fetchTopics(supabase, activeId),
+    fetchTopics(supabase, activeId),
+    fetchLessonsByTopic(supabase, activeId),
     ]);
 
     res.status(200).json({
@@ -49,6 +50,7 @@ export default async function handler(req, res) {
       invites,
       subjectsAll,
       topicsBySubject: topicsOnly.topicsBySubject,
+      lessonsByTopic,
     });
   } catch (e) {
     console.error('[api/boot2] error', e);
@@ -67,6 +69,30 @@ async function fetchTopics(supabase, subjectId) {
   const tlist = topics || [];
   if (tlist.length) topicsBySubject[String(subjectId)] = tlist;
   return { topicsBySubject };
+}
+
+async function fetchLessonsByTopic(supabase, subjectId) {
+  const map = {};
+  if (!subjectId) return map;
+  // Получаем все темы, затем одним запросом — все их уроки
+  const { data: topics } = await supabase
+    .from('topics')
+    .select('id')
+    .eq('subject_id', subjectId);
+  const ids = (topics || []).map(t => t.id);
+  if (!ids.length) return map;
+  const { data: lessons } = await supabase
+    .from('lessons')
+    .select('id, topic_id, order_index')
+    .in('topic_id', ids)
+    .order('topic_id', { ascending: true })
+    .order('order_index', { ascending: true });
+  (lessons || []).forEach((l) => {
+    const tid = String(l.topic_id);
+    if (!map[tid]) map[tid] = [];
+    map[tid].push({ id: l.id, topic_id: l.topic_id, order_index: l.order_index });
+  });
+  return map;
 }
 
 async function safeJson(req) {

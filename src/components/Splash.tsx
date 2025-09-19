@@ -90,7 +90,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
         setDone(true);
         onReady(data);
         try { warmupLoadSvgs(); } catch {}
-      }, 250);
+      }, 100);
       // Фоновый ШАГ 2: один запрос на тяжелые данные
       try { const uid = (data?.user as any)?.id as string | undefined; const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null; if (uid) void bootPreloadBackground(uid, activeId); } catch {}
     };

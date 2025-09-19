@@ -437,37 +437,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       if (cachedT.length) topicsBySubject[String(activeId)] = cachedT;
     } catch {}
   }
-  // Предзагрузка уроков для всех тем активного курса в кэш (для оффлайн-прогресса в TopicsPanel)
-  try {
-    if (activeId) {
-      let list = topicsBySubject[String(activeId)] || [];
-      if (!list.length) {
-        // если тем нет в кэше, пробуем подгрузить их быстро из фонового boot2 кэша
-        try {
-          const boot2Topics = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(activeId)) || [];
-          if (boot2Topics.length) list = boot2Topics;
-        } catch {}
-      }
-      if (Array.isArray(list) && list.length) {
-        await Promise.all(list.map(async (t: any) => {
-          try {
-            const key = CACHE_KEYS.lessonsByTopic(t.id);
-            const existing = cacheGet<any[]>(key);
-            if (existing && Array.isArray(existing) && existing.length) return;
-          } catch {}
-          try {
-            const { data: lessons } = await supabase
-              .from('lessons')
-              .select('id, topic_id, order_index')
-              .eq('topic_id', t.id)
-              .order('order_index', { ascending: true });
-            const arr = (lessons as any[]) || [];
-            cacheSet(CACHE_KEYS.lessonsByTopic(t.id), arr as any);
-          } catch {}
-        }));
-      }
-    }
-  } catch {}
+  // Предзагрузку уроков для всех тем переносим в boot2 (фон)
   // Прогрев лого/иконок, важных для первого кадра
   try {
     await preloadImage('/kursik.svg');
@@ -559,6 +529,25 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
     try {
       const topicsBySubject = data.topicsBySubject || {};
       Object.entries(topicsBySubject).forEach(([sid, arr]) => cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any));
+    } catch {}
+    // Новое: предзагрузим уроки для тем активного курса, если сервер их вернул
+    try {
+      const lessonsByTopic = data.lessonsByTopic || {};
+      Object.entries(lessonsByTopic).forEach(([tid, arr]) => {
+        cacheSet(CACHE_KEYS.lessonsByTopic(tid), (arr as any[]) || []);
+      });
+      // Альтернатива: если пришли только counts
+      const lessonCounts = data.lessonCountsByTopic || {};
+      Object.entries(lessonCounts).forEach(([tid, count]) => {
+        try {
+          const key = CACHE_KEYS.lessonsByTopic(tid);
+          const existing = cacheGet<any[]>(key);
+          if (!existing || !Array.isArray(existing) || existing.length !== Number(count)) {
+            const fake = Array.from({ length: Number(count || 0) }).map((_, i) => ({ id: `fake-${tid}-${i+1}`, topic_id: tid, order_index: i+1 }));
+            cacheSet(key, fake as any);
+          }
+        } catch {}
+      });
     } catch {}
   } catch {}
 }
