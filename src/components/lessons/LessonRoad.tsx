@@ -64,15 +64,18 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
         {/* Финальный блок под последним уроком */}
         <li style={{ marginTop: 24 }}>
-          <div className="flex justify-center px-4">
-            {/* чёткая разделительная линия без градиента */}
-            <div className="h-[2px] w-full bg-white/10" />
+          <div className="flex justify-center">
+            {/* чёткая разделительная линия на всю ширину экрана */}
+            <div
+              className="h-[2px] bg-white/12"
+              style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }}
+            />
           </div>
 
           <div className="mt-5 px-5 text-center">
             {/* Пилюля с текущей темой */}
             {currentTopicTitle ? (
-              <div className="mb-3 flex justify-center">
+              <div className="mb-4 flex justify-center">
                 <div
                   className="inline-flex rounded-xl px-3 py-1 text-[12px] font-extrabold uppercase tracking-[0.08em]"
                   style={{ color: '#3c73ff', background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)' }}
@@ -84,7 +87,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
 
             {/* Крупный заголовок — следующая тема */}
             {nextTopicTitle ? (
-              <div className="mb-5 px-2 text-white text-2xl sm:text-3xl font-extrabold leading-snug">
+              <div className="mb-6 px-2 text-white text-2xl sm:text-3xl font-extrabold leading-snug">
                 {nextTopicTitle}
               </div>
             ) : null}
@@ -92,14 +95,17 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
             {/* Кнопка перехода */}
             {nextTopicTitle && onNextTopic ? (
               <>
-                <LessonButton
-                  text="Перейти на следующую тему"
-                  baseColor="#3c73ff"
-                  shadowHeight={6}
-                  onClick={onNextTopic}
-                />
+                {/* Широкая кнопка на всю ширину экрана с небольшими полями */}
+                <div style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }} className="px-4">
+                  <LessonButton
+                    text="Перейти на следующую тему"
+                    baseColor="#3c73ff"
+                    shadowHeight={6}
+                    onClick={onNextTopic}
+                  />
+                </div>
                 {/* дополнительный большой отступ до низа */}
-                <div style={{ height: 96 }} />
+                <div style={{ height: 30 }} />
               </>
             ) : null}
           </div>
