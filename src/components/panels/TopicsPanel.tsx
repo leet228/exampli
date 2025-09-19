@@ -64,33 +64,17 @@ export default function TopicsPanel({ open, onClose }: Props) {
 
   useEffect(() => { void loadData(); }, [loadData]);
   
-  // Подгружаем количество уроков для каждой темы (0/Н)
+  // Подгружаем количество уроков только из локального кэша (без БД)
   useEffect(() => {
-    (async () => {
-      if (!Array.isArray(topics) || !topics.length) { setLessonCounts({}); return; }
-      const res: Record<string | number, number> = {};
-      // 1) сначала из локального кэша
-      topics.forEach((t) => {
-        try {
-          const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(t.id));
-          if (Array.isArray(cached)) res[t.id] = cached.length;
-        } catch {}
-      });
-      // 2) для отсутствующих — лёгкие head-запросы с count
-      const missing = topics.filter(t => res[t.id] == null);
-      if (missing.length) {
-        await Promise.all(missing.map(async (t) => {
-          try {
-            const { count } = await supabase
-              .from('lessons')
-              .select('id', { count: 'exact', head: true })
-              .eq('topic_id', t.id);
-            res[t.id] = Number(count ?? 0);
-          } catch { res[t.id] = 0; }
-        }));
-      }
-      setLessonCounts(res);
-    })();
+    if (!Array.isArray(topics) || !topics.length) { setLessonCounts({}); return; }
+    const res: Record<string | number, number> = {};
+    topics.forEach((t) => {
+      try {
+        const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(t.id));
+        res[t.id] = Array.isArray(cached) ? cached.length : 0;
+      } catch { res[t.id] = 0; }
+    });
+    setLessonCounts(res);
   }, [topics]);
   useEffect(() => {
     const onCourseChanged = () => { void loadData(); };

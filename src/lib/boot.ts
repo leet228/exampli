@@ -437,6 +437,37 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       if (cachedT.length) topicsBySubject[String(activeId)] = cachedT;
     } catch {}
   }
+  // Предзагрузка уроков для всех тем активного курса в кэш (для оффлайн-прогресса в TopicsPanel)
+  try {
+    if (activeId) {
+      let list = topicsBySubject[String(activeId)] || [];
+      if (!list.length) {
+        // если тем нет в кэше, пробуем подгрузить их быстро из фонового boot2 кэша
+        try {
+          const boot2Topics = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(activeId)) || [];
+          if (boot2Topics.length) list = boot2Topics;
+        } catch {}
+      }
+      if (Array.isArray(list) && list.length) {
+        await Promise.all(list.map(async (t: any) => {
+          try {
+            const key = CACHE_KEYS.lessonsByTopic(t.id);
+            const existing = cacheGet<any[]>(key);
+            if (existing && Array.isArray(existing) && existing.length) return;
+          } catch {}
+          try {
+            const { data: lessons } = await supabase
+              .from('lessons')
+              .select('id, topic_id, order_index')
+              .eq('topic_id', t.id)
+              .order('order_index', { ascending: true });
+            const arr = (lessons as any[]) || [];
+            cacheSet(CACHE_KEYS.lessonsByTopic(t.id), arr as any);
+          } catch {}
+        }));
+      }
+    }
+  } catch {}
   // Прогрев лого/иконок, важных для первого кадра
   try {
     await preloadImage('/kursik.svg');
