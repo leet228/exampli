@@ -6,6 +6,7 @@ import { hapticTiny } from '../lib/haptics';
 export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
   const [topicTitle, setTopicTitle] = useState<string>('Выбрать тему');
   const [pressed, setPressed] = useState(false);
+  const [lessonCount, setLessonCount] = useState<number>(0);
 
   // Базовый цвет кнопки — зависит от порядка текущей темы (1/2/3)
   const baseColor = useMemo(() => {
@@ -61,6 +62,27 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     }
     return darken(baseColor, 18);
   }, [baseColor]);
+
+  // Подтягиваем количество уроков текущей темы из кэша и обновляем по событиям
+  useEffect(() => {
+    const readCount = () => {
+      try {
+        const tid = localStorage.getItem('exampli:currentTopicId');
+        if (!tid) { setLessonCount(0); return; }
+        const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(tid));
+        setLessonCount(Array.isArray(cached) ? cached.length : 0);
+      } catch { setLessonCount(0); }
+    };
+    readCount();
+    const onLessons = () => readCount();
+    const onTopic = () => readCount();
+    window.addEventListener('exampli:lessonsChanged', onLessons as EventListener);
+    window.addEventListener('exampli:topicChanged', onTopic as EventListener);
+    return () => {
+      window.removeEventListener('exampli:lessonsChanged', onLessons as EventListener);
+      window.removeEventListener('exampli:topicChanged', onTopic as EventListener);
+    };
+  }, []);
 
   const CUR_TOPIC_TITLE_KEY = 'exampli:currentTopicTitle';
 
@@ -129,6 +151,7 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     >
       <div className="text-left leading-tight">
         <div className="text-[18px] font-extrabold leading-tight">{topicTitle}</div>
+        <div className="text-[13px] font-extrabold opacity-90">{`0/${lessonCount}`}</div>
       </div>
       <span className="ml-2 text-[18px] opacity-90">▾</span>
     </motion.button>

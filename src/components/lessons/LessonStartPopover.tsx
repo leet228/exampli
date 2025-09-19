@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
+import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 
 type Props = {
   open: boolean;
@@ -16,6 +17,9 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
   const [top, setTop] = useState<number>(0);
   const [left, setLeft] = useState<number>(0);
   const [arrowLeft, setArrowLeft] = useState<number>(0);
+  const [courseTitle, setCourseTitle] = useState<string>('');
+  const [progressLabel, setProgressLabel] = useState<string>('Урок 1 из 1');
+  const [baseColor, setBaseColor] = useState<string>('#3c73ff');
 
   // вычисляем позицию под кнопкой урока и положение стрелки, не вылезая за экран
   useEffect(() => {
@@ -39,6 +43,62 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
     window.addEventListener('scroll', update, { passive: true });
     return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update as any); };
   }, [open, anchorEl]);
+
+  // Синхронизация заголовка курса, цвета и «Урок X из N»
+  useEffect(() => {
+    if (!open) return;
+    try {
+      // Заголовок курса
+      const code = localStorage.getItem('exampli:activeSubjectCode') || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
+      const boot: any = (window as any).__exampliBoot;
+      let title = '';
+      if (boot?.subjects?.length) {
+        const f = (boot.subjects as any[]).find((s) => s.code === code);
+        title = f?.title || '';
+      }
+      if (!title) {
+        const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+        const f = (all as any[]).find((s) => s.code === code);
+        title = f?.title || '';
+      }
+      setCourseTitle(title || 'Курс');
+
+      // Цвет поповера — как в TopicsButton по циклу 1/2/3
+      const palette = ['#3c73ff', '#fc86d0', '#57cc02'];
+      let orderIndex: number | null = null;
+      const savedOrder = localStorage.getItem('exampli:currentTopicOrder');
+      if (savedOrder) orderIndex = Number(savedOrder);
+      if (!orderIndex) {
+        const tid = localStorage.getItem('exampli:currentTopicId');
+        if (tid) {
+          // попытка найти order_index из кэша тем
+          let subjectId: any = null;
+          const inUser = (boot?.subjects || []).find((s: any) => s.code === code);
+          subjectId = inUser?.id ?? null;
+          if (!subjectId) {
+            const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+            subjectId = (all.find((s) => s.code === code) as any)?.id ?? null;
+          }
+          if (subjectId != null) {
+            const cached = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(subjectId)) || [];
+            const found = (cached as any[]).find((t) => String(t.id) === String(tid));
+            if (found?.order_index != null) orderIndex = Number(found.order_index);
+          }
+        }
+      }
+      const idx = Math.max(0, ((orderIndex || 1) - 1) % 3);
+      setBaseColor(palette[idx]);
+
+      // «Урок X из N»
+      try {
+        const tid = localStorage.getItem('exampli:currentTopicId');
+        const cached = tid ? cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(tid)) : null;
+        const total = Array.isArray(cached) ? cached.length : 0;
+        const current = 1; // пока без реального прогресса
+        setProgressLabel(`Урок ${current} из ${total || 1}`);
+      } catch { setProgressLabel('Урок 1 из 1'); }
+    } catch {}
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -68,15 +128,15 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
       <div
         aria-hidden
         className="absolute -top-3"
-        style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #fc86d0' }}
+        style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: `12px solid ${baseColor}` }}
       />
-      <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: '#fc86d0', color: '#ffffff', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
+      <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: baseColor, color: '#ffffff', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
                 <div className="px-5 pt-4 pb-3">
-                  <div className="text-xl font-extrabold">{title}</div>
-                  <div className="text-base opacity-90 mt-1">Лекция 1 из 4</div>
+                  <div className="text-xl font-extrabold">{courseTitle || title}</div>
+                  <div className="text-base opacity-90 mt-1">{progressLabel}</div>
                 </div>
                 <div className="px-5 pb-5">
-                  <LessonButton text="НАЧАТЬ +20 XP" onClick={() => { try { hapticSelect(); } catch {} onStart(); }} baseColor="#ffffff" textColor="#fc86d0" shadowColorOverride="rgba(0,0,0,0.12)" />
+                  <LessonButton text="НАЧАТЬ" onClick={() => { try { hapticSelect(); } catch {} onStart(); }} baseColor="#ffffff" textColor={baseColor} shadowColorOverride="rgba(0,0,0,0.12)" />
                 </div>
               </div>
             </div>
