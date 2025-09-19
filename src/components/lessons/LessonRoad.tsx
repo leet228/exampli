@@ -27,9 +27,15 @@ export default function LessonRoad({ lessons, onOpen }: Props) {
         {lessons.map((l, idx) => {
           const offsetX = getOffsetX(idx);
           const prev = idx > 0 ? getOffsetX(idx - 1) : 0;
+          const absPrev = Math.abs(prev);
+          const absCurr = Math.abs(offsetX);
           const gapPx = idx === 0
             ? 0
-            : (Math.abs(prev) === small && Math.abs(offsetX) === big ? 16 : 8); // small→big = 4, иначе = 2
+            : (absPrev === small && absCurr === big
+                ? 16 // small → big = 4
+                : (absPrev === big && absCurr === small
+                    ? 18 // big → small = 4.5
+                    : 8)); // остальные = 2
           return (
             <li key={l.id} style={{ marginTop: gapPx }}>
               <div className={`flex justify-center`} style={{ overflow: 'visible' }}>
