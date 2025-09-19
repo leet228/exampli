@@ -33,7 +33,8 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
         const el = lineAnchorRef.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
-        setLineTop(Math.round(r.top + window.scrollY));
+        // Для fixed-элемента используем координату относительно вьюпорта
+        setLineTop(Math.round(r.top));
       } catch {}
     };
     update();
@@ -46,7 +47,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* Глобальная линия 100vw */}
       {lineTop != null && (
-        <div className="pointer-events-none fixed left-0" style={{ top: lineTop, width: '100vw', height: 2, background: 'rgba(255,255,255,0.1)', zIndex: 1 }} />
+        <div className="pointer-events-none fixed left-0" style={{ top: lineTop, width: '100vw', height: 2, background: 'rgba(255,255,255,0.18)', zIndex: 10 }} />
       )}
       {/* центральную вертикальную линию убрали */}
 
