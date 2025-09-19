@@ -67,7 +67,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
           <div className="flex justify-center">
             {/* чёткая разделительная линия на всю ширину экрана */}
             <div
-              className="h-[2px] bg-white/12"
+              className="h-[2px] bg-white/10"
               style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }}
             />
           </div>
@@ -96,9 +96,9 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
             {nextTopicTitle && onNextTopic ? (
               <>
                 {/* Широкая кнопка на всю ширину экрана с небольшими полями */}
-                <div style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }} className="px-4">
+                <div style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }} className="px-6">
                   <LessonButton
-                    text="Перейти на следующую тему"
+                    text="ПЕРЕЙТИ НА СЛЕДУЮЩУЮ ТЕМУ"
                     baseColor="#3c73ff"
                     shadowHeight={6}
                     onClick={onNextTopic}
