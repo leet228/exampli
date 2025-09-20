@@ -60,19 +60,35 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
-    // Сферическая сетка ракурсов (yaw/pitch) 10x10
-    const GRID = 10
-    const targetPerCell = 6
+    // Сферическая сетка ракурсов (yaw/pitch)
+    const GRID = 8
+    const targetPerCell = 4
     const got: Array<Float32Array[]> = Array.from({ length: GRID * GRID }, () => [])
     const start = Date.now()
     const maxMs = 90000
     const yawPitchFromPts = (pts: { x: number; y: number }[]) => {
+      // Используем ключевые точки: 33 (левый глаз внешний), 263 (правый глаз внешний), 1 (нос), 13 (верхняя губа)
+      const p33 = pts[33], p263 = pts[263], p1 = pts[1], p13 = pts[13]
+      if (p33 && p263 && p1 && p13) {
+        const midEyeX = (p33.x + p263.x) / 2
+        const midEyeY = (p33.y + p263.y) / 2
+        const interEye = Math.hypot(p263.x - p33.x, p263.y - p33.y) || 1
+        // yaw: смещение носа по X относительно центра глаз, нормированное на межглазье
+        let yaw = (p1.x - midEyeX) / (interEye * 0.35)
+        // pitch: относительная высота носа между глазами и ртом
+        let pitch = ((midEyeY - p1.y) - (p13.y - midEyeY)) / (interEye * 0.5)
+        // ограничим
+        yaw = Math.max(-1, Math.min(1, yaw))
+        pitch = Math.max(-1, Math.min(1, pitch))
+        return { yaw, pitch }
+      }
+      // запасной вариант — по bbox
       let minX = 1, minY = 1, maxX = 0, maxY = 0
       for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
       const cx = (minX + maxX) / 2
       const cy = (minY + maxY) / 2
-      const yaw = (cx - 0.5) * 2 // -1..1
-      const pitch = (0.5 - cy) * 2 // -1..1
+      const yaw = (cx - 0.5) * 2
+      const pitch = (0.5 - cy) * 2
       return { yaw, pitch }
     }
     const cellIndex = (yaw: number, pitch: number) => {
@@ -90,7 +106,8 @@ function App() {
         const { yaw, pitch } = yawPitchFromPts(pts)
         // Подсказка направление
         const dYaw = Math.abs(yaw), dPitch = Math.abs(pitch)
-        setGuideDir(dYaw > dPitch ? (yaw > 0 ? 'right' : 'left') : (pitch > 0 ? 'up' : 'down'))
+        const nearCenter = dYaw < 0.15 && dPitch < 0.15
+        setGuideDir(nearCenter ? 'center' : (dYaw > dPitch ? (yaw > 0 ? 'right' : 'left') : (pitch > 0 ? 'up' : 'down')))
         const idx = cellIndex(yaw, pitch)
         if (got[idx].length < targetPerCell) {
           const emb = await captureEmbeddingOnce()
