@@ -54,12 +54,10 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
     if (!ready) return
     let cancelled = false
     let landmarker: any
-    let drawUtils: any
     ;(async () => {
       try {
-        const { landmarker: lm, DrawingUtils } = await loadFaceLandmarker()
+        const { landmarker: lm } = await loadFaceLandmarker()
         landmarker = lm
-        drawUtils = DrawingUtils
         const loop = () => {
           if (cancelled) return
           const v = videoRef.current
