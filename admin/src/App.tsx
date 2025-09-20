@@ -15,7 +15,6 @@ function App() {
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
   const [coverage, setCoverage] = useState<number>(0)
   const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
-  const [faceBox, setFaceBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null)
 
   useEffect(() => {
     // Гарантируем одну общую сессию (кэшируется)
@@ -70,7 +69,6 @@ function App() {
     const yawPitchFromPts = (pts: { x: number; y: number }[]) => {
       let minX = 1, minY = 1, maxX = 0, maxY = 0
       for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
-      setFaceBox({ minX, minY, maxX, maxY })
       const cx = (minX + maxX) / 2
       const cy = (minY + maxY) / 2
       const yaw = (cx - 0.5) * 2 // -1..1
@@ -155,14 +153,7 @@ function App() {
         <button onClick={handleLogin} disabled={!sessionReady || mode !== 'idle'} style={{ marginLeft: 8 }}>Login</button>
       </div>
       <div style={{ position: 'relative' }}>
-        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => {
-          landmarksRef.current = pts
-          if (pts && pts.length) {
-            let minX = 1, minY = 1, maxX = 0, maxY = 0
-            for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
-            setFaceBox({ minX, minY, maxX, maxY })
-          }
-        }} />
+        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
         {mode === 'enroll' && (
           <PoseGuide direction={guideDir} progress={coverage} />
         )}
