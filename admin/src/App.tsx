@@ -4,7 +4,7 @@ import Camera from './components/Camera'
 import { createEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
 
 function App() {
-  const [mode, setMode] = useState<'idle'|'enroll'|'login'>('idle')
+  const [mode, setMode] = useState<'idle'|'enroll'|'login'|'ok'>('idle')
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const sessionRef = useRef<any>(null)
@@ -130,7 +130,12 @@ function App() {
     const probe = l2normalize(acc)
     const score = cosine(tmpl, probe)
     setLog(`Сходство: ${score.toFixed(4)}`)
-    setMode('idle')
+    const THRESHOLD = 0.40
+    if (score >= THRESHOLD) {
+      setMode('ok')
+    } else {
+      setMode('idle')
+    }
   }
 
   return (
@@ -143,6 +148,11 @@ function App() {
       <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
       {livenessPrompt && (
         <div style={{ marginTop: 8, fontWeight: 700, color: '#3c73ff' }}>{livenessPrompt}</div>
+      )}
+      {mode === 'ok' && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'rgba(60,115,255,0.12)', color: '#3c73ff', fontWeight: 700 }}>
+          Авторизация успешна
+        </div>
       )}
       <div style={{ marginTop: 12, color: '#888' }}>{log}</div>
     </div>

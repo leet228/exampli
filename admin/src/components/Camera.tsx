@@ -71,12 +71,24 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
             ctx.clearRect(0, 0, c.width, c.height)
             const res = landmarker.detectForVideo(v, performance.now())
             if (res?.faceLandmarks?.length) {
-              const du = new drawUtils(c.getContext('2d'))
-              res.faceLandmarks.forEach((lmks: any) => {
-                du.drawConnectors(lmks, [[33,263],[362,133],[133,362]], { color: '#3c73ff', lineWidth: 2 })
-                du.drawLandmarks(lmks, { color: '#fc86d0', lineWidth: 1, radius: 1 })
-              })
-              try { onLandmarks?.(res.faceLandmarks[0]) } catch {}
+              const pts = res.faceLandmarks[0] as { x: number; y: number }[]
+              // Рисуем точки/бокс вручную, конвертируя нормализованные координаты в пиксели
+              let minX = 1, minY = 1, maxX = 0, maxY = 0
+              ctx.fillStyle = '#fc86d0'
+              for (const p of pts) {
+                if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y
+                const x = p.x * c.width
+                const y = p.y * c.height
+                ctx.beginPath()
+                ctx.arc(x, y, 1.6, 0, Math.PI * 2)
+                ctx.fill()
+              }
+              const bx = minX * c.width, by = minY * c.height
+              const bw = (maxX - minX) * c.width, bh = (maxY - minY) * c.height
+              ctx.strokeStyle = '#3c73ff'
+              ctx.lineWidth = 2
+              ctx.strokeRect(bx, by, bw, bh)
+              try { onLandmarks?.(pts) } catch {}
             } else {
               try { onLandmarks?.(null) } catch {}
             }
