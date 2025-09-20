@@ -1,7 +1,7 @@
 import './App.css'
 import { useEffect, useRef, useState } from 'react'
 import Camera from './components/Camera'
-import PoseGuide from './components/PoseGuide'
+// PoseGuide больше не используем — регистрация по таймеру
 import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
 
 function App() {
@@ -13,10 +13,8 @@ function App() {
   const [log, setLog] = useState<string>('')
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
-  const [coverage, setCoverage] = useState<number>(0)
-  const [cellsDone, setCellsDone] = useState<number>(0)
-  const [gridSize, setGridSize] = useState<number>(8)
-  const [debugPose, setDebugPose] = useState<{yaw:number;pitch:number}>({ yaw: 0, pitch: 0 })
+  const [samplesCount, setSamplesCount] = useState<number>(0)
+  const [secondsLeft, setSecondsLeft] = useState<number>(0)
   const [yaw0, setYaw0] = useState<number | null>(null)
   const [pitch0, setPitch0] = useState<number | null>(null)
   const yawEmaRef = useRef<number>(0)
@@ -24,7 +22,7 @@ function App() {
   const calEndTsRef = useRef<number>(0)
   const calSumRef = useRef<{ yaw: number; pitch: number; n: number }>({ yaw: 0, pitch: 0, n: 0 })
   const [phaseMsg, setPhaseMsg] = useState<string>('')
-  const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
+  // guideDir более не используется в таймерной регистрации
 
   useEffect(() => {
     // Гарантируем одну общую сессию (кэшируется)
@@ -75,13 +73,9 @@ function App() {
     calEndTsRef.current = Date.now() + 800
     calSumRef.current = { yaw: 0, pitch: 0, n: 0 }
     setPhaseMsg('Калибровка: смотри прямо…')
-    // Сферическая сетка ракурсов (yaw/pitch)
-    const GRID = 5
-    setGridSize(GRID)
-    const targetPerCell = 2
-    const got: Array<Float32Array[]> = Array.from({ length: GRID * GRID }, () => [])
+    const got: Float32Array[] = []
     const start = Date.now()
-    const maxMs = 60000
+    const totalMs = 20000
     const yawPitchFromPts = (pts: { x: number; y: number }[]) => {
       // Используем ключевые точки: 33 (левый глаз внешний), 263 (правый глаз внешний), 1 (нос), 13 (верхняя губа)
       const p33 = pts[33], p263 = pts[263], p1 = pts[1], p13 = pts[13]
@@ -107,25 +101,14 @@ function App() {
       const pitch = Math.max(-0.8, Math.min(0.8, (0.5 - cy) * 2))
       return { yaw, pitch }
     }
-    const cellIndex = (yaw: number, pitch: number) => {
-      const yi = Math.max(0, Math.min(GRID - 1, Math.floor(((yaw + 1) / 2) * GRID)))
-      const pi = Math.max(0, Math.min(GRID - 1, Math.floor(((pitch + 1) / 2) * GRID)))
-      return pi * GRID + yi
-    }
-    const coveragePct = () => {
-      const filled = got.reduce((acc, arr) => acc + (arr.length >= targetPerCell ? 1 : 0), 0)
-      setCellsDone(filled)
-      return Math.round((filled / (GRID * GRID)) * 100)
-    }
     let lastFaceTs = 0
-    while (Date.now() - start < maxMs && coveragePct() < 100) {
+    while (Date.now() - start < totalMs) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
         lastFaceTs = Date.now()
         const raw = yawPitchFromPts(pts)
         // базовая калибровка: смотрим прямо, удерживаем 0.5с
         if (yaw0 == null || pitch0 == null) {
-          setGuideDir('center')
           setLivenessPrompt('Смотри прямо для калибровки…')
           if (Date.now() < calEndTsRef.current) {
             calSumRef.current.yaw += raw.yaw
@@ -136,7 +119,7 @@ function App() {
             setYaw0(calSumRef.current.yaw / n)
             setPitch0(calSumRef.current.pitch / n)
             setLivenessPrompt('')
-            setPhaseMsg('Сбор ракурсов: двигай головой по сторонам')
+            setPhaseMsg('Запись 20с: двигай головой, мигает индикатор')
           }
           await new Promise(r => setTimeout(r, 60))
           continue
@@ -146,23 +129,17 @@ function App() {
         // сглаживание EMA
         yawEmaRef.current = yawEmaRef.current * 0.8 + yaw * 0.2
         pitchEmaRef.current = pitchEmaRef.current * 0.8 + pitch * 0.2
-        setDebugPose({ yaw: yawEmaRef.current, pitch: pitchEmaRef.current })
-        // Подсказка направление
-        const dYaw = Math.abs(yawEmaRef.current), dPitch = Math.abs(pitchEmaRef.current)
-        const nearCenter = dYaw < 0.15 && dPitch < 0.15
-        setGuideDir(nearCenter ? 'center' : (dYaw > dPitch ? (yawEmaRef.current > 0 ? 'right' : 'left') : (pitchEmaRef.current > 0 ? 'up' : 'down')))
-        const idx = cellIndex(Math.max(-1, Math.min(1, yawEmaRef.current * 1.25)), Math.max(-1, Math.min(1, pitchEmaRef.current * 1.25)))
-        if (got[idx].length < targetPerCell) {
-          const emb = await captureEmbeddingOnce()
-          if (emb) got[idx].push(emb)
-          setCoverage(coveragePct() / 100)
-        }
+        // любой кадр, пока лицо в кадре — учитываем
+        const emb = await captureEmbeddingOnce()
+        if (emb) { got.push(emb); setSamplesCount(got.length) }
       } else {
         if (Date.now() - lastFaceTs > 800) setPhaseMsg('Не вижу лицо — встань в кадр')
       }
-      await new Promise(r => setTimeout(r, 60))
+      const left = Math.max(0, totalMs - (Date.now() - start))
+      setSecondsLeft(Math.ceil(left / 1000))
+      await new Promise(r => setTimeout(r, 80))
     }
-    const all: Float32Array[] = got.flat()
+    const all: Float32Array[] = got
     if (all.length) {
       const acc = new Float32Array(all[0].length)
       for (const p of all) for (let i = 0; i < acc.length; i++) acc[i] += p[i]
@@ -217,7 +194,19 @@ function App() {
       <div style={{ position: 'relative' }}>
         <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
         {mode === 'enroll' && (
-          <PoseGuide direction={guideDir} progress={coverage} cellsDone={cellsDone} gridSize={gridSize} debugYaw={debugPose.yaw} debugPitch={debugPose.pitch} />
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ height: 24 }} />
+            <div style={{ textAlign: 'center', color: '#ffd166', fontWeight: 800 }}>
+              <div style={{ fontSize: 48, lineHeight: 1 }}>{secondsLeft || 0}</div>
+              <div style={{ marginTop: 6 }}>идёт запись…</div>
+            </div>
+            <div style={{ width: '90%', marginBottom: 14 }}>
+              <div style={{ height: 10, background: 'rgba(255,255,255,0.2)', borderRadius: 9999, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.round(((20 - (secondsLeft||0)) / 20) * 100))}%`, height: '100%', background: '#57cc02' }} />
+              </div>
+              <div style={{ marginTop: 6, textAlign: 'right', fontWeight: 700, color: '#57cc02' }}>{samplesCount} кадров</div>
+            </div>
+          </div>
         )}
       </div>
       {phaseMsg && (
