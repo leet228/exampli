@@ -23,6 +23,7 @@ function App() {
   const pitchEmaRef = useRef<number>(0)
   const calEndTsRef = useRef<number>(0)
   const calSumRef = useRef<{ yaw: number; pitch: number; n: number }>({ yaw: 0, pitch: 0, n: 0 })
+  const [phaseMsg, setPhaseMsg] = useState<string>('')
   const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
 
   useEffect(() => {
@@ -73,13 +74,14 @@ function App() {
     // запустим калибровку по времени (0.8с)
     calEndTsRef.current = Date.now() + 800
     calSumRef.current = { yaw: 0, pitch: 0, n: 0 }
+    setPhaseMsg('Калибровка: смотри прямо…')
     // Сферическая сетка ракурсов (yaw/pitch)
-    const GRID = 6
+    const GRID = 5
     setGridSize(GRID)
-    const targetPerCell = 3
+    const targetPerCell = 2
     const got: Array<Float32Array[]> = Array.from({ length: GRID * GRID }, () => [])
     const start = Date.now()
-    const maxMs = 90000
+    const maxMs = 60000
     const yawPitchFromPts = (pts: { x: number; y: number }[]) => {
       // Используем ключевые точки: 33 (левый глаз внешний), 263 (правый глаз внешний), 1 (нос), 13 (верхняя губа)
       const p33 = pts[33], p263 = pts[263], p1 = pts[1], p13 = pts[13]
@@ -115,9 +117,11 @@ function App() {
       setCellsDone(filled)
       return Math.round((filled / (GRID * GRID)) * 100)
     }
+    let lastFaceTs = 0
     while (Date.now() - start < maxMs && coveragePct() < 100) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
+        lastFaceTs = Date.now()
         const raw = yawPitchFromPts(pts)
         // базовая калибровка: смотрим прямо, удерживаем 0.5с
         if (yaw0 == null || pitch0 == null) {
@@ -132,6 +136,7 @@ function App() {
             setYaw0(calSumRef.current.yaw / n)
             setPitch0(calSumRef.current.pitch / n)
             setLivenessPrompt('')
+            setPhaseMsg('Сбор ракурсов: двигай головой по сторонам')
           }
           await new Promise(r => setTimeout(r, 60))
           continue
@@ -152,6 +157,8 @@ function App() {
           if (emb) got[idx].push(emb)
           setCoverage(coveragePct() / 100)
         }
+      } else {
+        if (Date.now() - lastFaceTs > 800) setPhaseMsg('Не вижу лицо — встань в кадр')
       }
       await new Promise(r => setTimeout(r, 60))
     }
@@ -213,6 +220,9 @@ function App() {
           <PoseGuide direction={guideDir} progress={coverage} cellsDone={cellsDone} gridSize={gridSize} debugYaw={debugPose.yaw} debugPitch={debugPose.pitch} />
         )}
       </div>
+      {phaseMsg && (
+        <div style={{ marginTop: 8, fontWeight: 700 }}>{phaseMsg}</div>
+      )}
       {livenessPrompt && (
         <div style={{ marginTop: 8, fontWeight: 700, color: '#3c73ff' }}>{livenessPrompt}</div>
       )}
