@@ -244,8 +244,8 @@ export default function AI() {
             src="/ai/ai_waiting.svg"
             alt=""
             aria-hidden
-            className="absolute left-1/2 bottom-0 -translate-x-1/2 pointer-events-none select-none"
-            style={{ width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
+            className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
+            style={{ bottom: 24, width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
           />
         )}
         {/* Фиксированный HUD приветствия поверх ленты */}
