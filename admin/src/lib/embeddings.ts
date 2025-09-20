@@ -10,6 +10,8 @@ function loadOrt() {
 export async function createEmbeddingSession(modelUrl: string) {
   const ort = await loadOrt()
   try { ort.env.wasm.wasmPaths = (import.meta as any).env.BASE_URL + 'ort/' } catch {}
+  try { ort.env.wasm.numThreads = 1 } catch {}
+  try { ort.env.wasm.simd = true } catch {}
   const session = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] as any })
   return { ort, session }
 }
