@@ -17,6 +17,10 @@ function App() {
   const [cellsDone, setCellsDone] = useState<number>(0)
   const [gridSize, setGridSize] = useState<number>(8)
   const [debugPose, setDebugPose] = useState<{yaw:number;pitch:number}>({ yaw: 0, pitch: 0 })
+  const [yaw0, setYaw0] = useState<number | null>(null)
+  const [pitch0, setPitch0] = useState<number | null>(null)
+  const yawEmaRef = useRef<number>(0)
+  const pitchEmaRef = useRef<number>(0)
   const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
 
   useEffect(() => {
@@ -63,6 +67,7 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
+    setYaw0(null); setPitch0(null); yawEmaRef.current = 0; pitchEmaRef.current = 0
     // Сферическая сетка ракурсов (yaw/pitch)
     const GRID = 6
     setGridSize(GRID)
@@ -81,9 +86,9 @@ function App() {
         let yaw = (p1.x - midEyeX) / (interEye * 0.35)
         // pitch: относительная высота носа между глазами и ртом
         let pitch = ((midEyeY - p1.y) - (p13.y - midEyeY)) / (interEye * 0.5)
-        // ограничим
-        yaw = Math.max(-1, Math.min(1, yaw))
-        pitch = Math.max(-1, Math.min(1, pitch))
+        // ограничим мягче, чтобы не "липло"
+        yaw = Math.max(-0.8, Math.min(0.8, yaw))
+        pitch = Math.max(-0.8, Math.min(0.8, pitch))
         return { yaw, pitch }
       }
       // запасной вариант — по bbox
@@ -91,8 +96,8 @@ function App() {
       for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
       const cx = (minX + maxX) / 2
       const cy = (minY + maxY) / 2
-      const yaw = (cx - 0.5) * 2
-      const pitch = (0.5 - cy) * 2
+      const yaw = Math.max(-0.8, Math.min(0.8, (cx - 0.5) * 2))
+      const pitch = Math.max(-0.8, Math.min(0.8, (0.5 - cy) * 2))
       return { yaw, pitch }
     }
     const cellIndex = (yaw: number, pitch: number) => {
@@ -105,16 +110,32 @@ function App() {
       setCellsDone(filled)
       return Math.round((filled / (GRID * GRID)) * 100)
     }
+    let steadyCtr = 0
     while (Date.now() - start < maxMs && coveragePct() < 100) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
-        const { yaw, pitch } = yawPitchFromPts(pts)
-        setDebugPose({ yaw, pitch })
+        const raw = yawPitchFromPts(pts)
+        // базовая калибровка: смотрим прямо, удерживаем 0.5с
+        if (yaw0 == null || pitch0 == null) {
+          const near0 = Math.abs(raw.yaw) < 0.1 && Math.abs(raw.pitch) < 0.1
+          steadyCtr = near0 ? steadyCtr + 1 : 0
+          setGuideDir('center')
+          setLivenessPrompt('Смотри прямо для калибровки…')
+          if (steadyCtr > 8) { setYaw0(raw.yaw); setPitch0(raw.pitch); setLivenessPrompt(''); }
+          await new Promise(r => setTimeout(r, 60))
+          continue
+        }
+        const yaw = raw.yaw - yaw0
+        const pitch = raw.pitch - pitch0
+        // сглаживание EMA
+        yawEmaRef.current = yawEmaRef.current * 0.8 + yaw * 0.2
+        pitchEmaRef.current = pitchEmaRef.current * 0.8 + pitch * 0.2
+        setDebugPose({ yaw: yawEmaRef.current, pitch: pitchEmaRef.current })
         // Подсказка направление
-        const dYaw = Math.abs(yaw), dPitch = Math.abs(pitch)
+        const dYaw = Math.abs(yawEmaRef.current), dPitch = Math.abs(pitchEmaRef.current)
         const nearCenter = dYaw < 0.15 && dPitch < 0.15
-        setGuideDir(nearCenter ? 'center' : (dYaw > dPitch ? (yaw > 0 ? 'right' : 'left') : (pitch > 0 ? 'up' : 'down')))
-        const idx = cellIndex(yaw, pitch)
+        setGuideDir(nearCenter ? 'center' : (dYaw > dPitch ? (yawEmaRef.current > 0 ? 'right' : 'left') : (pitchEmaRef.current > 0 ? 'up' : 'down')))
+        const idx = cellIndex(Math.max(-1, Math.min(1, yawEmaRef.current * 1.25)), Math.max(-1, Math.min(1, pitchEmaRef.current * 1.25)))
         if (got[idx].length < targetPerCell) {
           const emb = await captureEmbeddingOnce()
           if (emb) got[idx].push(emb)
