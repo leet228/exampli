@@ -15,34 +15,26 @@ export default function EnrollmentGuide({ width, height, segments, filled, curre
   const r = Math.max(10, Math.min(cx, cy) - pad)
   const segAngle = (Math.PI * 2) / segments
 
-  function arcPath(i: number) {
-    const a0 = -Math.PI / 2 + i * segAngle + segAngle * 0.1
-    const a1 = -Math.PI / 2 + (i + 1) * segAngle - segAngle * 0.1
-    const x0 = cx + r * Math.cos(a0)
-    const y0 = cy + r * Math.sin(a0)
-    const x1 = cx + r * Math.cos(a1)
-    const y1 = cy + r * Math.sin(a1)
-    const large = 0
-    const sweep = 1
-    return `M ${x0} ${y0} A ${r} ${r} 0 ${large} ${sweep} ${x1} ${y1}`
-  }
+  // Радиальные полосы: от радиуса r к r+len
+  const barLen = Math.max(12, Math.min(cx, cy) * 0.18)
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {/* base circle */}
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={6} />
-        {/* segments */}
-        {Array.from({ length: segments }).map((_, i) => (
-          <path
-            key={i}
-            d={arcPath(i)}
-            stroke={filled[i] ? '#57cc02' : (i === currentIndex ? '#3c73ff' : 'rgba(255,255,255,0.45)')}
-            strokeWidth={8}
-            fill="none"
-            strokeLinecap="round"
-          />
-        ))}
+        {/* radial bars */}
+        {Array.from({ length: segments }).map((_, i) => {
+          const a = -Math.PI / 2 + i * segAngle
+          const x0 = cx + r * Math.cos(a)
+          const y0 = cy + r * Math.sin(a)
+          const x1 = cx + (r + barLen) * Math.cos(a)
+          const y1 = cy + (r + barLen) * Math.sin(a)
+          const color = filled[i] ? '#57cc02' : (i === currentIndex ? '#3c73ff' : 'rgba(255,255,255,0.45)')
+          return (
+            <line key={i} x1={x0} y1={y0} x2={x1} y2={y1} stroke={color} strokeWidth={6} strokeLinecap="round" />
+          )
+        })}
       </svg>
       {done && (
         <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', textAlign: 'center', fontWeight: 800, color: '#57cc02', fontSize: 24 }}>

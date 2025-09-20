@@ -108,51 +108,12 @@ function App() {
     }
   }
 
-  // Простейшая liveness: случайное движение головы — вправо/влево/вверх/вниз
-  function runLiveness(timeoutMs = 4000, delta = 0.06): Promise<boolean> {
-    const actions = [
-      { key: 'right', text: 'Поверни голову вправо →', axis: 'x', sign: +1 },
-      { key: 'left', text: 'Поверни голову влево ←', axis: 'x', sign: -1 },
-      { key: 'up', text: 'Подними голову вверх ↑', axis: 'y', sign: -1 },
-      { key: 'down', text: 'Опусти голову вниз ↓', axis: 'y', sign: +1 },
-    ] as const
-    const target = actions[Math.floor(Math.random() * actions.length)]
-    setLivenessPrompt(target.text)
-    const start = Date.now()
-    const base = (() => {
-      const pts = landmarksRef.current
-      if (!pts || !pts.length) return { cx: 0.5, cy: 0.5 }
-      let minX = 1, minY = 1, maxX = 0, maxY = 0
-      for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
-      return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 }
-    })()
-    return new Promise<boolean>((resolve) => {
-      const id = setInterval(() => {
-        const pts = landmarksRef.current
-        if (Date.now() - start > timeoutMs) { clearInterval(id); setLivenessPrompt(''); return resolve(false) }
-        if (!pts || !pts.length) return
-        let minX = 1, minY = 1, maxX = 0, maxY = 0
-        for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
-        const cx = (minX + maxX) / 2
-        const cy = (minY + maxY) / 2
-        if (target.axis === 'x') {
-          const d = cx - base.cx
-          if (Math.sign(d) === target.sign && Math.abs(d) > delta) { clearInterval(id); setLivenessPrompt(''); resolve(true) }
-        } else {
-          const d = cy - base.cy
-          if (Math.sign(d) === target.sign && Math.abs(d) > delta) { clearInterval(id); setLivenessPrompt(''); resolve(true) }
-        }
-      }, 80)
-    })
-  }
+  // Убрали liveness: логин пассивный
 
   async function handleLogin() {
     setMode('login')
     const tmpl = templateRef.current
     if (!tmpl) { setLog('Нет эталона — сначала пройди enrollment'); setMode('idle'); return }
-    // liveness
-    const ok = await runLiveness()
-    if (!ok) { setLog('Liveness не пройден'); setMode('idle'); return }
     const parts: Float32Array[] = []
     for (let i = 0; i < 8; i++) {
       const emb = await captureEmbeddingOnce()

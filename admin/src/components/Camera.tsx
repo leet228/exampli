@@ -68,8 +68,9 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
           if (now - last < 33) { rafRef.current = requestAnimationFrame(loop); return }
           last = now
           if (v && c) {
-            c.width = v.videoWidth
-            c.height = v.videoHeight
+            const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1))
+            c.width = Math.floor(v.videoWidth * dpr)
+            c.height = Math.floor(v.videoHeight * dpr)
             const ctx = c.getContext('2d')!
             ctx.clearRect(0, 0, c.width, c.height)
             const res = landmarker.detectForVideo(v, now)
@@ -115,7 +116,7 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
         autoPlay
         style={{ width: '100%', borderRadius: 12, transform: 'scaleX(-1)', background: '#000' }}
       />
-      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, transform: 'scaleX(-1)', pointerEvents: 'none' }} />
+      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, transform: 'scaleX(-1)', pointerEvents: 'none', width: '100%', height: '100%' }} />
       {!ready && !error && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
           Разреши доступ к камере…
