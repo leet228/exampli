@@ -1,7 +1,7 @@
 import './App.css'
 import { useEffect, useRef, useState } from 'react'
 import Camera from './components/Camera'
-import EnrollmentGuide from './components/EnrollmentGuide'
+import PoseGuide from './components/PoseGuide'
 import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
 
 function App() {
@@ -13,9 +13,8 @@ function App() {
   const [log, setLog] = useState<string>('')
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
-  const [enrollFilled, setEnrollFilled] = useState<boolean[]>([])
-  const [enrollIndex, setEnrollIndex] = useState<number | null>(null)
-  const [enrollTarget, setEnrollTarget] = useState<number | null>(null)
+  const [coverage, setCoverage] = useState<number>(0)
+  const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
   const [faceBox, setFaceBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null)
 
   useEffect(() => {
@@ -62,58 +61,48 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
-    // Плотная сетка ракурсов
-    const segments = 100
-    const targetPerSegment = 8
-    const filled = new Array<boolean>(segments).fill(false)
-    setEnrollFilled([...filled])
-    setEnrollIndex(null)
-    setEnrollTarget(0)
-    const perSegment: Array<Float32Array[]> = Array.from({ length: segments }, () => [])
-    const counts: number[] = new Array<number>(segments).fill(0)
+    // Сферическая сетка ракурсов (yaw/pitch) 10x10
+    const GRID = 10
+    const targetPerCell = 6
+    const got: Array<Float32Array[]> = Array.from({ length: GRID * GRID }, () => [])
     const start = Date.now()
-    // собираем до 90с или пока все сегменты не заполнены
-    while (Date.now() - start < 90000 && filled.some(f => !f)) {
-      // определим текущий азимут головы по центру bbox
+    const maxMs = 90000
+    const yawPitchFromPts = (pts: { x: number; y: number }[]) => {
+      let minX = 1, minY = 1, maxX = 0, maxY = 0
+      for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
+      setFaceBox({ minX, minY, maxX, maxY })
+      const cx = (minX + maxX) / 2
+      const cy = (minY + maxY) / 2
+      const yaw = (cx - 0.5) * 2 // -1..1
+      const pitch = (0.5 - cy) * 2 // -1..1
+      return { yaw, pitch }
+    }
+    const cellIndex = (yaw: number, pitch: number) => {
+      const yi = Math.max(0, Math.min(GRID - 1, Math.floor(((yaw + 1) / 2) * GRID)))
+      const pi = Math.max(0, Math.min(GRID - 1, Math.floor(((pitch + 1) / 2) * GRID)))
+      return pi * GRID + yi
+    }
+    const coveragePct = () => {
+      const filled = got.reduce((acc, arr) => acc + (arr.length >= targetPerCell ? 1 : 0), 0)
+      return Math.round((filled / (GRID * GRID)) * 100)
+    }
+    while (Date.now() - start < maxMs && coveragePct() < 100) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
-        let minX = 1, minY = 1, maxX = 0, maxY = 0
-        for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
-        setFaceBox({ minX, minY, maxX, maxY })
-        const cx = (minX + maxX) / 2
-        const cy = (minY + maxY) / 2
-        // преобразуем (cx,cy) в угол относительно центра кадра
-        const dx = cx - 0.5
-        const dy = 0.5 - cy
-        const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)
-        const idx = Math.floor((angle / (Math.PI * 2)) * segments) % segments
-        setEnrollIndex(idx)
-        // Подсвечиваем ближайший незаполненный сектор как цель
-        {
-          let t = idx
-          for (let step = 0; step < segments; step++) {
-            const p = (idx + step) % segments
-            if (!filled[p]) { t = p; break }
-          }
-          setEnrollTarget(t)
-        }
-        // Снимаем кадры ПОКА голова в сегменте, до нужного количества
-        if (!filled[idx]) {
+        const { yaw, pitch } = yawPitchFromPts(pts)
+        // Подсказка направление
+        const dYaw = Math.abs(yaw), dPitch = Math.abs(pitch)
+        setGuideDir(dYaw > dPitch ? (yaw > 0 ? 'right' : 'left') : (pitch > 0 ? 'up' : 'down'))
+        const idx = cellIndex(yaw, pitch)
+        if (got[idx].length < targetPerCell) {
           const emb = await captureEmbeddingOnce()
-          if (emb) {
-            perSegment[idx].push(emb)
-            counts[idx]++
-            if (counts[idx] >= targetPerSegment) {
-              filled[idx] = true
-              setEnrollFilled([...filled])
-            }
-          }
+          if (emb) got[idx].push(emb)
+          setCoverage(coveragePct() / 100)
         }
       }
-      await new Promise(r => setTimeout(r, 120))
+      await new Promise(r => setTimeout(r, 100))
     }
-    // Считаем итоговый эталон по всем собранным кадрам
-    const all: Float32Array[] = perSegment.flat()
+    const all: Float32Array[] = got.flat()
     if (all.length) {
       const acc = new Float32Array(all[0].length)
       for (const p of all) for (let i = 0; i < acc.length; i++) acc[i] += p[i]
@@ -122,15 +111,11 @@ function App() {
       try { localStorage.setItem('admin:face_template', JSON.stringify(Array.from(templateRef.current))) } catch {}
       setLog('Эталон сохранён локально')
       setMode('idle')
-      setEnrollIndex(null)
-      setEnrollTarget(null)
       setLivenessPrompt('Регистрация пройдена')
       setTimeout(() => setLivenessPrompt(''), 1500)
     } else {
       setLog('Не удалось собрать эталон')
       setMode('idle')
-      setEnrollIndex(null)
-      setEnrollTarget(null)
     }
   }
 
@@ -179,15 +164,7 @@ function App() {
           }
         }} />
         {mode === 'enroll' && (
-          <EnrollmentGuide
-            width={videoRef.current?.videoWidth || 640}
-            height={videoRef.current?.videoHeight || 480}
-            segments={100}
-            filled={enrollFilled.length ? enrollFilled : new Array(100).fill(false)}
-            currentIndex={enrollIndex}
-            targetIndex={enrollTarget}
-            faceBox={faceBox}
-          />
+          <PoseGuide direction={guideDir} progress={coverage} />
         )}
       </div>
       {livenessPrompt && (
