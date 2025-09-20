@@ -2,7 +2,7 @@ import './App.css'
 import { useEffect, useRef, useState } from 'react'
 import Camera from './components/Camera'
 import EnrollmentGuide from './components/EnrollmentGuide'
-import { createEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
+import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
 
 function App() {
   const [mode, setMode] = useState<'idle'|'enroll'|'login'|'ok'>('idle')
@@ -18,11 +18,11 @@ function App() {
   const [faceBox, setFaceBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null)
 
   useEffect(() => {
-    // Загружаем onnx с CDN (примерная ссылка — заменишь на свою модель)
+    // Гарантируем одну общую сессию (кэшируется)
     (async () => {
       try {
         const modelUrl = import.meta.env.BASE_URL + 'models/w600k_r50.onnx'
-        const sess = await createEmbeddingSession(modelUrl)
+        const sess = await ensureEmbeddingSession(modelUrl)
         sessionRef.current = sess
         setSessionReady(true)
         // Попробуем восстановить локальный эталон
@@ -157,7 +157,14 @@ function App() {
         <button onClick={handleLogin} disabled={!sessionReady || mode !== 'idle'} style={{ marginLeft: 8 }}>Login</button>
       </div>
       <div style={{ position: 'relative' }}>
-        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
+        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => {
+          landmarksRef.current = pts
+          if (pts && pts.length) {
+            let minX = 1, minY = 1, maxX = 0, maxY = 0
+            for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
+            setFaceBox({ minX, minY, maxX, maxY })
+          }
+        }} />
         {mode === 'enroll' && (
           <EnrollmentGuide
             width={videoRef.current?.videoWidth || 640}

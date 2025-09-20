@@ -7,6 +7,8 @@ function loadOrt() {
   return ortPromise
 }
 
+let sessionPromise: Promise<{ ort: any; session: any }> | null = null
+
 export async function createEmbeddingSession(modelUrl: string) {
   const ort = await loadOrt()
   try { ort.env.wasm.wasmPaths = (import.meta as any).env.BASE_URL + 'ort/' } catch {}
@@ -14,6 +16,15 @@ export async function createEmbeddingSession(modelUrl: string) {
   try { ort.env.wasm.simd = true } catch {}
   const session = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] as any })
   return { ort, session }
+}
+
+export async function ensureEmbeddingSession(modelUrl: string) {
+  if (!sessionPromise) sessionPromise = createEmbeddingSession(modelUrl)
+  return sessionPromise
+}
+
+export function prefetchEmbeddingSession(modelUrl: string) {
+  if (!sessionPromise) sessionPromise = createEmbeddingSession(modelUrl)
 }
 
 export function l2normalize(v: Float32Array) {
