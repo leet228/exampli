@@ -1,6 +1,7 @@
 import './App.css'
 import { useEffect, useRef, useState } from 'react'
 import Camera from './components/Camera'
+import EnrollmentGuide from './components/EnrollmentGuide'
 import { createEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
 
 function App() {
@@ -12,6 +13,8 @@ function App() {
   const [log, setLog] = useState<string>('')
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
+  const [enrollFilled, setEnrollFilled] = useState<boolean[]>([])
+  const [enrollIndex, setEnrollIndex] = useState<number | null>(null)
 
   useEffect(() => {
     // Загружаем onnx с CDN (примерная ссылка — заменишь на свою модель)
@@ -57,24 +60,51 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
-    const parts: Float32Array[] = []
-    for (let i = 0; i < 20; i++) {
-      const emb = await captureEmbeddingOnce()
-      if (emb) parts.push(emb)
+    // Круг из сегментов: 12 секторов окружности
+    const segments = 12
+    const filled = new Array<boolean>(segments).fill(false)
+    setEnrollFilled([...filled])
+    setEnrollIndex(null)
+    const collected: Float32Array[] = []
+    const start = Date.now()
+    // собираем до 60с или пока все сегменты не заполнены
+    while (Date.now() - start < 60000 && filled.some(f => !f)) {
+      // определим текущий азимут головы по центру bbox
+      const pts = landmarksRef.current
+      if (pts && pts.length) {
+        let minX = 1, minY = 1, maxX = 0, maxY = 0
+        for (const p of pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y }
+        const cx = (minX + maxX) / 2
+        const cy = (minY + maxY) / 2
+        // преобразуем (cx,cy) в угол относительно центра кадра
+        const dx = cx - 0.5
+        const dy = 0.5 - cy
+        const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)
+        const idx = Math.floor((angle / (Math.PI * 2)) * segments) % segments
+        setEnrollIndex(idx)
+        // соберём эмбеддинг, если этот сегмент ещё пуст и лицо в кадре
+        if (!filled[idx]) {
+          const emb = await captureEmbeddingOnce()
+          if (emb) { collected.push(emb); filled[idx] = true; setEnrollFilled([...filled]) }
+        }
+      }
       await new Promise(r => setTimeout(r, 120))
     }
-    if (parts.length) {
-      // усреднение
-      const acc = new Float32Array(parts[0].length)
-      for (const p of parts) for (let i = 0; i < acc.length; i++) acc[i] += p[i]
-      for (let i = 0; i < acc.length; i++) acc[i] /= parts.length
+    if (collected.length) {
+      const acc = new Float32Array(collected[0].length)
+      for (const p of collected) for (let i = 0; i < acc.length; i++) acc[i] += p[i]
+      for (let i = 0; i < acc.length; i++) acc[i] /= collected.length
       templateRef.current = l2normalize(acc)
       try { localStorage.setItem('admin:face_template', JSON.stringify(Array.from(templateRef.current))) } catch {}
       setLog('Эталон сохранён локально')
       setMode('idle')
+      setEnrollIndex(null)
+      setLivenessPrompt('Регистрация пройдена')
+      setTimeout(() => setLivenessPrompt(''), 1500)
     } else {
       setLog('Не удалось собрать эталон')
       setMode('idle')
+      setEnrollIndex(null)
     }
   }
 
@@ -152,7 +182,18 @@ function App() {
         <button onClick={handleEnroll} disabled={!sessionReady || mode !== 'idle'}>Enrollment</button>
         <button onClick={handleLogin} disabled={!sessionReady || mode !== 'idle'} style={{ marginLeft: 8 }}>Login</button>
       </div>
-      <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
+      <div style={{ position: 'relative' }}>
+        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
+        {mode === 'enroll' && (
+          <EnrollmentGuide
+            width={videoRef.current?.videoWidth || 640}
+            height={videoRef.current?.videoHeight || 480}
+            segments={12}
+            filled={enrollFilled.length ? enrollFilled : new Array(12).fill(false)}
+            currentIndex={enrollIndex}
+          />
+        )}
+      </div>
       {livenessPrompt && (
         <div style={{ marginTop: 8, fontWeight: 700, color: '#3c73ff' }}>{livenessPrompt}</div>
       )}

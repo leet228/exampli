@@ -58,16 +58,21 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
       try {
         const { landmarker: lm } = await loadFaceLandmarker()
         landmarker = lm
+        let last = 0
         const loop = () => {
           if (cancelled) return
           const v = videoRef.current
           const c = canvasRef.current
+          const now = performance.now()
+          // ограничение FPS ~30
+          if (now - last < 33) { rafRef.current = requestAnimationFrame(loop); return }
+          last = now
           if (v && c) {
             c.width = v.videoWidth
             c.height = v.videoHeight
             const ctx = c.getContext('2d')!
             ctx.clearRect(0, 0, c.width, c.height)
-            const res = landmarker.detectForVideo(v, performance.now())
+            const res = landmarker.detectForVideo(v, now)
             if (res?.faceLandmarks?.length) {
               const pts = res.faceLandmarks[0] as { x: number; y: number }[]
               // Рисуем точки/бокс вручную, конвертируя нормализованные координаты в пиксели
