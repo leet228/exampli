@@ -21,6 +21,8 @@ function App() {
   const [pitch0, setPitch0] = useState<number | null>(null)
   const yawEmaRef = useRef<number>(0)
   const pitchEmaRef = useRef<number>(0)
+  const calEndTsRef = useRef<number>(0)
+  const calSumRef = useRef<{ yaw: number; pitch: number; n: number }>({ yaw: 0, pitch: 0, n: 0 })
   const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
 
   useEffect(() => {
@@ -68,6 +70,9 @@ function App() {
   async function handleEnroll() {
     setMode('enroll')
     setYaw0(null); setPitch0(null); yawEmaRef.current = 0; pitchEmaRef.current = 0
+    // запустим калибровку по времени (0.8с)
+    calEndTsRef.current = Date.now() + 800
+    calSumRef.current = { yaw: 0, pitch: 0, n: 0 }
     // Сферическая сетка ракурсов (yaw/pitch)
     const GRID = 6
     setGridSize(GRID)
@@ -110,18 +115,24 @@ function App() {
       setCellsDone(filled)
       return Math.round((filled / (GRID * GRID)) * 100)
     }
-    let steadyCtr = 0
     while (Date.now() - start < maxMs && coveragePct() < 100) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
         const raw = yawPitchFromPts(pts)
         // базовая калибровка: смотрим прямо, удерживаем 0.5с
         if (yaw0 == null || pitch0 == null) {
-          const near0 = Math.abs(raw.yaw) < 0.1 && Math.abs(raw.pitch) < 0.1
-          steadyCtr = near0 ? steadyCtr + 1 : 0
           setGuideDir('center')
           setLivenessPrompt('Смотри прямо для калибровки…')
-          if (steadyCtr > 8) { setYaw0(raw.yaw); setPitch0(raw.pitch); setLivenessPrompt(''); }
+          if (Date.now() < calEndTsRef.current) {
+            calSumRef.current.yaw += raw.yaw
+            calSumRef.current.pitch += raw.pitch
+            calSumRef.current.n += 1
+          } else {
+            const n = Math.max(1, calSumRef.current.n)
+            setYaw0(calSumRef.current.yaw / n)
+            setPitch0(calSumRef.current.pitch / n)
+            setLivenessPrompt('')
+          }
           await new Promise(r => setTimeout(r, 60))
           continue
         }
