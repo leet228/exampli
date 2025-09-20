@@ -245,7 +245,7 @@ export default function AI() {
             style={{
               backgroundImage: "url('/ai/ai_waiting.svg')",
               backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
+              backgroundPosition: 'center 85%',
               backgroundSize: 'contain',
               zIndex: 0,
             }}
@@ -312,7 +312,7 @@ export default function AI() {
             {/* плюсик */}
             <MotionPressButton
               ariaLabel="Прикрепить изображение"
-              onClick={onPickImageClick}
+              onClick={() => { try { hapticTiny(); } catch {}; onPickImageClick(); }}
               baseColor="#2b2b2b"
               textColor="rgba(255,255,255,0.9)"
             >
@@ -358,6 +358,8 @@ export default function AI() {
               baseColor="#ffffff"
               textColor="#000000"
               disabled={(!input.trim() && pendingImages.length === 0) || isLoading}
+              disabledBackgroundColor="#e5e5e5"
+              disabledTextColor="#7a7a7a"
             >
               ↑
             </MotionPressButton>
@@ -470,6 +472,8 @@ function MotionPressButton({
   baseColor,
   textColor,
   disabled,
+  disabledBackgroundColor,
+  disabledTextColor,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -477,10 +481,14 @@ function MotionPressButton({
   baseColor: string;
   textColor: string;
   disabled?: boolean;
+  disabledBackgroundColor?: string;
+  disabledTextColor?: string;
 }) {
   const [pressed, setPressed] = React.useState(false);
   const shadowHeight = PRESS_SHADOW_HEIGHT;
-  const darkColor = React.useMemo(() => darken(baseColor, 18), [baseColor]);
+  const bg = disabled ? (disabledBackgroundColor || baseColor) : baseColor;
+  const fg = disabled ? (disabledTextColor || textColor) : textColor;
+  const darkColor = React.useMemo(() => darken(bg, 18), [bg]);
   return (
     <motion.button
       type="button"
@@ -488,14 +496,14 @@ function MotionPressButton({
       onPointerDown={() => !disabled && setPressed(true)}
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
-      onClick={() => { if (!disabled) onClick && onClick(); }}
+      onClick={() => { setPressed(false); if (!disabled) onClick && onClick(); }}
       animate={{
-        y: pressed ? shadowHeight : 0,
-        boxShadow: pressed ? `0px 0px 0px ${darkColor}` : `0px ${shadowHeight}px 0px ${darkColor}`,
+        y: disabled ? 0 : (pressed ? shadowHeight : 0),
+        boxShadow: disabled ? `0px ${shadowHeight}px 0px ${darkColor}` : (pressed ? `0px 0px 0px ${darkColor}` : `0px ${shadowHeight}px 0px ${darkColor}`),
       }}
       transition={{ duration: 0 }}
-      className={`shrink-0 ai-btn rounded-full flex items-center justify-center ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      style={{ background: baseColor, color: textColor }}
+      className={`shrink-0 ai-btn rounded-full flex items-center justify-center ${disabled ? 'cursor-not-allowed' : ''}`}
+      style={{ background: bg, color: fg }}
       data-no-focus
       disabled={disabled}
     >
