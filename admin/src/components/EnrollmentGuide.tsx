@@ -6,17 +6,25 @@ type Props = {
   filled: boolean[]
   currentIndex?: number | null
   done?: boolean
+  // нормализованный bbox лица [0..1]
+  faceBox?: { minX: number; minY: number; maxX: number; maxY: number } | null
 }
 
-export default function EnrollmentGuide({ width, height, segments, filled, currentIndex, done }: Props) {
-  const pad = 24
-  const cx = width / 2
-  const cy = height / 2
-  const r = Math.max(10, Math.min(cx, cy) - pad)
+export default function EnrollmentGuide({ width, height, segments, filled, currentIndex, done, faceBox }: Props) {
+  // центр и радиус — вокруг головы
+  let cx = width / 2
+  let cy = height / 2
+  let r = Math.max(10, Math.min(cx, cy) - 24)
+  if (faceBox) {
+    const fx = (faceBox.minX + faceBox.maxX) / 2 * width
+    const fy = (faceBox.minY + faceBox.maxY) / 2 * height
+    const fr = Math.max((faceBox.maxX - faceBox.minX) * width, (faceBox.maxY - faceBox.minY) * height) * 0.65
+    cx = fx; cy = fy; r = Math.max(20, fr)
+  }
   const segAngle = (Math.PI * 2) / segments
 
   // Радиальные полосы: от радиуса r к r+len
-  const barLen = Math.max(12, Math.min(cx, cy) * 0.18)
+  const barLen = Math.max(12, Math.min(width, height) * 0.12)
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>

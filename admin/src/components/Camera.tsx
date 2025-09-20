@@ -87,11 +87,6 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
                 ctx.arc(x, y, 1.6, 0, Math.PI * 2)
                 ctx.fill()
               }
-              const bx = minX * c.width, by = minY * c.height
-              const bw = (maxX - minX) * c.width, bh = (maxY - minY) * c.height
-              ctx.strokeStyle = '#3c73ff'
-              ctx.lineWidth = 2
-              ctx.strokeRect(bx, by, bw, bh)
               try { onLandmarks?.(pts) } catch {}
             } else {
               try { onLandmarks?.(null) } catch {}
