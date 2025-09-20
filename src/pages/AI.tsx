@@ -244,7 +244,7 @@ export default function AI() {
             src="/ai/ai_waiting.svg"
             alt=""
             aria-hidden
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
+            className="absolute left-1/2 bottom-0 -translate-x-1/2 pointer-events-none select-none"
             style={{ width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
           />
         )}
