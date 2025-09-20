@@ -42,8 +42,15 @@ function App() {
     if (!sess || !v) return null
     const faceCanvas = cropFaceToCanvas(v, landmarksRef.current, 112)
     const input = canvasToOrtTensor(sess.ort, faceCanvas)
-    const output = await sess.session.run({ input })
-    const key = Object.keys(output)[0]
+    const inputName = Array.isArray(sess.session.inputNames) && sess.session.inputNames.length
+      ? sess.session.inputNames[0]
+      : 'input.1'
+    const outputName = Array.isArray(sess.session.outputNames) && sess.session.outputNames.length
+      ? sess.session.outputNames[0]
+      : undefined
+    const feeds: Record<string, any> = { [inputName]: input }
+    const output = await sess.session.run(feeds)
+    const key = outputName ?? Object.keys(output)[0]
     const vect = output[key].data as Float32Array
     return l2normalize(vect)
   }
