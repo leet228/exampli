@@ -78,13 +78,13 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
               const pts = res.faceLandmarks[0] as { x: number; y: number }[]
               // Рисуем точки/бокс вручную, конвертируя нормализованные координаты в пиксели
               let minX = 1, minY = 1, maxX = 0, maxY = 0
-              ctx.fillStyle = '#fc86d0'
+              ctx.fillStyle = 'rgba(252,134,208,0.95)'
               for (const p of pts) {
                 if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y
                 const x = p.x * c.width
                 const y = p.y * c.height
                 ctx.beginPath()
-                ctx.arc(x, y, 1.6, 0, Math.PI * 2)
+                ctx.arc(x, y, 2.2, 0, Math.PI * 2)
                 ctx.fill()
               }
               try { onLandmarks?.(pts) } catch {}

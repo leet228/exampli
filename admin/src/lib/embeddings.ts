@@ -9,12 +9,31 @@ function loadOrt() {
 
 let sessionPromise: Promise<{ ort: any; session: any }> | null = null
 
+async function fetchModelBuffer(modelUrl: string): Promise<Uint8Array> {
+  try {
+    const cache = await caches.open('admin-face-model-v1')
+    let res = await cache.match(modelUrl)
+    if (!res) {
+      const net = await fetch(modelUrl, { cache: 'force-cache' })
+      await cache.put(modelUrl, net.clone())
+      res = net
+    }
+    const buf = await res.arrayBuffer()
+    return new Uint8Array(buf)
+  } catch {
+    const net = await fetch(modelUrl)
+    const buf = await net.arrayBuffer()
+    return new Uint8Array(buf)
+  }
+}
+
 export async function createEmbeddingSession(modelUrl: string) {
   const ort = await loadOrt()
   try { ort.env.wasm.wasmPaths = (import.meta as any).env.BASE_URL + 'ort/' } catch {}
   try { ort.env.wasm.numThreads = 1 } catch {}
   try { ort.env.wasm.simd = true } catch {}
-  const session = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] as any })
+  const modelData = await fetchModelBuffer(modelUrl)
+  const session = await ort.InferenceSession.create(modelData, { executionProviders: ['wasm'] as any })
   return { ort, session }
 }
 

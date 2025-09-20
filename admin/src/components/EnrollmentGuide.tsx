@@ -5,12 +5,13 @@ type Props = {
   segments: number
   filled: boolean[]
   currentIndex?: number | null
+  targetIndex?: number | null
   done?: boolean
   // нормализованный bbox лица [0..1]
   faceBox?: { minX: number; minY: number; maxX: number; maxY: number } | null
 }
 
-export default function EnrollmentGuide({ width, height, segments, filled, currentIndex, done, faceBox }: Props) {
+export default function EnrollmentGuide({ width, height, segments, filled, currentIndex, targetIndex, done, faceBox }: Props) {
   // центр и радиус — вокруг головы
   let cx = width / 2
   let cy = height / 2
@@ -38,12 +39,17 @@ export default function EnrollmentGuide({ width, height, segments, filled, curre
           const y0 = cy + r * Math.sin(a)
           const x1 = cx + (r + barLen) * Math.cos(a)
           const y1 = cy + (r + barLen) * Math.sin(a)
-          const color = filled[i] ? '#57cc02' : (i === currentIndex ? '#3c73ff' : 'rgba(255,255,255,0.45)')
+          const color = filled[i] ? '#57cc02' : (i === targetIndex ? '#ffd166' : (i === currentIndex ? '#3c73ff' : 'rgba(255,255,255,0.45)'))
           return (
             <line key={i} x1={x0} y1={y0} x2={x1} y2={y1} stroke={color} strokeWidth={6} strokeLinecap="round" />
           )
         })}
       </svg>
+      {targetIndex != null && !done && (
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', fontWeight: 800, color: '#ffd166', fontSize: 18 }}>
+          Медленно поверни голову к подсвеченному сектору
+        </div>
+      )}
       {done && (
         <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', textAlign: 'center', fontWeight: 800, color: '#57cc02', fontSize: 24 }}>
           ✓ Регистрация пройдена

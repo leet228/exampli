@@ -15,6 +15,7 @@ function App() {
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
   const [enrollFilled, setEnrollFilled] = useState<boolean[]>([])
   const [enrollIndex, setEnrollIndex] = useState<number | null>(null)
+  const [enrollTarget, setEnrollTarget] = useState<number | null>(null)
   const [faceBox, setFaceBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null)
 
   useEffect(() => {
@@ -61,17 +62,18 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
-    // Круг из сегментов: 12 секторов окружности
-    const segments = 48
+    // Плотная сетка ракурсов
+    const segments = 100
     const targetPerSegment = 8
     const filled = new Array<boolean>(segments).fill(false)
     setEnrollFilled([...filled])
     setEnrollIndex(null)
+    setEnrollTarget(0)
     const perSegment: Array<Float32Array[]> = Array.from({ length: segments }, () => [])
     const counts: number[] = new Array<number>(segments).fill(0)
     const start = Date.now()
-    // собираем до 60с или пока все сегменты не заполнены
-    while (Date.now() - start < 60000 && filled.some(f => !f)) {
+    // собираем до 90с или пока все сегменты не заполнены
+    while (Date.now() - start < 90000 && filled.some(f => !f)) {
       // определим текущий азимут головы по центру bbox
       const pts = landmarksRef.current
       if (pts && pts.length) {
@@ -86,6 +88,15 @@ function App() {
         const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)
         const idx = Math.floor((angle / (Math.PI * 2)) * segments) % segments
         setEnrollIndex(idx)
+        // Подсвечиваем ближайший незаполненный сектор как цель
+        {
+          let t = idx
+          for (let step = 0; step < segments; step++) {
+            const p = (idx + step) % segments
+            if (!filled[p]) { t = p; break }
+          }
+          setEnrollTarget(t)
+        }
         // Снимаем кадры ПОКА голова в сегменте, до нужного количества
         if (!filled[idx]) {
           const emb = await captureEmbeddingOnce()
@@ -112,12 +123,14 @@ function App() {
       setLog('Эталон сохранён локально')
       setMode('idle')
       setEnrollIndex(null)
+      setEnrollTarget(null)
       setLivenessPrompt('Регистрация пройдена')
       setTimeout(() => setLivenessPrompt(''), 1500)
     } else {
       setLog('Не удалось собрать эталон')
       setMode('idle')
       setEnrollIndex(null)
+      setEnrollTarget(null)
     }
   }
 
@@ -169,9 +182,10 @@ function App() {
           <EnrollmentGuide
             width={videoRef.current?.videoWidth || 640}
             height={videoRef.current?.videoHeight || 480}
-            segments={48}
-            filled={enrollFilled.length ? enrollFilled : new Array(12).fill(false)}
+            segments={100}
+            filled={enrollFilled.length ? enrollFilled : new Array(100).fill(false)}
             currentIndex={enrollIndex}
+            targetIndex={enrollTarget}
             faceBox={faceBox}
           />
         )}
