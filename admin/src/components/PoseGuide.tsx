@@ -1,9 +1,13 @@
 type Props = {
   direction: 'left' | 'right' | 'up' | 'down' | 'center'
   progress: number // 0..1
+  cellsDone?: number
+  gridSize?: number
+  debugYaw?: number
+  debugPitch?: number
 }
 
-export default function PoseGuide({ direction, progress }: Props) {
+export default function PoseGuide({ direction, progress, cellsDone, gridSize, debugYaw, debugPitch }: Props) {
   const arrow = direction === 'left' ? '←'
     : direction === 'right' ? '→'
     : direction === 'up' ? '↑'
@@ -28,7 +32,13 @@ export default function PoseGuide({ direction, progress }: Props) {
         <div style={{ height: 10, background: 'rgba(255,255,255,0.2)', borderRadius: 9999, overflow: 'hidden' }}>
           <div style={{ width: `${pct}%`, height: '100%', background: '#57cc02' }} />
         </div>
-        <div style={{ marginTop: 6, textAlign: 'right', fontWeight: 700, color: '#57cc02' }}>{pct}%</div>
+        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+          <span style={{ color: '#ffd166' }}>{direction.toUpperCase()}</span>
+          <span style={{ color: '#57cc02' }}>{pct}% {cellsDone != null && gridSize != null ? `(${cellsDone}/${gridSize*gridSize})` : ''}</span>
+        </div>
+        {debugYaw != null && debugPitch != null && (
+          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>{`yaw=${debugYaw.toFixed(2)} pitch=${debugPitch.toFixed(2)}`}</div>
+        )}
       </div>
     </div>
   )

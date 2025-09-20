@@ -14,6 +14,9 @@ function App() {
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
   const [coverage, setCoverage] = useState<number>(0)
+  const [cellsDone, setCellsDone] = useState<number>(0)
+  const [gridSize, setGridSize] = useState<number>(8)
+  const [debugPose, setDebugPose] = useState<{yaw:number;pitch:number}>({ yaw: 0, pitch: 0 })
   const [guideDir, setGuideDir] = useState<'left'|'right'|'up'|'down'|'center'>('center')
 
   useEffect(() => {
@@ -61,8 +64,9 @@ function App() {
   async function handleEnroll() {
     setMode('enroll')
     // Сферическая сетка ракурсов (yaw/pitch)
-    const GRID = 8
-    const targetPerCell = 4
+    const GRID = 6
+    setGridSize(GRID)
+    const targetPerCell = 3
     const got: Array<Float32Array[]> = Array.from({ length: GRID * GRID }, () => [])
     const start = Date.now()
     const maxMs = 90000
@@ -98,12 +102,14 @@ function App() {
     }
     const coveragePct = () => {
       const filled = got.reduce((acc, arr) => acc + (arr.length >= targetPerCell ? 1 : 0), 0)
+      setCellsDone(filled)
       return Math.round((filled / (GRID * GRID)) * 100)
     }
     while (Date.now() - start < maxMs && coveragePct() < 100) {
       const pts = landmarksRef.current
       if (pts && pts.length) {
         const { yaw, pitch } = yawPitchFromPts(pts)
+        setDebugPose({ yaw, pitch })
         // Подсказка направление
         const dYaw = Math.abs(yaw), dPitch = Math.abs(pitch)
         const nearCenter = dYaw < 0.15 && dPitch < 0.15
@@ -115,7 +121,7 @@ function App() {
           setCoverage(coveragePct() / 100)
         }
       }
-      await new Promise(r => setTimeout(r, 100))
+      await new Promise(r => setTimeout(r, 60))
     }
     const all: Float32Array[] = got.flat()
     if (all.length) {
@@ -172,7 +178,7 @@ function App() {
       <div style={{ position: 'relative' }}>
         <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
         {mode === 'enroll' && (
-          <PoseGuide direction={guideDir} progress={coverage} />
+          <PoseGuide direction={guideDir} progress={coverage} cellsDone={cellsDone} gridSize={gridSize} debugYaw={debugPose.yaw} debugPitch={debugPose.pitch} />
         )}
       </div>
       {livenessPrompt && (
