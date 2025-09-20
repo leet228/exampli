@@ -240,15 +240,12 @@ export default function AI() {
     <div className="safe-bottom main-scroll">
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad relative">
         {!hasAnyUser && (
-          <div
-            className="absolute inset-0 pointer-events-none opacity-80"
-            style={{
-              backgroundImage: "url('/ai/ai_waiting.svg')",
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center 85%',
-              backgroundSize: 'contain',
-              zIndex: 0,
-            }}
+          <img
+            src="/ai/ai_waiting.svg"
+            alt=""
+            aria-hidden
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
+            style={{ width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
           />
         )}
         {/* Фиксированный HUD приветствия поверх ленты */}
