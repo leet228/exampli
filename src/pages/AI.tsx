@@ -245,7 +245,7 @@ export default function AI() {
             alt=""
             aria-hidden
             className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
-            style={{ bottom: 260, width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
+            style={{ bottom: 262, width: 'min(92%, 720px)', opacity: 0.85, zIndex: 0 }}
           />
         )}
         {/* Фиксированный HUD приветствия поверх ленты */}
