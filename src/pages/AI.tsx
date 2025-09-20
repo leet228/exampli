@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { hapticTiny, hapticSelect, hapticTypingTick } from '../lib/haptics';
@@ -17,6 +18,7 @@ type ChatMessage = {
 };
 
 const STORAGE_KEY = 'ai_chat_cache_v1';
+const PRESS_SHADOW_HEIGHT = 6;
 
 export default function AI() {
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
@@ -28,15 +30,24 @@ export default function AI() {
     return [{ role: 'assistant', content: '' }];
   });
   const [input, setInput] = React.useState<string>('');
-  const [pendingImage, setPendingImage] = React.useState<string | null>(null);
+  const [pendingImages, setPendingImages] = React.useState<string[]>([]);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const inputShellRef = React.useRef<HTMLDivElement | null>(null);
+  const previewWrapRef = React.useRef<HTMLDivElement | null>(null);
   const MAX_VISIBLE_LINES = 8;
   const [isInputFocused, setIsInputFocused] = React.useState<boolean>(false);
   const isFirstMountRef = React.useRef<boolean>(true);
+  const [previewOffset, setPreviewOffset] = React.useState<number>(0);
+  // высота «нижней полоски» для поля ввода совпадает с кнопками
+
+  const hasAnyUser = React.useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
+
+  const inputBaseColor = '#2b2b2b';
+  const inputDarkColor = React.useMemo(() => darken(inputBaseColor, 18), []);
   function focusComposer(e?: any) {
     try {
       const el = (e?.target as HTMLElement) || null;
@@ -92,23 +103,43 @@ export default function AI() {
     return () => document.body.classList.remove(cls);
   }, [isInputFocused]);
 
+  // Выравнивание первого превью ровно над началом поля ввода
+  React.useLayoutEffect(() => {
+    const align = () => {
+      try {
+        const inputEl = inputShellRef.current;
+        const wrapEl = previewWrapRef.current;
+        if (!inputEl || !wrapEl) { setPreviewOffset(0); return; }
+        const r1 = inputEl.getBoundingClientRect();
+        const r0 = wrapEl.getBoundingClientRect();
+        const dx = Math.round(r1.left - r0.left);
+        setPreviewOffset(Math.max(0, dx));
+      } catch { setPreviewOffset(0); }
+    };
+    align();
+    window.addEventListener('resize', align);
+    return () => window.removeEventListener('resize', align);
+  }, [pendingImages.length, isInputFocused, input]);
+
   async function sendMessage() {
     const trimmed = input.trim();
-    if (!trimmed && !pendingImage) return;
+    if (!trimmed && pendingImages.length === 0) return;
     if (isLoading) return;
     setError(null);
 
-    const userContent: MessageContent = pendingImage
-      ? [
-          ...(trimmed ? [{ type: 'text', text: trimmed } as const] : [{ type: 'text', text: 'Опиши, что на фото.' } as const]),
-          { type: 'image_url', image_url: { url: pendingImage } } as const,
-        ]
+    const userContent: MessageContent = pendingImages.length > 0
+      ? (
+          [
+            ...(trimmed ? [{ type: 'text', text: trimmed } as const] : [{ type: 'text', text: 'Опиши, что на фото.' } as const]),
+            ...pendingImages.map((url) => ({ type: 'image_url', image_url: { url } } as const)),
+          ]
+        )
       : trimmed;
 
     const nextMessages: ChatMessage[] = [...messages, { role: 'user', content: userContent }];
     setMessages(nextMessages);
     setInput('');
-    setPendingImage(null);
+    setPendingImages([]);
     setIsLoading(true);
     // Хаптик «выстрел» после отправки
     try { hapticTiny(); } catch {}
@@ -188,26 +219,38 @@ export default function AI() {
   }
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Пожалуйста, выберите изображение.');
-      return;
-    }
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const allowed = files.filter((f) => f.type.startsWith('image/'));
+    if (!allowed.length) { setError('Пожалуйста, выберите изображение.'); return; }
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setPendingImage(dataUrl);
+      const remain = Math.max(0, 3 - pendingImages.length);
+      if (remain <= 0) return;
+      const picked = allowed.slice(0, remain);
+      const urls = await Promise.all(picked.map((f) => readFileAsDataUrl(f)));
+      setPendingImages((prev) => [...prev, ...urls].slice(0, 3));
     } catch (_err: any) {
       setError('Не удалось прочитать файл изображения.');
     } finally {
-      // allow reselect same file later
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
   return (
     <div className="safe-bottom main-scroll">
-      <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad">
+      <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad relative">
+        {!hasAnyUser && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-80"
+            style={{
+              backgroundImage: "url('/ai/ai_waiting.svg')",
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center',
+              backgroundSize: 'contain',
+              zIndex: 0,
+            }}
+          />
+        )}
         {/* Фиксированный HUD приветствия поверх ленты */}
         <div className="ai-greet-hud">
           <div className="inline-block text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
@@ -219,7 +262,7 @@ export default function AI() {
 
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1"
+          className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-44 pt-1 relative"
           aria-live="polite"
         >
           {messages.slice(1).map((m, idx) => (
@@ -245,43 +288,55 @@ export default function AI() {
 
         {/* Ввод как на макете: фиксирован над нижним HUD */}
         <div className="ai-input-fixed">
-          {pendingImage && (
-            <div className="mb-2">
-              <div className="relative inline-block">
-                <img src={pendingImage} alt="Выбранное изображение" className="w-20 h-20 object-cover rounded-2xl border border-white/10" />
-                <button
-                  type="button"
-                  className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-white text-black flex items-center justify-center"
-                  data-no-focus
-                  aria-label="Убрать фото"
-                  onClick={() => setPendingImage(null)}
-                >
-                  ×
-                </button>
+          {pendingImages.length > 0 && (
+            <div className="mb-2" ref={previewWrapRef}>
+              <div className="flex items-center gap-2" style={{ marginLeft: `${previewOffset}px` }}>
+                {pendingImages.map((src, i) => (
+                  <div key={i} className="relative inline-block">
+                    <img src={src} alt="Выбранное изображение" className="w-20 h-20 object-cover rounded-2xl border border-white/10" />
+                    <button
+                      type="button"
+                      className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-white text-black flex items-center justify-center"
+                      data-no-focus
+                      aria-label="Убрать фото"
+                      onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
           <div className="flex items-end gap-2 ai-input-row" onMouseDownCapture={focusComposer} onTouchStartCapture={focusComposer}>
             {/* плюсик */}
-            <button
-              type="button"
+            <MotionPressButton
+              ariaLabel="Прикрепить изображение"
               onClick={onPickImageClick}
-              aria-label="Прикрепить изображение"
-              className="shrink-0 ai-btn rounded-full bg-[#2b2b2b] border border-transparent text-xl text-white/90 flex items-center justify-center"
-              data-no-focus
+              baseColor="#2b2b2b"
+              textColor="rgba(255,255,255,0.9)"
             >
               +
-            </button>
+            </MotionPressButton>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
               className="hidden"
+              multiple
               onChange={onFileChange}
             />
 
             {/* поле ввода — скруглённое, растёт до 8 строк */}
-            <div className="flex-1 min-w-0 rounded-full bg-[#2b2b2b] border border-transparent px-4 py-2">
+            <div
+              ref={inputShellRef}
+              className="flex-1 min-w-0 rounded-full border border-transparent px-4 py-2"
+              style={{
+                background: inputBaseColor,
+                boxShadow: `0px ${PRESS_SHADOW_HEIGHT}px 0px ${inputDarkColor}`,
+                borderRadius: 9999,
+              }}
+            >
               <textarea
                 ref={textareaRef}
                 className="block w-full bg-transparent outline-none text-[var(--text)] placeholder-[var(--muted)] text-base leading-6 resize-none no-scrollbar whitespace-pre-wrap break-normal"
@@ -297,17 +352,15 @@ export default function AI() {
             </div>
 
             {/* отправка */}
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.preventDefault()}
+            <MotionPressButton
+              ariaLabel="Отправить"
               onClick={sendMessage}
-              disabled={(!input.trim() && !pendingImage) || isLoading}
-              aria-label="Отправить"
-              className="shrink-0 ai-btn rounded-full bg-white text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              data-no-focus
+              baseColor="#ffffff"
+              textColor="#000000"
+              disabled={(!input.trim() && pendingImages.length === 0) || isLoading}
             >
               ↑
-            </button>
+            </MotionPressButton>
           </div>
         </div>
       </div>
@@ -389,4 +442,64 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onerror = (e) => reject(e);
     reader.readAsDataURL(file);
   });
+}
+
+// Цветовые утилиты для вычисления нижней «полоски»
+function hexToRgb(hex: string) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
+  const bigint = parseInt(full, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return { r, g, b };
+}
+
+function darken(hex: string, amount = 18) {
+  if (hex.startsWith('rgb')) return hex; // простая защита, если уже rgb
+  const { r, g, b } = hexToRgb(hex);
+  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+  return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+}
+
+// Кнопка с «нижней полоской» через box-shadow и мгновенной анимацией
+function MotionPressButton({
+  children,
+  onClick,
+  ariaLabel,
+  baseColor,
+  textColor,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  ariaLabel: string;
+  baseColor: string;
+  textColor: string;
+  disabled?: boolean;
+}) {
+  const [pressed, setPressed] = React.useState(false);
+  const shadowHeight = PRESS_SHADOW_HEIGHT;
+  const darkColor = React.useMemo(() => darken(baseColor, 18), [baseColor]);
+  return (
+    <motion.button
+      type="button"
+      aria-label={ariaLabel}
+      onPointerDown={() => !disabled && setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={() => { if (!disabled) onClick && onClick(); }}
+      animate={{
+        y: pressed ? shadowHeight : 0,
+        boxShadow: pressed ? `0px 0px 0px ${darkColor}` : `0px ${shadowHeight}px 0px ${darkColor}`,
+      }}
+      transition={{ duration: 0 }}
+      className={`shrink-0 ai-btn rounded-full flex items-center justify-center ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      style={{ background: baseColor, color: textColor }}
+      data-no-focus
+      disabled={disabled}
+    >
+      {children}
+    </motion.button>
+  );
 }
