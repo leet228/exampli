@@ -63,7 +63,7 @@ function App() {
       const master: number[] = json?.template || []
       if (!master.length) throw new Error('empty')
       const tmpl = l2normalize(new Float32Array(master))
-      // Запускаем короткую сессию сбора 2с и сравниваем
+      // Запускаем короткую сессию сбора и сравниваем
       const start = Date.now()
       const ms = 2000
       const parts: Float32Array[] = []
@@ -80,10 +80,11 @@ function App() {
       const score = cosine(tmpl, probe)
       const el = document.querySelector('.auth-ring') as HTMLElement | null
       if (el) {
+        // Включаем бегущую рамку на время проверки
+        el.style.animationDuration = `${Math.max(0.6, ms / 1000)}s`
         if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
         else { el.classList.remove('auth-ring--ok'); el.classList.add('auth-ring--fail') }
-        // снять класс после анимации
-        setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 700)
+        setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 800)
       }
     } catch {
       // ignore

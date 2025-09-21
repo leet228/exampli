@@ -103,13 +103,13 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
   }, [ready])
 
   return (
-    <div style={{ position: 'relative', height: '100%' }}>
+    <div style={{ position: 'relative' }}>
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12, transform: 'scaleX(-1)', background: '#000' }}
+        style={{ width: '100%', borderRadius: 12, transform: 'scaleX(-1)', background: '#000' }}
       />
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, transform: 'scaleX(-1)', pointerEvents: 'none', width: '100%', height: '100%' }} />
       {!ready && !error && (
