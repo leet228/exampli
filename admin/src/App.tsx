@@ -113,7 +113,7 @@ function App() {
   useEffect(() => { if (sessionReady) handleAuth() }, [sessionReady])
 
   return (
-    <div style={{ height: '100vh', padding: 16, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: '100dvh', padding: 16, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       <div style={{ position: 'relative', width: 'min(900px, 100%)' }}>
         <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
         {/* Зеленая жирная бегущая рамка — SVG вдоль краёв видео */}

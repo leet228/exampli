@@ -22,19 +22,30 @@ a:hover {
   color: #535bf2;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   display: flex;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none; /* гасим резиновый скролл */
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
   -webkit-touch-callout: none; /* отключить лупу iOS */
-  touch-action: manipulation; /* отключить dbl-tap zoom на iOS/Android */
+  touch-action: none; /* запретить панорамирование/зум жестами */
 }
+
+#root { height: 100dvh; min-height: 100dvh; overflow: hidden; }
 
 /* Жирная зелёная бегущая полоса по рамке камеры (SVG) */
 .auth-ring { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 6px var(--ring-static, transparent); }
