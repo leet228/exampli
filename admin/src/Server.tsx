@@ -7,7 +7,7 @@ export default function Server() {
       <div className="admin-scroll">
         <div className="admin-fade admin-fade--top" />
         <div style={{ padding: 16, paddingTop: 8, opacity: 0.9 }}>
-          Здесь будут: метрики RPS/latency/error rate из Prometheus, алерты и состояние сервисов.
+          Здесь будут: метрики RPS/latency/error rate из Prometheus, алерты и состояние сервисов.f
         </div>
         <div className="admin-fade admin-fade--bottom" />
       </div>
