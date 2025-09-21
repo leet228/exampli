@@ -126,7 +126,7 @@ function App() {
       templateRef.current = l2normalize(acc)
       try { localStorage.setItem('admin:face_template', JSON.stringify(Array.from(templateRef.current))) } catch {}
       try {
-        await fetch('/admin/api/face_template', {
+        await fetch('/api/face_template', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ template: Array.from(templateRef.current) })
         })
