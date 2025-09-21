@@ -15,12 +15,10 @@ function App() {
   const [livenessPrompt, setLivenessPrompt] = useState<string>('')
   const [samplesCount, setSamplesCount] = useState<number>(0)
   const [secondsLeft, setSecondsLeft] = useState<number>(0)
-  const [yaw0, setYaw0] = useState<number | null>(null)
-  const [pitch0, setPitch0] = useState<number | null>(null)
+  // yaw0/pitch0 калибровка больше не используется
   const yawEmaRef = useRef<number>(0)
   const pitchEmaRef = useRef<number>(0)
-  const calEndTsRef = useRef<number>(0)
-  const calSumRef = useRef<{ yaw: number; pitch: number; n: number }>({ yaw: 0, pitch: 0, n: 0 })
+  // калибровочные буферы удалены
   const [phaseMsg, setPhaseMsg] = useState<string>('')
   // guideDir более не используется в таймерной регистрации
 
@@ -68,11 +66,8 @@ function App() {
 
   async function handleEnroll() {
     setMode('enroll')
-    setYaw0(null); setPitch0(null); yawEmaRef.current = 0; pitchEmaRef.current = 0
-    // запустим калибровку по времени (0.8с)
-    calEndTsRef.current = Date.now() + 800
-    calSumRef.current = { yaw: 0, pitch: 0, n: 0 }
-    setPhaseMsg('Калибровка: смотри прямо…')
+    setPhaseMsg('Запись 20с: просто двигай головой')
+    setSamplesCount(0)
     const got: Float32Array[] = []
     const start = Date.now()
     const totalMs = 20000
@@ -107,28 +102,9 @@ function App() {
       if (pts && pts.length) {
         lastFaceTs = Date.now()
         const raw = yawPitchFromPts(pts)
-        // базовая калибровка: смотрим прямо, удерживаем 0.5с
-        if (yaw0 == null || pitch0 == null) {
-          setLivenessPrompt('Смотри прямо для калибровки…')
-          if (Date.now() < calEndTsRef.current) {
-            calSumRef.current.yaw += raw.yaw
-            calSumRef.current.pitch += raw.pitch
-            calSumRef.current.n += 1
-          } else {
-            const n = Math.max(1, calSumRef.current.n)
-            setYaw0(calSumRef.current.yaw / n)
-            setPitch0(calSumRef.current.pitch / n)
-            setLivenessPrompt('')
-            setPhaseMsg('Запись 20с: двигай головой, мигает индикатор')
-          }
-          await new Promise(r => setTimeout(r, 60))
-          continue
-        }
-        const yaw = raw.yaw - yaw0
-        const pitch = raw.pitch - pitch0
-        // сглаживание EMA
-        yawEmaRef.current = yawEmaRef.current * 0.8 + yaw * 0.2
-        pitchEmaRef.current = pitchEmaRef.current * 0.8 + pitch * 0.2
+        // сглаживание EMA (не для калибровки, просто стабилизируем)
+        yawEmaRef.current = yawEmaRef.current * 0.8 + raw.yaw * 0.2
+        pitchEmaRef.current = pitchEmaRef.current * 0.8 + raw.pitch * 0.2
         // любой кадр, пока лицо в кадре — учитываем
         const emb = await captureEmbeddingOnce()
         if (emb) { got.push(emb); setSamplesCount(got.length) }
@@ -137,7 +113,7 @@ function App() {
       }
       const left = Math.max(0, totalMs - (Date.now() - start))
       setSecondsLeft(Math.ceil(left / 1000))
-      await new Promise(r => setTimeout(r, 80))
+      await new Promise(r => setTimeout(r, 33)) // ~30fps
     }
     const all: Float32Array[] = got
     if (all.length) {
