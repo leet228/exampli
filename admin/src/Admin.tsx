@@ -27,25 +27,23 @@ export default function Admin() {
   return (
     <div className="admin-page">
       <div style={{ padding: '16px 16px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
-      <div className="admin-scroll">
+      <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' as any }}>
         <div className="admin-fade admin-fade--top" />
-        <div style={{ padding: '0 16px 16px' }}>
+        <div style={{ padding: 0 }}>
           {loading ? (
             <div style={{ opacity: 0.7 }}>Загрузка…</div>
           ) : error ? (
             <div style={{ color: '#ff4d4d' }}>{error}</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+            <>
               <Card title="Пользователи" subtitle="Всего" value={stats?.total ?? 0} />
               <Card title="Онлайн" subtitle="последние 5 мин" value={stats?.online ?? 0} />
               <Card title="Новые" subtitle="за 24 часа" value={stats?.new24h ?? 0} />
-            </div>
+            </>
           )}
 
-          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-            <WideCard title="Активность" valueLabel="DAU/WAU/MAU" hint="подключим позже" />
-            <WideCard title="Retention" valueLabel="D1/D7/D30" hint="подключим позже" />
-          </div>
+          <WideCard title="Активность" valueLabel="DAU/WAU/MAU" hint="подключим позже" />
+          <WideCard title="Retention" valueLabel="D1/D7/D30" hint="подключим позже" />
         </div>
         <div className="admin-fade admin-fade--bottom" />
       </div>
@@ -56,7 +54,7 @@ export default function Admin() {
 
 function Card({ title, subtitle, value }: { title: string; subtitle?: string; value: number }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 13, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         {subtitle ? <div style={{ fontSize: 12, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div> : null}
@@ -68,7 +66,7 @@ function Card({ title, subtitle, value }: { title: string; subtitle?: string; va
 
 function WideCard({ title, valueLabel, hint }: { title: string; valueLabel?: string; hint?: string }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valueLabel}</div> : null}

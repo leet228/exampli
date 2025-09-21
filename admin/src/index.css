@@ -42,7 +42,7 @@ body {
   -ms-user-select: none;
   user-select: none;
   -webkit-touch-callout: none; /* отключить лупу iOS */
-  touch-action: none; /* запретить панорамирование/зум жестами */
+  touch-action: pan-y; /* разрешаем вертикальный скролл */
 }
 
 #root { height: 100dvh; min-height: 100dvh; overflow: hidden; }
