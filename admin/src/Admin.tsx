@@ -44,8 +44,8 @@ export default function Admin() {
             </>
           )}
 
-          <WideCard title="Активность" valueLabel="DAU/WAU/MAU" hint="подключим позже" />
-          <WideCard title="Retention" valueLabel="D1/D7/D30" hint="подключим позже" />
+          <Activity />
+          <Retention />
         </div>
         <div className="admin-fade admin-fade--bottom" />
       </div>
@@ -66,17 +66,51 @@ function Card({ title, subtitle, value }: { title: string; subtitle?: string; va
   )
 }
 
-function WideCard({ title, valueLabel, hint }: { title: string; valueLabel?: string; hint?: string }) {
+// WideCard удалён — заменён на Activity/Retention
+
+function Badge({ label, value, color }: { label: string; value: string; color: 'green' | 'yellow' | 'red' }) {
+  const bg = color === 'green' ? '#062a06' : color === 'yellow' ? '#2a2a06' : '#2a0606'
+  const bd = color === 'green' ? '#0b590b' : color === 'yellow' ? '#59590b' : '#590b0b'
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 16, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 14px', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-        {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valueLabel}</div> : null}
-      </div>
-      {hint ? <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hint}</div> : null}
-      <div style={{ height: 140, marginTop: 10, borderRadius: 8, background: 'repeating-linear-gradient(90deg, #0f0f0f, #0f0f0f 10px, #0c0c0c 10px, #0c0c0c 20px)' }} />
+    <div style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: 12 }}>
+      <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800 }}>{value}</div>
     </div>
   )
 }
 
+function Activity() {
+  const [a, setA] = useState<any | null>(null)
+  useEffect(() => { (async () => { try { const r = await fetch('/api/users_activity'); const j = await r.json(); setA(j) } catch {} })() }, [])
+  if (!a) return <div style={{ opacity: 0.7, padding: 16 }}>Загрузка активности…</div>
+  const color = (n: number) => (n > 100 ? 'green' : n > 20 ? 'yellow' : 'red') as 'green' | 'yellow' | 'red'
+  return (
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, margin: '0 0 14px' }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Активность</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <Badge label="DAU" value={(a?.dau ?? 0).toLocaleString('ru-RU')} color={color(a?.dau ?? 0)} />
+        <Badge label="WAU" value={(a?.wau ?? 0).toLocaleString('ru-RU')} color={color(a?.wau ?? 0)} />
+        <Badge label="MAU" value={(a?.mau ?? 0).toLocaleString('ru-RU')} color={color(a?.mau ?? 0)} />
+      </div>
+    </div>
+  )
+}
+
+function Retention() {
+  const [a, setA] = useState<any | null>(null)
+  useEffect(() => { (async () => { try { const r = await fetch('/api/users_activity'); const j = await r.json(); setA(j?.retention) } catch {} })() }, [])
+  if (!a) return <div style={{ opacity: 0.7, padding: 16 }}>Загрузка retention…</div>
+  const pc = (x: number | null) => (x == null ? '—' : Math.round(x * 100) + '%')
+  const color = (x: number | null) => (x == null ? 'red' : x >= 0.4 ? 'green' : x >= 0.2 ? 'yellow' : 'red') as 'green' | 'yellow' | 'red'
+  return (
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, margin: '0 0 14px' }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Retention</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <Badge label="D1" value={pc(a?.d1?.rate ?? null)} color={color(a?.d1?.rate ?? null)} />
+        <Badge label="D7" value={pc(a?.d7?.rate ?? null)} color={color(a?.d7?.rate ?? null)} />
+        <Badge label="D30" value={pc(a?.d30?.rate ?? null)} color={color(a?.d30?.rate ?? null)} />
+      </div>
+    </div>
+  )
+}
 

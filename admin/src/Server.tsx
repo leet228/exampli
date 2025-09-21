@@ -9,6 +9,7 @@ export default function Server() {
       <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
         <div className="admin-fade admin-fade--top" />
         <MainPing />
+        <RoutesHealth />
         <LocalMetricsPanel />
         <div className="admin-fade admin-fade--bottom" />
       </div>
@@ -89,6 +90,48 @@ function MainPing() {
         <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <KV k="Статус" v={res ? String(res.status) : '—'} />
           <KV k="Latency" v={res ? res.ms + ' ms' : '—'} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RoutesHealth() {
+  const routes = ['/', '/ai', '/battle', '/quests', '/subscription', '/profile']
+  const [rows, setRows] = useState<any[]>([])
+  useEffect(() => {
+    (async () => {
+      const out: any[] = []
+      for (const p of routes) {
+        try {
+          const r = await fetch('/api/main_stats?domain=exampli.vercel.app&path=' + encodeURIComponent(p))
+          const j = await r.json()
+          out.push({ path: p, ...j })
+        } catch {
+          out.push({ path: p, status: 0, ms: 0, ok: false })
+        }
+      }
+      setRows(out)
+    })()
+  }, [])
+  const color = (ok: boolean, ms: number) => (ok && ms <= 400 ? 'green' : ok ? 'yellow' : 'red') as 'green' | 'yellow' | 'red'
+  const bg = (c: 'green'|'yellow'|'red') => c==='green'?'#062a06':c==='yellow'?'#2a2a06':'#2a0606'
+  const bd = (c: 'green'|'yellow'|'red') => c==='green'?'#0b590b':c==='yellow'?'#59590b':'#590b0b'
+  return (
+    <div style={{ padding: '0 16px 12px' }}>
+      <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Маршруты главного проекта</div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {rows.map((r) => {
+            const c = color(Boolean(r.ok), Number(r.ms || 0))
+            return (
+              <div key={r.path} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', background: bg(c), border: `1px solid ${bd(c)}`, borderRadius: 10, padding: 12 }}>
+                <div>{r.url || r.path}</div>
+                <div style={{ opacity: 0.9 }}>{r.status ?? '—'}</div>
+                <div style={{ fontWeight: 800 }}>{r.ms ? r.ms + ' ms' : '—'}</div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

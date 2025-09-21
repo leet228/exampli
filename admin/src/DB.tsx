@@ -50,6 +50,17 @@ export default function DB() {
                   <BadgeKV k="Storage download 128KB" v={msOrDash(data.storageTest.downloadMs)} color={colorByNullableMs(data.storageTest.downloadMs, 150, 400)} />
                 </Grid2>
               </Section>
+              <Section title="Статус">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                  {(() => {
+                    const ok = data.dbPingMs <= 300 && (data.readLatencyMs == null || data.readLatencyMs <= 300)
+                    const warn = !ok && (data.dbPingMs <= 600)
+                    const color = ok ? 'green' : warn ? 'yellow' : 'red'
+                    const text = ok ? 'OK' : warn ? 'Degraded' : 'Fail'
+                    return <BadgeKV k="База данных" v={text} color={color as any} />
+                  })()}
+                </div>
+              </Section>
 
               <Section title="Storage Buckets">
                 {data.storage.buckets.length ? (
