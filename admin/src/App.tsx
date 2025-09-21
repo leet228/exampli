@@ -216,9 +216,24 @@ function App() {
   useEffect(() => { if (sessionReady) handleAuth() }, [sessionReady])
 
   function handleSubmitPasscode() {
-    // TODO: интеграция с API/проверкой кода
-    // Для начала просто логируем.
-    console.log('Submitted passcode:', passcode)
+    (async () => {
+      try {
+        const r = await fetch('/api/verify_passcode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: passcode })
+        })
+        const json = await r.json().catch(() => ({}))
+        if (!r.ok || !json?.ok) {
+          haptic('error')
+          return
+        }
+        haptic('correct')
+        // TODO: переход в админку/сохранение сессии
+      } catch {
+        haptic('error')
+      }
+    })()
   }
 
   return (
