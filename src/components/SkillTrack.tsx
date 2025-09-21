@@ -4,7 +4,7 @@ export type Skill = {
   id: string;
   title: string;
   icon: string;
-  color: string; // hex
+  color: string; // heх
   progress?: number; // 0..1
 };
 
