@@ -4,6 +4,8 @@ import './index.css';
 import AppRouter from './pages/App';
 import { applyTelegramTheme } from './theme/telegram';
 import { setupViewportMode } from './theme/telegram';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 
 applyTelegramTheme();
 setupViewportMode();

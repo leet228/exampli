@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 import remarkGfm from 'remark-gfm';
 import { hapticTiny, hapticSelect, hapticTypingTick } from '../lib/haptics';
 
@@ -165,6 +165,24 @@ export default function AI() {
       // добавляем «пустое» ассистентское сообщение, которое будем дополнять
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
       let lastTick = 0;
+      let pending = '';
+      let lastFlush = 0;
+      const flush = () => {
+        if (!pending) return;
+        const chunkToAppend = pending;
+        pending = '';
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'assistant' && typeof last.content === 'string') {
+            copy[copy.length - 1] = { role: 'assistant', content: last.content + chunkToAppend };
+          }
+          return copy;
+        });
+        const now = Date.now();
+        if (now - lastTick > 150) { try { hapticTypingTick(); } catch {} lastTick = now; }
+        lastFlush = now;
+      };
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -181,22 +199,16 @@ export default function AI() {
               const delta = json?.choices?.[0]?.delta?.content;
               if (typeof delta === 'string' && delta.length) {
                 acc += delta;
-                setMessages((prev) => {
-                  const copy = [...prev];
-                  // последнее сообщение — ассистент, добавляем дельту
-                  const last = copy[copy.length - 1];
-                  if (last && last.role === 'assistant' && typeof last.content === 'string') {
-                    copy[copy.length - 1] = { role: 'assistant', content: last.content + delta };
-                  }
-                  return copy;
-                });
-                // микро-хаптик не чаще раза в ~150мс, чтобы не раздражал
-                const now = Date.now();
-                if (now - lastTick > 150) { try { hapticTypingTick(); } catch {} lastTick = now; }
+                pending += delta;
+                if (Date.now() - lastFlush > 80) {
+                  flush();
+                }
               }
             } catch {}
           });
       }
+      // финальный флеш накопившегося буфера
+      flush();
       // Хаптик на завершение ответа
       try { hapticSelect(); } catch {}
     } catch (e: any) {
@@ -389,9 +401,7 @@ function RenderMessageContent({ content, role }: { content: MessageContent; role
   const common = 'prose prose-invert max-w-none prose-p:my-0 prose-li:my-0 prose-pre:bg-white/10';
   if (typeof content === 'string') {
     return role === 'assistant' ? (
-      <ReactMarkdown className={`${common} text-base leading-relaxed`} remarkPlugins={[remarkGfm]} skipHtml>
-        {content}
-      </ReactMarkdown>
+      <MarkdownRenderer className={`${common} text-base leading-relaxed`} content={content} />
     ) : (
       <div className="whitespace-pre-wrap break-normal text-base leading-relaxed">{content}</div>
     );
@@ -401,9 +411,7 @@ function RenderMessageContent({ content, role }: { content: MessageContent; role
       {content.map((part, idx) => {
         if (part.type === 'text') {
           return role === 'assistant' ? (
-            <ReactMarkdown key={idx} className={`${common} text-base leading-relaxed`} remarkPlugins={[remarkGfm]} skipHtml>
-              {part.text}
-            </ReactMarkdown>
+            <MarkdownRenderer key={idx} className={`${common} text-base leading-relaxed`} content={part.text} />
           ) : (
             <div key={idx} className="whitespace-pre-wrap break-normal text-base leading-relaxed">
               {part.text}

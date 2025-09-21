@@ -801,3 +801,23 @@ body.profile-overscroll::before {
     user-select: text !important;
     -webkit-touch-callout: default !important;
 }
+
+/* Markdown/KaTeX tweaks */
+.prose code {
+    @apply rounded px-1.5 py-0.5 bg-white/10 border border-white/10;
+}
+.prose pre code {
+    @apply bg-transparent border-0 px-0 py-0;
+}
+.prose table {
+    @apply w-full overflow-auto block my-3;
+}
+.prose thead th {
+    @apply border-b border-white/20;
+}
+.prose tbody td {
+    @apply border-b border-white/10;
+}
+.katex-display {
+    overflow-x: auto;
+}
