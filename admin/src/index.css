@@ -48,6 +48,14 @@ body {
 }
 
 #root { height: 100dvh; min-height: 100dvh; overflow: visible; }
+/* Override any global template styles that narrow the root */
+html body #root {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: initial !important;
+}
 
 /* ===== Admin bottom nav (fixed above bottom) ===== */
 .admin-nav { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 40; }

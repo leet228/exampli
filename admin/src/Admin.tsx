@@ -31,7 +31,7 @@ export default function Admin() {
       <div style={{ padding: '0 20px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
       <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' as any }}>
         <div className="admin-fade admin-fade--top" />
-        <div style={{ padding: '0 20px 16px' }}>
+        <div style={{ padding: '0 24px 16px' }}>
           {loading ? (
             <div style={{ opacity: 0.7 }}>Загрузка…</div>
           ) : error ? (
@@ -56,7 +56,7 @@ export default function Admin() {
 
 function Card({ title, subtitle, value }: { title: string; subtitle?: string; value: number }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 12px', boxSizing: 'border-box' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 16, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 14px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <div style={{ fontSize: 13, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         {subtitle ? <div style={{ fontSize: 12, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div> : null}
@@ -68,7 +68,7 @@ function Card({ title, subtitle, value }: { title: string; subtitle?: string; va
 
 function WideCard({ title, valueLabel, hint }: { title: string; valueLabel?: string; hint?: string }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 12px', boxSizing: 'border-box' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 16, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden', width: '100%', margin: '0 0 14px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valueLabel}</div> : null}
