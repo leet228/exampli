@@ -126,7 +126,7 @@ function RoutesHealth() {
             const c = color(Boolean(r.ok), Number(r.ms || 0))
             return (
               <div key={r.path} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', background: bg(c), border: `1px solid ${bd(c)}`, borderRadius: 10, padding: 12 }}>
-                <div>{r.url || r.path}</div>
+                <div style={{ minWidth: 0, whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{r.url || r.path}</div>
                 <div style={{ opacity: 0.9 }}>{r.status ?? '—'}</div>
                 <div style={{ fontWeight: 800 }}>{r.ms ? r.ms + ' ms' : '—'}</div>
               </div>
