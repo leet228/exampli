@@ -125,6 +125,12 @@ function App() {
       for (let i = 0; i < acc.length; i++) acc[i] /= all.length
       templateRef.current = l2normalize(acc)
       try { localStorage.setItem('admin:face_template', JSON.stringify(Array.from(templateRef.current))) } catch {}
+      try {
+        await fetch('/admin/api/face_template', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: Array.from(templateRef.current) })
+        })
+      } catch {}
       setLog('Эталон сохранён локально')
       setMode('idle')
       setLivenessPrompt('Регистрация пройдена')
