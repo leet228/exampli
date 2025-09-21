@@ -81,7 +81,7 @@ function App() {
       const el = document.querySelector('.auth-ring') as HTMLElement | null
       if (el) {
         // Включаем бегущую рамку на время проверки
-        el.style.animationDuration = `${Math.max(0.6, ms / 1000)}s`
+        el.style.setProperty('--ring-duration', `${Math.max(0.6, ms / 1000)}s`)
         if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
         else { el.classList.remove('auth-ring--ok'); el.classList.add('auth-ring--fail') }
         setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 800)
@@ -96,8 +96,8 @@ function App() {
   useEffect(() => { if (sessionReady) handleAuth() }, [sessionReady])
 
   return (
-    <div style={{ height: '100vh', padding: 0 }}>
-      <div style={{ position: 'relative', height: '70vh' }}>
+    <div style={{ height: '100vh', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', width: 'min(900px, 95vw)' }}>
         <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
         {/* Зеленая жирная бегущая рамка */}
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: 12 }}>

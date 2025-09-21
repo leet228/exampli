@@ -5,7 +5,7 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #000000;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -42,12 +42,16 @@ body {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   background:
-    conic-gradient(from var(--ang, 0deg), var(--ring-color, #57cc02) 0 12%, transparent 12% 100%);
-  animation: spin 1.2s linear infinite;
+    conic-gradient(var(--ring-color, #57cc02) 0 12%, transparent 12% 100%);
+  animation: ringSpin var(--ring-duration, 1.2s) linear infinite;
+  transform-origin: 50% 50%;
 }
 
-@keyframes spin { to { --ang: 360deg; } }
+@keyframes ringSpin { to { transform: rotate(360deg); } }
 
 /* Пульс при результате */
 .auth-ring { position: absolute; inset: 0; border-radius: 12px; }
