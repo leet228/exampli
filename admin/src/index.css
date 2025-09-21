@@ -30,31 +30,27 @@ body {
   min-height: 100vh;
 }
 
-/* Жирная зелёная бегущая рамка вокруг камеры */
-.auth-ring::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  padding: 6px; /* толщина */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  background:
-    conic-gradient(var(--ring-color, #57cc02) 0 12%, transparent 12% 100%);
-  animation: ringSpin var(--ring-duration, 1.2s) linear infinite;
-  transform-origin: 50% 50%;
+/* Жирная зелёная бегущая полоса по рамке камеры (SVG) */
+.auth-ring { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; }
+.auth-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.auth-ring-svg__path {
+  fill: none;
+  stroke: var(--ring-color, #57cc02);
+  stroke-width: 6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+  /* одна «полоса» длиной --dash, остальное — пробел */
+  stroke-dasharray: var(--dash, 120) calc(var(--perim, 1000) - var(--dash, 120));
+  stroke-dashoffset: 0;
+  animation: dashMove var(--ring-duration, 1.2s) linear infinite;
 }
 
-@keyframes ringSpin { to { transform: rotate(360deg); } }
+@keyframes dashMove {
+  to { stroke-dashoffset: var(--perim, 1000); }
+}
 
 /* Пульс при результате */
-.auth-ring { position: absolute; inset: 0; border-radius: 12px; }
 .auth-ring--ok { --ring-color: #57cc02; animation: pulse 600ms ease-out 1; }
 .auth-ring--fail { --ring-color: #ff4d4f; animation: pulse 600ms ease-out 1; }
 

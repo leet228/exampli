@@ -80,6 +80,17 @@ function App() {
       const score = cosine(tmpl, probe)
       const el = document.querySelector('.auth-ring') as HTMLElement | null
       if (el) {
+        // Задаём длину штриха и периметр под текущий размер рамки
+        const svg = el.querySelector('svg') as SVGSVGElement | null
+        const rect = svg?.querySelector('rect.auth-ring-svg__path') as SVGRectElement | null
+        if (rect && svg) {
+          const bb = el.getBoundingClientRect()
+          const r = 12
+          const w = bb.width, h = bb.height
+          const perim = 2 * (w + h - 4 * r) + 2 * Math.PI * r
+          rect.style.setProperty('--perim', String(perim))
+          rect.style.setProperty('--dash', String(Math.max(80, Math.round(perim / 10))))
+        }
         // Включаем бегущую рамку на время проверки
         el.style.setProperty('--ring-duration', `${Math.max(0.6, ms / 1000)}s`)
         if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
@@ -96,12 +107,15 @@ function App() {
   useEffect(() => { if (sessionReady) handleAuth() }, [sessionReady])
 
   return (
-    <div style={{ height: '100vh', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ position: 'relative', width: 'min(900px, 95vw)' }}>
+    <div style={{ height: '100vh', padding: 16, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', width: 'min(900px, 100%)' }}>
         <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
-        {/* Зеленая жирная бегущая рамка */}
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: 12 }}>
-          <div className="auth-ring" />
+        {/* Зеленая жирная бегущая рамка — SVG вдоль краёв видео */}
+        <div className="auth-ring">
+          <svg className="auth-ring-svg" preserveAspectRatio="none">
+            <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" fill="none" stroke="transparent" />
+            <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" className="auth-ring-svg__path" />
+          </svg>
         </div>
       </div>
       {/* Результат без слов, только цвет рамки меняем через класс */}
