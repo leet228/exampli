@@ -2,7 +2,7 @@ import './App.css'
 import { useEffect, useRef, useState } from 'react'
 import Camera from './components/Camera'
 // PoseGuide больше не используем — регистрация по таймеру
-import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, canvasToOrtTensor } from './lib/embeddings'
+import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, imageDataToOrtTensor } from './lib/embeddings'
 
 function App() {
   const [mode, setMode] = useState<'idle'|'enroll'|'login'|'ok'>('idle')
@@ -49,8 +49,11 @@ function App() {
     const sess = sessionRef.current
     const v = videoRef.current
     if (!sess || !v) return null
+    // Быстрый путь: реже создаём canvas; используем прямой ImageData
     const faceCanvas = cropFaceToCanvas(v, landmarksRef.current, 112)
-    const input = canvasToOrtTensor(sess.ort, faceCanvas)
+    const ctx = faceCanvas.getContext('2d')!
+    const img = ctx.getImageData(0, 0, faceCanvas.width, faceCanvas.height)
+    const input = imageDataToOrtTensor(sess.ort, img)
     const inputName = Array.isArray(sess.session.inputNames) && sess.session.inputNames.length
       ? sess.session.inputNames[0]
       : 'input.1'

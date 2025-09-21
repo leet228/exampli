@@ -64,8 +64,8 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
           const v = videoRef.current
           const c = canvasRef.current
           const now = performance.now()
-          // ограничение FPS ~30
-          if (now - last < 33) { rafRef.current = requestAnimationFrame(loop); return }
+          // ограничение FPS ~45 для более плотной записи
+          if (now - last < 22) { rafRef.current = requestAnimationFrame(loop); return }
           last = now
           if (v && c) {
             const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1))

@@ -120,4 +120,19 @@ export function canvasToOrtTensor(ort: any, canvas: HTMLCanvasElement) {
   return tensor
 }
 
+export function imageDataToOrtTensor(ort: any, img: ImageData) {
+  const { width, height, data } = img
+  const out = new Float32Array(3 * width * height)
+  let r = 0, g = width * height, b = 2 * width * height
+  for (let i = 0; i < data.length; i += 4) {
+    const R = data[i] / 255 * 2 - 1
+    const G = data[i + 1] / 255 * 2 - 1
+    const B = data[i + 2] / 255 * 2 - 1
+    out[r++] = R
+    out[g++] = G
+    out[b++] = B
+  }
+  return new ort.Tensor('float32', out, [1, 3, height, width])
+}
+
 
