@@ -26,23 +26,23 @@ export default function Admin() {
 
   return (
     <div className="admin-page">
-      <div style={{ padding: 16, paddingBottom: 8, fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
+      <div style={{ padding: '16px 16px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
       <div className="admin-scroll">
         <div className="admin-fade admin-fade--top" />
-        <div style={{ padding: 16, paddingTop: 8 }}>
+        <div style={{ padding: '0 16px 16px' }}>
           {loading ? (
             <div style={{ opacity: 0.7 }}>Загрузка…</div>
           ) : error ? (
             <div style={{ color: '#ff4d4d' }}>{error}</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
               <Card title="Пользователи" subtitle="Всего" value={stats?.total ?? 0} />
               <Card title="Онлайн" subtitle="последние 5 мин" value={stats?.online ?? 0} />
               <Card title="Новые" subtitle="за 24 часа" value={stats?.new24h ?? 0} />
             </div>
           )}
 
-          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
             <WideCard title="Активность" valueLabel="DAU/WAU/MAU" hint="подключим позже" />
             <WideCard title="Retention" valueLabel="D1/D7/D30" hint="подключим позже" />
           </div>
@@ -56,23 +56,25 @@ export default function Admin() {
 
 function Card({ title, subtitle, value }: { title: string; subtitle?: string; value: number }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)' }}>
-      <div style={{ fontSize: 13, opacity: 0.8 }}>{title}</div>
-      {subtitle ? <div style={{ fontSize: 12, opacity: 0.6 }}>{subtitle}</div> : null}
-      <div style={{ fontSize: 32, fontWeight: 900, marginTop: 8 }}>{value.toLocaleString('ru-RU')}</div>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 13, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        {subtitle ? <div style={{ fontSize: 12, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div> : null}
+      </div>
+      <div style={{ fontSize: 34, fontWeight: 900, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value.toLocaleString('ru-RU')}</div>
     </div>
   )
 }
 
 function WideCard({ title, valueLabel, hint }: { title: string; valueLabel?: string; hint?: string }) {
   return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
-        {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7 }}>{valueLabel}</div> : null}
+        <div style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valueLabel}</div> : null}
       </div>
-      {hint ? <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{hint}</div> : null}
-      <div style={{ height: 120, marginTop: 10, borderRadius: 8, background: 'repeating-linear-gradient(90deg, #0f0f0f, #0f0f0f 10px, #0c0c0c 10px, #0c0c0c 20px)' }} />
+      {hint ? <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hint}</div> : null}
+      <div style={{ height: 140, marginTop: 10, borderRadius: 8, background: 'repeating-linear-gradient(90deg, #0f0f0f, #0f0f0f 10px, #0c0c0c 10px, #0c0c0c 20px)' }} />
     </div>
   )
 }
