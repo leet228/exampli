@@ -2,13 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import Admin from './Admin'
+import Admin from './Admin.tsx'
+import Server from './Server.tsx'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { prefetchEmbeddingSession } from './lib/embeddings'
 
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
   { path: '/admin', element: <Admin /> },
+  { path: '/admin/server', element: <Server /> },
 ])
 
 createRoot(document.getElementById('root')!).render(
