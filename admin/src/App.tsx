@@ -191,6 +191,7 @@ function App() {
             el.classList.remove('auth-ring--fail'); 
             el.classList.add('auth-ring--ok');
             haptic('correct')
+            setTimeout(() => { window.location.assign('/admin') }, 200)
           }
           else { 
             el.classList.remove('auth-ring--ok'); 
