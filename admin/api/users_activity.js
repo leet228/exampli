@@ -14,6 +14,7 @@ export default async function handler(req, res) {
 
     // Activity
     // allow fallback to updated_at if last_active_at is not tracked
+    // DAU: активные за сутки (last_active_at OR updated_at)
     const { count: dau } = await supabase
       .from('users')
       .select('*', { count: 'exact', head: true })

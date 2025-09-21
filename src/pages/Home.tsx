@@ -5,6 +5,17 @@ import { supabase } from '../lib/supabase';
 import SkillRoad from '../components/SkillRoad';
 import LessonRoad from '../components/lessons/LessonRoad';
 import LessonStartPopover from '../components/lessons/LessonStartPopover';
+async function pingPresence(event: string) {
+  try {
+    const boot: any = (window as any).__exampliBoot;
+    const userId = boot?.user?.id || null;
+    if (!userId) return;
+    await fetch('/api/presence', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, route: window.location.pathname, event })
+    });
+  } catch {}
+}
 import LessonRunnerSheet from '../components/lessons/LessonRunnerSheet';
 import TopicsButton from '../components/TopicsButton';
 import TopicsPanel from '../components/panels/TopicsPanel';
@@ -435,6 +446,7 @@ export default function Home() {
             }
           } catch {}
           setLessonPreviewOpen(false);
+          try { pingPresence('lesson_start'); } catch {}
           setRunnerOpen(true);
         }}
       />

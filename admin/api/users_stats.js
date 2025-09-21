@@ -14,10 +14,24 @@ export default async function handler(req, res) {
     const { count: total, error: e1 } = await supabase.from('users').select('*', { count: 'exact', head: true })
     if (e1) { res.status(500).json({ error: e1.message }); return }
 
-    // online: last_active_at within 5 minutes
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-    const { count: online, error: e2 } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('last_active_at', fiveMinAgo)
-    if (e2) { res.status(500).json({ error: e2.message }); return }
+    // online: prefer app_presence with expires_at > now; fallback to users.last_active_at within 5 minutes
+    let online = 0
+    try {
+      const nowIso = new Date().toISOString()
+      const { count: presCount, error: pe } = await supabase
+        .from('app_presence')
+        .select('user_id', { count: 'exact', head: true })
+        .gt('expires_at', nowIso)
+      if (!pe && typeof presCount === 'number') online = presCount || 0
+      else throw pe
+    } catch {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { count: fallbackCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .gte('last_active_at', fiveMinAgo)
+      online = fallbackCount || 0
+    }
 
     // new24h: created_at within 24h
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()

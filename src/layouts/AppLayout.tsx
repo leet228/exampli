@@ -10,6 +10,17 @@ import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects, syncEnergy } from '../lib/userState';
 import { supabase } from '../lib/supabase';
 import SpeedInsights from '../lib/SpeedInsights';
+async function pingPresence(route: string, event: string) {
+  try {
+    const boot: any = (window as any).__exampliBoot;
+    const userId = boot?.user?.id || null;
+    if (!userId) return;
+    await fetch('/api/presence', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, route, event })
+    });
+  } catch {}
+}
 import Profile from '../pages/Profile';
 import Home from '../pages/Home';
 import AI from '../pages/AI';
@@ -129,6 +140,11 @@ export default function AppLayout() {
       const hidden = pathname !== path;
       try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
     });
+  }, [pathname]);
+
+  // Presence ping на смену маршрута (с TTL 5 минут на сервере)
+  useEffect(() => {
+    try { pingPresence(pathname || '/', 'route'); } catch {}
   }, [pathname]);
 
   // После bootReady один раз прогреваем AddCourseSheet: монтируем и затем полностью размонтируем

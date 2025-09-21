@@ -5,6 +5,7 @@ type UsersStats = { total: number; online: number; new24h: number }
 
 export default function Admin() {
   const [stats, setStats] = useState<UsersStats | null>(null)
+  const [onlineNow, setOnlineNow] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,6 +25,21 @@ export default function Admin() {
     })()
   }, [])
 
+  // Онлайн «живьём» с /api/online, автообновление раз в 15с
+  useEffect(() => {
+    let stop = false
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/online', { cache: 'no-store' })
+        const j = await r.json()
+        if (!stop) setOnlineNow(Number(j?.online || 0))
+      } catch {}
+    }
+    tick()
+    const id = setInterval(tick, 15000)
+    return () => { stop = true; clearInterval(id) }
+  }, [])
+
   // свайпы между страницами отключены, оставляем вертикальный скролл
 
   return (
@@ -39,7 +55,7 @@ export default function Admin() {
           ) : (
             <>
               <Card title="Пользователи" subtitle="Всего" value={stats?.total ?? 0} />
-              <Card title="Онлайн" subtitle="последние 5 мин" value={stats?.online ?? 0} />
+              <Card title="Онлайн" subtitle="последние 5 мин (живьём)" value={onlineNow ?? stats?.online ?? 0} />
               <Card title="Новые" subtitle="за 24 часа" value={stats?.new24h ?? 0} />
             </>
           )}
