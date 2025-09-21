@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         const d0 = Date.now()
         await supabase.storage.from(bucket).download(path)
         storageTest.downloadMs = Date.now() - d0
-        // cleanup
+        // cleanupыы
         try { await supabase.storage.from(bucket).remove([path]) } catch {}
       }
     } catch {}

@@ -1,3 +1,0 @@
-# Exclude the admin app from the main project deploy artifact
-admin/
-admin/**
