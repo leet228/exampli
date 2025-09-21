@@ -24,7 +24,8 @@ a:hover {
 
 html {
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain; /* предотвратить перетягивание боди, чёрный фон за границами */
 }
 
@@ -35,7 +36,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain; /* чёрный фон при жёстком пролистывании */
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -45,7 +47,7 @@ body {
   touch-action: pan-y; /* разрешаем вертикальный скролл */
 }
 
-#root { height: 100dvh; min-height: 100dvh; overflow: hidden; }
+#root { height: 100dvh; min-height: 100dvh; overflow: visible; }
 
 /* ===== Admin bottom nav (fixed above bottom) ===== */
 .admin-nav { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 40; }
@@ -54,7 +56,7 @@ body {
 .admin-tab--active { background: #fff; color: #000; font-weight: 700; }
 
 /* ===== Admin scroll container with top/bottom fade (black) ===== */
-.admin-page { position: relative; min-height: 100dvh; background: #000; color: #fff; display: flex; flex-direction: column; padding-bottom: 92px; touch-action: pan-y; }
+.admin-page { position: relative; min-height: 100dvh; background: #000; color: #fff; display: flex; flex-direction: column; padding-bottom: 92px; padding-top: calc(env(safe-area-inset-top, 0px) + 16px); touch-action: pan-y; }
 .admin-scroll { position: relative; flex: 1; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .admin-fade { position: sticky; left: 0; right: 0; height: 28px; z-index: 5; pointer-events: none; }
 .admin-fade--top { top: 0; background: linear-gradient(#000, rgba(0,0,0,0)); }
