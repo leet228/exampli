@@ -13,9 +13,19 @@ export default async function handler(req, res) {
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     // Activity
-    const { count: dau } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('last_active_at', dayAgo)
-    const { count: wau } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('last_active_at', weekAgo)
-    const { count: mau } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('last_active_at', monthAgo)
+    // allow fallback to updated_at if last_active_at is not tracked
+    const { count: dau } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .or(`last_active_at.gte.${dayAgo},updated_at.gte.${dayAgo}`)
+    const { count: wau } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .or(`last_active_at.gte.${weekAgo},updated_at.gte.${weekAgo}`)
+    const { count: mau } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .or(`last_active_at.gte.${monthAgo},updated_at.gte.${monthAgo}`)
 
     // Retention approximation
     async function cohortRet(agoDays) {
@@ -23,7 +33,12 @@ export default async function handler(req, res) {
       const end = new Date(now.getTime() - agoDays * 24 * 60 * 60 * 1000).toISOString()
       const { count: cohort } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end)
       if (!cohort) return { cohort: 0, returned: 0, rate: null }
-      const { count: returned } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end).gte('last_active_at', dayAgo)
+      const { count: returned } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', start)
+        .lt('created_at', end)
+        .or(`last_active_at.gte.${dayAgo},updated_at.gte.${dayAgo}`)
       return { cohort: cohort || 0, returned: returned || 0, rate: cohort ? (returned || 0) / cohort : null }
     }
 

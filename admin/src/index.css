@@ -60,7 +60,7 @@ html body #root {
 /* ===== Admin bottom nav (fixed above bottom) ===== */
 .admin-nav { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 40; }
 .admin-nav__wrap { pointer-events: auto; display: grid; grid-auto-flow: column; gap: 10px; background: rgba(0,0,0,0.6); padding: 8px; border: 1px solid #222; border-radius: 14px; backdrop-filter: blur(8px); max-width: min(520px, 92vw); }
-.admin-tab { text-decoration: none; color: #fff; background: #111; border: 1px solid #222; border-radius: 10px; padding: 10px 12px; text-align: center; font-weight: 600; min-width: 140px; width: 140px; }
+.admin-tab { text-decoration: none; color: #fff; background: #111; border: 1px solid #222; border-radius: 12px; padding: 10px; text-align: center; font-weight: 700; width: 56px; height: 44px; display: grid; place-items: center; }
 .admin-tab--active { background: #fff; color: #000; font-weight: 700; }
 
 /* ===== Admin scroll container with top/bottom fade (black) ===== */
