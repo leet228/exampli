@@ -28,8 +28,8 @@ export default function Admin() {
 
   return (
     <div className="admin-page">
-      <div style={{ padding: '0 20px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
-      <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' as any }}>
+      <div style={{ padding: '0 20px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2, textAlign: 'center' }}>Обзор</div>
+      <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
         <div className="admin-fade admin-fade--top" />
         <div style={{ padding: '0 24px 16px' }}>
           {loading ? (
