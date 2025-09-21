@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadFaceLandmarker } from '../lib/mediapipe'
 
-async function getCameraPermissionState(): Promise<'granted'|'denied'|'prompt'|null> {
-	try {
-		// @ts-ignore — Permissions API может отсутствовать в некоторых WebView
-		const st = await navigator.permissions.query({ name: 'camera' as PermissionName })
-		return (st?.state as any) ?? null
-	} catch {
-		return null
-	}
-}
-
 type CameraProps = {
   facingMode?: 'user' | 'environment'
   onError?: (err: unknown) => void
@@ -25,45 +15,33 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
   const [error, setError] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number | null>(null)
-  const [needsUserGesture, setNeedsUserGesture] = useState(false)
-
-  const openCamera = async () => {
-	try {
-		setError(null)
-		setReady(false)
-		const stream = await navigator.mediaDevices.getUserMedia({
-			video: { facingMode },
-			audio: false,
-		})
-		streamRef.current = stream
-		const v = videoRef.current
-		if (v) {
-			v.srcObject = stream
-			await v.play().catch(() => {})
-			setReady(true)
-			setNeedsUserGesture(false)
-			try { onReady?.(v) } catch {}
-		}
-	} catch (e) {
-		const msg = (e as any)?.message || 'Не удалось открыть камеру'
-		setError(String(msg))
-		onError?.(e)
-	}
-  }
 
   useEffect(() => {
     let alive = true
-    const init = async () => {
-      const perm = await getCameraPermissionState()
-      if (perm === 'granted' || perm === null) {
-        if (!alive) return
-        await openCamera()
-      } else {
-        if (!alive) return
-        setNeedsUserGesture(true)
+    const start = async () => {
+      try {
+        setError(null)
+        setReady(false)
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+          audio: false,
+        })
+        if (!alive) { stream.getTracks().forEach(t => t.stop()); return }
+        streamRef.current = stream
+        const v = videoRef.current
+        if (v) {
+          v.srcObject = stream
+          await v.play().catch(() => {})
+          setReady(true)
+          try { onReady?.(v) } catch {}
+        }
+      } catch (e) {
+        const msg = (e as any)?.message || 'Не удалось открыть камеру'
+        setError(String(msg))
+        onError?.(e)
       }
     }
-    init()
+    start()
     return () => {
       alive = false
       try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
@@ -134,14 +112,6 @@ export default function Camera({ facingMode = 'user', onError, onReady, onLandma
         style={{ width: '100%', borderRadius: 12, transform: 'scaleX(-1)', background: '#000' }}
       />
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, transform: 'scaleX(-1)', pointerEvents: 'none', width: '100%', height: '100%' }} />
-      {needsUserGesture && !ready && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <button onClick={openCamera} style={{
-            background: '#ffffff', color: '#000', borderRadius: 9999, border: 'none',
-            padding: '12px 18px', fontSize: 16, cursor: 'pointer'
-          }}>Включить камеру</button>
-        </div>
-      )}
       {!ready && !error && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
           Разреши доступ к камере…
