@@ -25,7 +25,7 @@ a:hover {
 html {
   height: 100%;
   overflow: hidden;
-  overscroll-behavior: none;
+  overscroll-behavior: contain; /* предотвратить перетягивание боди, чёрный фон за границами */
 }
 
 body {
@@ -36,7 +36,7 @@ body {
   min-height: 100vh;
   height: 100%;
   overflow: hidden;
-  overscroll-behavior: none; /* гасим резиновый скролл */
+  overscroll-behavior: contain; /* чёрный фон при жёстком пролистывании */
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -46,6 +46,19 @@ body {
 }
 
 #root { height: 100dvh; min-height: 100dvh; overflow: hidden; }
+
+/* ===== Admin bottom nav (fixed above bottom) ===== */
+.admin-nav { position: fixed; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; pointer-events: none; z-index: 40; }
+.admin-nav__wrap { pointer-events: auto; display: grid; grid-auto-flow: column; gap: 10px; background: rgba(0,0,0,0.6); padding: 8px; border: 1px solid #222; border-radius: 14px; backdrop-filter: blur(8px); }
+.admin-tab { text-decoration: none; color: #fff; background: #111; border: 1px solid #222; border-radius: 10px; padding: 10px 12px; text-align: center; font-weight: 600; min-width: 120px; }
+.admin-tab--active { background: #fff; color: #000; font-weight: 700; }
+
+/* ===== Admin scroll container with top/bottom fade (black) ===== */
+.admin-page { position: relative; min-height: 100dvh; background: #000; color: #fff; display: flex; flex-direction: column; }
+.admin-scroll { position: relative; flex: 1; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.admin-fade { position: sticky; left: 0; right: 0; height: 28px; z-index: 5; pointer-events: none; }
+.admin-fade--top { top: 0; background: linear-gradient(#000, rgba(0,0,0,0)); }
+.admin-fade--bottom { bottom: 0; background: linear-gradient(rgba(0,0,0,0), #000); }
 
 /* Жирная зелёная бегущая полоса по рамке камеры (SVG) */
 .auth-ring { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 6px var(--ring-static, transparent); }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AdminNav from './components/AdminNav'
 
 type UsersStats = { total: number; online: number; new24h: number }
 
@@ -24,40 +25,54 @@ export default function Admin() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#000', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 16, fontSize: 24, fontWeight: 700 }}>АДМИН</div>
-      <div style={{ flex: 1, padding: 16 }}>
-        {loading ? (
-          <div style={{ opacity: 0.7 }}>Загрузка…</div>
-        ) : error ? (
-          <div style={{ color: '#ff4d4d' }}>{error}</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
-            <Card title="Пользователей всего" value={stats?.total ?? 0} />
-            <Card title="Онлайн (5 мин)" value={stats?.online ?? 0} />
-            <Card title="Новых за 24ч" value={stats?.new24h ?? 0} />
+    <div className="admin-page">
+      <div style={{ padding: 16, paddingBottom: 8, fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>Обзор</div>
+      <div className="admin-scroll">
+        <div className="admin-fade admin-fade--top" />
+        <div style={{ padding: 16, paddingTop: 8 }}>
+          {loading ? (
+            <div style={{ opacity: 0.7 }}>Загрузка…</div>
+          ) : error ? (
+            <div style={{ color: '#ff4d4d' }}>{error}</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
+              <Card title="Пользователи" subtitle="Всего" value={stats?.total ?? 0} />
+              <Card title="Онлайн" subtitle="последние 5 мин" value={stats?.online ?? 0} />
+              <Card title="Новые" subtitle="за 24 часа" value={stats?.new24h ?? 0} />
+            </div>
+          )}
+
+          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+            <WideCard title="Активность" valueLabel="DAU/WAU/MAU" hint="подключим позже" />
+            <WideCard title="Retention" valueLabel="D1/D7/D30" hint="подключим позже" />
           </div>
-        )}
+        </div>
+        <div className="admin-fade admin-fade--bottom" />
       </div>
-      <BottomNav />
+      <AdminNav active="overview" />
     </div>
   )
 }
 
-function Card({ title, value }: { title: string; value: number }) {
+function Card({ title, subtitle, value }: { title: string; subtitle?: string; value: number }) {
   return (
-    <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16, textAlign: 'left' }}>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)' }}>
       <div style={{ fontSize: 13, opacity: 0.8 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, marginTop: 8 }}>{value.toLocaleString('ru-RU')}</div>
+      {subtitle ? <div style={{ fontSize: 12, opacity: 0.6 }}>{subtitle}</div> : null}
+      <div style={{ fontSize: 32, fontWeight: 900, marginTop: 8 }}>{value.toLocaleString('ru-RU')}</div>
     </div>
   )
 }
 
-function BottomNav() {
+function WideCard({ title, valueLabel, hint }: { title: string; valueLabel?: string; hint?: string }) {
   return (
-    <div style={{ borderTop: '1px solid #222', padding: 8, display: 'flex', gap: 8 }}>
-      <a href="/admin" style={{ flex: 1, textDecoration: 'none', color: '#fff', background: '#111', border: '1px solid #222', borderRadius: 10, padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>Обзор</a>
-      <a href="/admin/server" style={{ flex: 1, textDecoration: 'none', color: '#000', background: '#fff', border: '1px solid #222', borderRadius: 10, padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>Сервер</a>
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, textAlign: 'left', boxShadow: '0 8px 20px rgba(0,0,0,0.35)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
+        {valueLabel ? <div style={{ fontSize: 12, opacity: 0.7 }}>{valueLabel}</div> : null}
+      </div>
+      {hint ? <div style={{ fontSize: 12, opacity: 0.6, marginTop: 10 }}>{hint}</div> : null}
+      <div style={{ height: 120, marginTop: 10, borderRadius: 8, background: 'repeating-linear-gradient(90deg, #0f0f0f, #0f0f0f 10px, #0c0c0c 10px, #0c0c0c 20px)' }} />
     </div>
   )
 }
