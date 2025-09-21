@@ -91,11 +91,17 @@ function App() {
           rect.style.setProperty('--perim', String(perim))
           rect.style.setProperty('--dash', String(Math.max(80, Math.round(perim / 10))))
         }
-        // Включаем бегущую рамку на время проверки
+        // Включаем бегущую белую полоску на время проверки
+        el.classList.add('running')
         el.style.setProperty('--ring-duration', `${Math.max(0.6, ms / 1000)}s`)
-        if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
-        else { el.classList.remove('auth-ring--ok'); el.classList.add('auth-ring--fail') }
-        setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 800)
+        // По результату — выключаем бег и показываем статичную зелёную/красную рамку
+        setTimeout(() => {
+          el.classList.remove('running')
+          if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
+          else { el.classList.remove('auth-ring--ok'); el.classList.add('auth-ring--fail') }
+          // Сбрасываем цвет через 1.2s, если нужно повторять проверки
+          setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 1200)
+        }, ms)
       }
     } catch {
       // ignore
