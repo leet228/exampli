@@ -90,6 +90,8 @@
   width: 0;
 }
 
+.passcode__error { color: #ff4d4d; font-size: 14px; }
+
 .btn { 
   appearance: none;
   border: 0;

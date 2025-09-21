@@ -98,6 +98,7 @@ function App() {
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
   const [mode, setMode] = useState<'camera' | 'code'>('camera')
   const [passcode, setPasscode] = useState('')
+  const [passcodeError, setPasscodeError] = useState('')
   // статуса сейчас не отображаем
   // калибровочные буферы удалены
   // guideDir более не используется в таймерной регистрации
@@ -226,12 +227,16 @@ function App() {
         const json = await r.json().catch(() => ({}))
         if (!r.ok || !json?.ok) {
           haptic('error')
+          setPasscodeError('Неверный код')
+          setPasscode('')
           return
         }
         haptic('correct')
-        // TODO: переход в админку/сохранение сессии
+        // Переходим на страницу админки
+        window.location.assign('/admin')
       } catch {
         haptic('error')
+        setPasscodeError('Ошибка сети')
       }
     })()
   }
@@ -259,6 +264,7 @@ function App() {
             onChange={setPasscode}
             onSubmit={handleSubmitPasscode}
           />
+          {passcodeError ? <div className="passcode__error">{passcodeError}</div> : null}
           <button
             className="btn btn--primary"
             disabled={passcode.length !== 12}
