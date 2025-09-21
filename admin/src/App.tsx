@@ -4,12 +4,100 @@ import Camera from './components/Camera'
 // PoseGuide больше не используем — регистрация по таймеру
 import { ensureEmbeddingSession, l2normalize, cosine, cropFaceToCanvas, imageDataToOrtTensor } from './lib/embeddings'
 
+type PasscodeEntryProps = {
+  length?: number
+  value: string
+  onChange: (next: string) => void
+  onSubmit: () => void
+  title?: string
+}
+
+function PasscodeEntry({ length = 12, value, onChange, onSubmit, title }: PasscodeEntryProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  function focusInput() {
+    inputRef.current?.focus()
+  }
+
+  function sanitizeDigits(src: string) {
+    return src.replace(/\D+/g, '').slice(0, length)
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = sanitizeDigits(e.target.value)
+    if (digits !== value) onChange(digits)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && value.length === length) {
+      e.preventDefault()
+      onSubmit()
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const text = e.clipboardData.getData('text') || ''
+    const digits = sanitizeDigits(text)
+    if (digits) {
+      e.preventDefault()
+      onChange(digits)
+    }
+  }
+
+  const slots = Array.from({ length }, (_, i) => value[i] ?? '')
+
+  return (
+    <div className="passcode" onClick={focusInput}>
+      {title ? <div className="passcode__title">{title}</div> : null}
+      <div className="passcode__slots">
+        {slots.map((digit, idx) => (
+          <div key={idx} className={`passcode__slot${value.length === idx ? ' passcode__slot--active' : ''}`}>
+            <div className="passcode__digit">{digit}</div>
+            <div className="passcode__line" />
+          </div>
+        ))}
+      </div>
+      {/* Скрытый инпут — нужен только для ввода/клавиатуры */}
+      <input
+        ref={inputRef}
+        className="passcode__hidden-input"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        type="tel"
+        autoComplete="one-time-code"
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        aria-label="Код доступа"
+      />
+    </div>
+  )
+}
+
+function haptic(type: 'correct' | 'error') {
+  try {
+    if (navigator && 'vibrate' in navigator) {
+      if (type === 'correct') {
+        // короткий один импульс
+        navigator.vibrate?.(40)
+      } else {
+        // двойной сбойной импульс
+        navigator.vibrate?.([20, 30, 40])
+      }
+    }
+    // iOS/Android PWA доп. каналы можно добавить здесь при необходимости
+  } catch {}
+}
+
 function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const sessionRef = useRef<any>(null)
   const templateRef = useRef<Float32Array | null>(null)
   const landmarksRef = useRef<{ x: number; y: number }[] | null>(null)
+  const [mode, setMode] = useState<'camera' | 'code'>('camera')
+  const [passcode, setPasscode] = useState('')
   // статуса сейчас не отображаем
   // калибровочные буферы удалены
   // guideDir более не используется в таймерной регистрации
@@ -78,6 +166,7 @@ function App() {
       for (let i = 0; i < acc.length; i++) acc[i] /= parts.length
       const probe = l2normalize(acc)
       const score = cosine(tmpl, probe)
+      const threshold = 0.40
       const el = document.querySelector('.auth-ring') as HTMLElement | null
       if (el) {
         // Задаём длину штриха и периметр под текущий размер рамки
@@ -97,14 +186,28 @@ function App() {
         // По результату — выключаем бег и показываем статичную зелёную/красную рамку
         setTimeout(() => {
           el.classList.remove('running')
-          if (score >= 0.40) { el.classList.remove('auth-ring--fail'); el.classList.add('auth-ring--ok') }
-          else { el.classList.remove('auth-ring--ok'); el.classList.add('auth-ring--fail') }
+          if (score >= threshold) { 
+            el.classList.remove('auth-ring--fail'); 
+            el.classList.add('auth-ring--ok');
+            haptic('correct')
+          }
+          else { 
+            el.classList.remove('auth-ring--ok'); 
+            el.classList.add('auth-ring--fail');
+            haptic('error')
+          }
+          // Если не найден — переключаемся на ввод кода
+          if (score < threshold) {
+            setTimeout(() => setMode('code'), 200)
+          }
           // Сбрасываем цвет через 1.2s, если нужно повторять проверки
           setTimeout(() => { el.classList.remove('auth-ring--ok'); el.classList.remove('auth-ring--fail') }, 1200)
         }, ms)
       }
     } catch {
-      // ignore
+      // Любая ошибка — показываем ввод кода
+      haptic('error')
+      setMode('code')
     }
   }
 
@@ -112,19 +215,44 @@ function App() {
 
   useEffect(() => { if (sessionReady) handleAuth() }, [sessionReady])
 
+  function handleSubmitPasscode() {
+    // TODO: интеграция с API/проверкой кода
+    // Для начала просто логируем.
+    console.log('Submitted passcode:', passcode)
+  }
+
   return (
-    <div style={{ height: '100dvh', padding: 16, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      <div style={{ position: 'relative', width: 'min(900px, 100%)' }}>
-        <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
-        {/* Зеленая жирная бегущая рамка — SVG вдоль краёв видео */}
-        <div className="auth-ring">
-          <svg className="auth-ring-svg" preserveAspectRatio="none">
-            <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" fill="none" stroke="transparent" />
-            <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" className="auth-ring-svg__path" />
-          </svg>
+    <div className={mode === 'code' ? 'screen screen--code' : 'screen screen--camera'}>
+      {mode === 'camera' ? (
+        <div className="camera-wrap">
+          <div className="camera-aspect">
+            <Camera onReady={(v) => { videoRef.current = v }} onLandmarks={(pts) => { landmarksRef.current = pts }} />
+            {/* Зеленая жирная бегущая рамка — SVG вдоль краёв видео */}
+            <div className="auth-ring">
+              <svg className="auth-ring-svg" preserveAspectRatio="none">
+                <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" fill="none" stroke="transparent" />
+                <rect x="0" y="0" width="100%" height="100%" rx="12" ry="12" className="auth-ring-svg__path" />
+              </svg>
+            </div>
+          </div>
         </div>
-      </div>
-      {/* Результат без слов, только цвет рамки меняем через класс */}
+      ) : (
+        <div className="code-wrap">
+          <PasscodeEntry
+            title="Введите код доступа"
+            value={passcode}
+            onChange={setPasscode}
+            onSubmit={handleSubmitPasscode}
+          />
+          <button
+            className="btn btn--primary"
+            disabled={passcode.length !== 12}
+            onClick={handleSubmitPasscode}
+          >
+            Войти
+          </button>
+        </div>
+      )}
     </div>
   )
 }

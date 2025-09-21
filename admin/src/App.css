@@ -40,3 +40,88 @@
 .read-the-docs {
   color: #888;
 }
+
+/* ===== Admin black & white theme additions ===== */
+.screen {
+  height: 100dvh;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.screen--camera {
+  background: #000;
+}
+
+.camera-wrap { width: min(900px, 100%); }
+.camera-aspect { position: relative; }
+
+/* Ввод кода */
+.code-wrap {
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.passcode { width: 100%; cursor: text; }
+.passcode__title { font-size: 18px; margin-bottom: 8px; color: #fff; opacity: 0.9; }
+.passcode__slots {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+}
+.passcode__slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.passcode__digit { height: 28px; line-height: 28px; font-size: 20px; letter-spacing: 1px; }
+.passcode__line { width: 100%; height: 2px; background: #fff; opacity: 0.8; border-radius: 2px; }
+.passcode__slot--active .passcode__line { opacity: 1; }
+
+.passcode__hidden-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+}
+
+.btn { 
+  appearance: none;
+  border: 0;
+  background: #fff;
+  color: #000;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  transition: transform 0.1s ease, opacity 0.2s ease;
+}
+.btn:disabled { opacity: 0.5; }
+.btn:not(:disabled):active { transform: translateY(1px); }
+.btn--primary { background: #fff; color: #000; }
+
+/* auth-ring svg baseline (чёрно-белая гамма) */
+.auth-ring { position: absolute; inset: 0; pointer-events: none; }
+.auth-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.auth-ring-svg__path {
+  stroke: #fff;
+  stroke-width: 6px;
+  stroke-dasharray: var(--dash, 120) var(--perim, 1600);
+  stroke-dashoffset: 0;
+  transition: stroke 0.25s ease;
+}
+.auth-ring.running .auth-ring-svg__path {
+  animation: ring-run var(--ring-duration, 1s) linear infinite;
+}
+.auth-ring.auth-ring--ok .auth-ring-svg__path { stroke: #19ff19; }
+.auth-ring.auth-ring--fail .auth-ring-svg__path { stroke: #ff1919; }
+
+@keyframes ring-run {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: calc(var(--dash, 120) * -1); }
+}
