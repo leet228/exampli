@@ -13,6 +13,7 @@ export function StreakSheetContent() {
   });
   const [dir, setDir] = useState<1 | -1>(1);
   const [minMonth, setMinMonth] = useState<Date | null>(null);
+  const [createdAt, setCreatedAt] = useState<Date | null>(null);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function StreakSheetContent() {
         if (user?.streak != null) setStreak(Number(user.streak));
         if ((user as any)?.created_at) {
           const cd = new Date((user as any).created_at as string);
+          setCreatedAt(cd);
           setMinMonth(new Date(cd.getFullYear(), cd.getMonth(), 1));
         }
       } catch {}
@@ -115,7 +117,7 @@ export function StreakSheetContent() {
       {/* Сводки */}
       <div className="grid grid-cols-2 gap-3 mt-3">
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
-          <div className="w-5 h-5 grid place-items-center rounded-full" style={{ background: '#f6b73c', color: '#000' }}>✔</div>
+          <div className="w-5 h-5 rounded-full" style={{ background: '#f6b73c' }} />
           <div className="text-sm"><span className="font-semibold">0</span> дней</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
@@ -145,17 +147,24 @@ export function StreakSheetContent() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${year}-${month}`}
-              initial={{ x: dir > 0 ? 56 : -56, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: dir > 0 ? -56 : 56, opacity: 0 }}
-              transition={{ duration: .9, ease: [0.22,1,0.36,1] }}
+              initial={{ x: dir > 0 ? '100%' : '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: dir > 0 ? '-100%' : '100%' }}
+              transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }}
               className="grid grid-cols-7 gap-2"
             >
-              {cells.map((c, i) => (
-                c.day == null
-                  ? <div key={`e${i}`} />
-                  : <div key={c.day} className="h-10 rounded-2xl border border-white/10 flex items-center justify-center text-sm text-white/90">{c.day}</div>
-              ))}
+              {cells.map((c, i) => {
+                if (c.day == null) return <div key={`e${i}`} />;
+                const d = c.day;
+                const isBeforeFirstUse = (() => {
+                  if (!createdAt) return false;
+                  return createdAt.getFullYear() === year && createdAt.getMonth() === month && d < createdAt.getDate();
+                })();
+                const cls = isBeforeFirstUse
+                  ? 'h-10 rounded-2xl border border-white/5 flex items-center justify-center text-sm text-white/35'
+                  : 'h-10 rounded-2xl border border-white/10 flex items-center justify-center text-sm text-white/90';
+                return <div key={d} className={cls}>{d}</div>;
+              })}
             </motion.div>
           </AnimatePresence>
         </div>
