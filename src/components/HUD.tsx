@@ -266,9 +266,16 @@ export default function HUD() {
               type="button"
               onClick={(e) => {
                 e.preventDefault(); e.stopPropagation();
-                try { sessionStorage.setItem('exampli:highlightCoins','1'); } catch {}
-                window.dispatchEvent(new Event('exampli:highlightCoins'));
-                navigate('/subscription');
+                // Сначала закрываем любую открытую верхнюю шторку, затем переходим
+                setOpen(null);
+                // Немного подождём кадр, чтобы портал успел скрыться
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    try { sessionStorage.setItem('exampli:highlightCoins','1'); } catch {}
+                    window.dispatchEvent(new Event('exampli:highlightCoins'));
+                    navigate('/subscription');
+                  });
+                });
               }}
               className="justify-self-center flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Коины"
