@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BottomSheet from './BottomSheet';
-import { supabase } from '../../lib/supabase';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 
 // Контент для верхней шторки HUD и для нижней шторки (переиспользуемый)
@@ -22,23 +21,15 @@ export function StreakSheetContent() {
       const cs = cacheGet<any>(CACHE_KEYS.stats);
       if (cs?.streak != null) setStreak(Number(cs.streak));
     } catch {}
-    (async () => {
-      try {
-        const id = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-        if (!id) return;
-        const { data: user } = await supabase
-          .from('users')
-          .select('streak, created_at')
-          .eq('tg_id', String(id))
-          .single();
-        if (user?.streak != null) setStreak(Number(user.streak));
-        if ((user as any)?.created_at) {
-          const cd = new Date((user as any).created_at as string);
-          setCreatedAt(cd);
-          setMinMonth(new Date(cd.getFullYear(), cd.getMonth(), 1));
-        }
-      } catch {}
-    })();
+    // created_at тоже берём из boot/user кэша (без запросов к БД)
+    try {
+      const u = cacheGet<any>(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || null;
+      if (u?.created_at) {
+        const cd = new Date(String(u.created_at));
+        setCreatedAt(cd);
+        setMinMonth(new Date(cd.getFullYear(), cd.getMonth(), 1));
+      }
+    } catch {}
   }, []);
 
   // Конструируем календарь на выбранный месяц (понедельник — первый)
@@ -133,7 +124,7 @@ export function StreakSheetContent() {
         onPointerUp={(e) => {
           const s = swipeStart.current; swipeStart.current = null; if (!s) return;
           const dx = e.clientX - s.x; const dy = e.clientY - s.y;
-          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+          if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy)) {
             if (dx < 0) goNext(); else goPrev();
           }
         }}
@@ -144,13 +135,19 @@ export function StreakSheetContent() {
           ))}
         </div>
         <div style={{ position: 'relative', height: 'auto' }}>
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence custom={dir} initial={false} mode="wait">
             <motion.div
               key={`${year}-${month}`}
-              initial={{ x: dir > 0 ? '100%' : '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: dir > 0 ? '-100%' : '100%' }}
-              transition={{ duration: 1.2, ease: [0.22,1,0.36,1] }}
+              custom={dir}
+              variants={{
+                enter: (d: 1 | -1) => ({ x: d > 0 ? '100%' : '-100%' }),
+                center: { x: 0 },
+                exit: (d: 1 | -1) => ({ x: d > 0 ? '-100%' : '100%' }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.18, ease: [0.22,1,0.36,1] }}
               className="grid grid-cols-7 gap-2"
             >
               {cells.map((c, i) => {
