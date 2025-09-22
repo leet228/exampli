@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BottomSheet from './BottomSheet';
 import { supabase } from '../../lib/supabase';
@@ -12,6 +12,8 @@ export function StreakSheetContent() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [dir, setDir] = useState<1 | -1>(1);
+  const [minMonth, setMinMonth] = useState<Date | null>(null);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     // быстрый снимок из boot-кэша, чтобы число совпадало с HUD
@@ -25,10 +27,14 @@ export function StreakSheetContent() {
         if (!id) return;
         const { data: user } = await supabase
           .from('users')
-          .select('streak')
+          .select('streak, created_at')
           .eq('tg_id', String(id))
           .single();
         if (user?.streak != null) setStreak(Number(user.streak));
+        if ((user as any)?.created_at) {
+          const cd = new Date((user as any).created_at as string);
+          setMinMonth(new Date(cd.getFullYear(), cd.getMonth(), 1));
+        }
       } catch {}
     })();
   }, []);
@@ -54,6 +60,23 @@ export function StreakSheetContent() {
     return new Date(base.getFullYear(), base.getMonth() + delta, 1);
   }
 
+  const canGoPrev = useMemo(() => {
+    if (!minMonth) return true;
+    const prev = addMonths(view, -1);
+    return prev.getTime() >= minMonth.getTime();
+  }, [view, minMonth]);
+
+  function goPrev() {
+    if (!canGoPrev) return;
+    setDir(-1);
+    setView((v) => addMonths(v, -1));
+  }
+
+  function goNext() {
+    setDir(1);
+    setView((v) => addMonths(v, 1));
+  }
+
   return (
     <div>
       {/* Верхний блок с числом и иконкой */}
@@ -62,7 +85,7 @@ export function StreakSheetContent() {
           <div className="text-[64px] leading-none font-extrabold tabular-nums">{streak}</div>
           <div className="-mt-1 text-base">дней подряд!</div>
         </div>
-        <img src="/stickers/dead_fire.svg" alt="dead fire" className="w-[80px] h-[80px] opacity-60 select-none" />
+        <img src="/stickers/dead_fire.svg" alt="dead fire" className="w-[112px] h-[112px] opacity-60 select-none" />
       </div>
 
       {/* Заголовок месяца и бейдж */}
@@ -71,8 +94,8 @@ export function StreakSheetContent() {
           <button
             type="button"
             aria-label="Предыдущий месяц"
-            className="text-white/60 text-xl leading-none"
-            onClick={() => { setDir(-1); setView((v) => addMonths(v, -1)); }}
+            className={["text-white/60 text-xl leading-none", canGoPrev ? '' : 'opacity-30 pointer-events-none'].join(' ')}
+            onClick={goPrev}
           >
             ‹
           </button>
@@ -81,7 +104,7 @@ export function StreakSheetContent() {
             type="button"
             aria-label="Следующий месяц"
             className="text-white/60 text-xl leading-none"
-            onClick={() => { setDir(1); setView((v) => addMonths(v, 1)); }}
+            onClick={goNext}
           >
             ›
           </button>
@@ -92,17 +115,27 @@ export function StreakSheetContent() {
       {/* Сводки */}
       <div className="grid grid-cols-2 gap-3 mt-3">
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
-          <div className="w-5 h-5 grid place-items-center rounded-full bg-white/15">✔</div>
-          <div className="text-sm"><span className="font-semibold">1</span> день занимались</div>
+          <div className="w-5 h-5 grid place-items-center rounded-full" style={{ background: '#f6b73c', color: '#000' }}>✔</div>
+          <div className="text-sm"><span className="font-semibold">0</span> дней</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
-          <img src="/stickers/dead_fire.svg" alt="огонь погас" className="w-5 h-5" />
-          <div className="text-sm"><span className="font-semibold">1</span> заморозка стрика</div>
+          <div className="w-5 h-5 rounded-full" style={{ background: '#5cc8ff' }} />
+          <div className="text-sm"><span className="font-semibold">0</span> заморозок</div>
         </div>
       </div>
 
       {/* Календарь */}
-      <div className="mt-3 rounded-2xl border border-white/10 p-3 overflow-hidden">
+      <div
+        className="mt-3 rounded-2xl border border-white/10 p-3 overflow-hidden"
+        onPointerDown={(e) => { swipeStart.current = { x: e.clientX, y: e.clientY }; }}
+        onPointerUp={(e) => {
+          const s = swipeStart.current; swipeStart.current = null; if (!s) return;
+          const dx = e.clientX - s.x; const dy = e.clientY - s.y;
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+            if (dx < 0) goNext(); else goPrev();
+          }
+        }}
+      >
         <div className="grid grid-cols-7 text-center text-xs text-white/60 mb-2">
           {['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map((w) => (
             <div key={w}>{w}</div>
@@ -112,10 +145,10 @@ export function StreakSheetContent() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${year}-${month}`}
-              initial={{ x: dir > 0 ? 32 : -32, opacity: 0 }}
+              initial={{ x: dir > 0 ? 56 : -56, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: dir > 0 ? -32 : 32, opacity: 0 }}
-              transition={{ duration: .18, ease: [0.22,1,0.36,1] }}
+              exit={{ x: dir > 0 ? -56 : 56, opacity: 0 }}
+              transition={{ duration: .9, ease: [0.22,1,0.36,1] }}
               className="grid grid-cols-7 gap-2"
             >
               {cells.map((c, i) => (
