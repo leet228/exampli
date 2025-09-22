@@ -10,6 +10,7 @@ import { setUserSubjects, syncEnergy } from '../lib/userState';
 import { getActiveCourse, subscribeActiveCourse, setActiveCourse as storeSetActiveCourse } from '../lib/courseStore';
 import CoursesPanel from './sheets/CourseSheet';
 // CoinSheet более не используется; переход на страницу подписки
+import { StreakSheetContent } from './sheets/StreakSheet';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -379,36 +380,7 @@ export default function HUD() {
 
 /* ================== ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ================== */
 
-function StreakSheetBody() {
-  const [streak, setStreak] = useState(0);
-  useEffect(() => {
-    try {
-      const cs = cacheGet<any>(CACHE_KEYS.stats);
-      setStreak(cs?.streak ?? 0);
-    } catch {}
-  }, []);
-  const days = Array.from({ length: 30 }, (_, i) => i + 1);
-  return (
-    <>
-      <div className="card">
-        <div className="text-3xl font-bold">🔥 {streak}</div>
-        <div className="text-sm text-muted">дней подряд</div>
-      </div>
-      <div className="grid grid-cols-7 gap-2 mt-4">
-        {days.map((d) => (
-          <div
-            key={d}
-            className={`h-9 rounded-xl flex items-center justify-center text-sm border ${
-              d <= streak ? 'bg-white/10 border-white/10' : 'border-white/5'
-            }`}
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
+function StreakSheetBody() { return <StreakSheetContent />; }
 
 function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number; onOpenSubscription: () => void; isOpen?: boolean }) {
   const [energy, setEnergy] = useState(value);
