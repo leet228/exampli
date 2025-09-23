@@ -253,7 +253,7 @@ export default function AI() {
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad relative">
         {!hasAnyUser && (
           <img
-            src="/ai/ai_waiter.svg"
+            src="/ai/ai_w.svg"
             alt=""
             aria-hidden
             className="fixed left-1/2 -translate-x-1/2 pointer-events-none select-none"
