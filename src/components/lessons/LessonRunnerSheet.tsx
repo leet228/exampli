@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMilestone } from '../../lib/haptics';
@@ -973,7 +973,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const ss = String(s).padStart(2, '0');
     return `${m}:${ss}`;
   };
-  const perfLabel = percent > 90 ? 'Фантастично' : (percent >= 50 ? 'Хорошо' : 'Неплохо');
+  const perfLabel = percent > 90 ? 'Фантастика' : (percent >= 50 ? 'Хорошо' : 'Неплохо');
   const darkInner = '#0a111d';
   const green = '#22c55e';
   const blue = '#3b82f6';
@@ -988,34 +988,69 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
-  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim, disableAnim = false }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void; disableAnim?: boolean }) => (
-    <motion.div
-      initial={disableAnim ? false : { x: initialX, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={disableAnim ? { duration: 0 } : { duration, delay }}
-      onAnimationComplete={onDoneAnim}
-      className="rounded-3xl overflow-hidden border w-32 sm:w-36"
-      style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
-    >
-      <div className="px-4 py-3 text-base font-extrabold uppercase text-center" style={{ color: '#0a111d' }}>{title}</div>
-      <div className="px-4 pb-4">
-        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 48 }}>
-          <div className="text-2xl font-extrabold tabular-nums" style={{ color }}>{value}</div>
+  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim, disableAnim = false }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void; disableAnim?: boolean }) => {
+    const titleRef = useRef<HTMLDivElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [fontSize, setFontSize] = useState<number>(16);
+
+    useLayoutEffect(() => {
+      const el = titleRef.current;
+      const box = containerRef.current;
+      if (!el || !box) return;
+      // Подгоняем шрифт, чтобы текст помещался в одну-две строки
+      const max = 18; // базовый
+      const min = 10; // минимальный
+      let size = max;
+      el.style.fontSize = `${size}px`;
+      el.style.lineHeight = '1.05';
+      // ограничим по высоте контейнера
+      const limit = 44; // как minHeight заголовка
+      for (; size >= min; size -= 1) {
+        el.style.fontSize = `${size}px`;
+        const h = el.scrollHeight;
+        const w = el.scrollWidth;
+        const bw = box.clientWidth - 8; // с учётом паддингов
+        if (h <= limit && w <= bw * 1.05) break;
+      }
+      setFontSize(size);
+    }, [title]);
+
+    return (
+      <motion.div
+        initial={disableAnim ? false : { x: initialX, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={disableAnim ? { duration: 0 } : { duration, delay }}
+        onAnimationComplete={onDoneAnim}
+        className="rounded-3xl overflow-hidden border w-28 sm:w-32"
+        style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
+        ref={containerRef}
+      >
+        <div
+          ref={titleRef}
+          className="px-3 py-3 font-extrabold uppercase text-center break-words leading-tight"
+          style={{ color: '#0a111d', minHeight: 44, fontSize }}
+        >
+          {title}
         </div>
-      </div>
-    </motion.div>
-  );
+        <div className="px-4 pb-4">
+          <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 48 }}>
+            <div className="text-2xl font-extrabold tabular-nums" style={{ color }}>{value}</div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
   return (
     <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
         <img src="/lessons/ending.svg" alt="" className="w-80 h-80" />
-        <div className="text-2xl font-extrabold text-center">Урок пройден!</div>
+        <div className="text-4xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
-          <div className="text-sm text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер</div>
+          <div className="text-lg text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер!</div>
         )}
         <div className="mt-2 w-full flex justify-center items-start gap-4">
           {/* стабильные ключи исключают повторные проигрывания */}
-          {(() => { const firstDuration = 0.6; const firstDelay = 0.05; const secondDelay = firstDelay + firstDuration + 0.3; return (
+          {(() => { const firstDuration = 0.6; const firstDelay = 0.0; const secondDelay = firstDelay + firstDuration + 0.3; return (
             <>
               <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} disableAnim={animated.left} onDoneAnim={() => setAnimated(s => ({ ...s, left: true }))} />
               <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} disableAnim={animated.right} onDoneAnim={() => { setAnimated(s => ({ ...s, right: true })); onReady(); }} />
@@ -1023,7 +1058,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
           ); })()}
         </div>
       </div>
-      <div className="w-full px-4 mt-16 mb-12">
+      <div className="w-full px-4 mt-16 mb-16">
         <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
       </div>
     </div>
