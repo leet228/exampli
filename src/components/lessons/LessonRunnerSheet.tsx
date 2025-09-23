@@ -1006,8 +1006,8 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
         style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
         ref={containerRef}
       >
-        <div className="px-3 font-extrabold uppercase text-center leading-tight grid place-items-center text-sm sm:text-base"
-          style={{ color: '#0a111d', minHeight: 64 }}>
+        <div className="px-2 font-extrabold uppercase text-center leading-tight grid place-items-center text-xs sm:text-sm"
+          style={{ color: '#0a111d', minHeight: 44 }}>
           {title}
         </div>
         <div className="px-4 pb-4">
