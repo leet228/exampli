@@ -978,6 +978,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   const green = '#22c55e';
   const blue = '#3b82f6';
   const [animated, setAnimated] = useState<{left: boolean; right: boolean}>({ left: false, right: false });
+  const [startSecond, setStartSecond] = useState<boolean>(false);
   function hexToRgb(hex: string) {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -1050,15 +1051,37 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
         )}
         <div className="mt-2 w-full flex justify-center items-start gap-4">
           {/* стабильные ключи исключают повторные проигрывания */}
-          {(() => { const firstDuration = 0.6; const firstDelay = 0.0; const secondDelay = firstDelay + firstDuration + 0.3; return (
+          {(() => { const firstDuration = 0.6; const firstDelay = 0.0; return (
             <>
-              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} disableAnim={animated.left} onDoneAnim={() => setAnimated(s => ({ ...s, left: true }))} />
-              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} disableAnim={animated.right} onDoneAnim={() => { setAnimated(s => ({ ...s, right: true })); onReady(); }} />
+              <Card
+                key="perf"
+                title={perfLabel}
+                value={`${percent}%`}
+                color={green}
+                delay={firstDelay}
+                duration={firstDuration}
+                initialX={-60}
+                disableAnim={animated.left}
+                onDoneAnim={() => { setAnimated(s => ({ ...s, left: true })); setTimeout(() => setStartSecond(true), 300); }}
+              />
+              {(startSecond || animated.right) && (
+                <Card
+                  key="time"
+                  title="Время"
+                  value={formatTime(elapsedMs)}
+                  color={blue}
+                  delay={0}
+                  duration={firstDuration}
+                  initialX={60}
+                  disableAnim={animated.right}
+                  onDoneAnim={() => { setAnimated(s => ({ ...s, right: true })); onReady(); }}
+                />
+              )}
             </>
           ); })()}
         </div>
       </div>
-      <div className="w-full px-4 mt-16 mb-16">
+      <div className="w-full px-4 mt-16 mb-24">
         <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
       </div>
     </div>
