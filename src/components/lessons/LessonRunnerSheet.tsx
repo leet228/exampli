@@ -987,18 +987,18 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
-  const Card = ({ title, value, color, delay, duration = 0.6, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; onDoneAnim?: () => void }) => (
+  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => (
     <motion.div
-      initial={{ x: -20, opacity: 0 }}
+      initial={{ x: initialX, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration, delay }}
       onAnimationComplete={onDoneAnim}
-      className="rounded-3xl overflow-hidden border"
+      className="rounded-3xl overflow-hidden border w-40 sm:w-44"
       style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
     >
-      <div className="px-4 py-3 text-xs font-extrabold uppercase" style={{ color: '#0a111d' }}>{title}</div>
+      <div className="px-4 py-3 text-sm font-extrabold uppercase text-center" style={{ color: '#0a111d' }}>{title}</div>
       <div className="px-4 pb-4">
-        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 64 }}>
+        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 56 }}>
           <div className="text-2xl font-extrabold tabular-nums" style={{ color }}>{value}</div>
         </div>
       </div>
@@ -1007,16 +1007,17 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   return (
     <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
-        <img src="/lessons/ending.svg" alt="" className="w-56 h-56" />
+        <img src="/lessons/ending.svg" alt="" className="w-64 h-64" />
         <div className="text-2xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
           <div className="text-sm text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер</div>
         )}
-        <div className="mt-2 grid grid-cols-2 gap-3 w-full max-w-sm">
+        <div className="mt-2 w-full flex justify-center items-start gap-4">
+          {/* стабильные ключи исключают повторные проигрывания */}
           {(() => { const firstDuration = 0.6; const firstDelay = 0.05; const secondDelay = firstDelay + firstDuration + 0.3; return (
             <>
-              <Card title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} />
-              <Card title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} onDoneAnim={onReady} />
+              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-40} />
+              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={40} onDoneAnim={onReady} />
             </>
           ); })()}
         </div>
