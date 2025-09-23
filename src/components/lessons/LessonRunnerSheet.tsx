@@ -991,20 +991,21 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => {
     const titleRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const [fontSize, setFontSize] = useState<number>(18);
+    const [fontSize, setFontSize] = useState<number>(22);
+    const animOnceRef = useRef<boolean>(false);
 
     useLayoutEffect(() => {
       const el = titleRef.current;
       const box = containerRef.current;
       if (!el || !box) return;
       // Подгоняем шрифт, чтобы текст помещался в одну-две строки
-      const max = 22; // базовый побольше
+      const max = 28; // базовый крупнее
       const min = 10; // минимальный
       let size = max;
       el.style.fontSize = `${size}px`;
       el.style.lineHeight = '1.1';
       // ограничим по высоте контейнера
-      const limit = 56; // как minHeight заголовка
+      const limit = 64; // как minHeight заголовка
       for (; size >= min; size -= 1) {
         el.style.fontSize = `${size}px`;
         const h = el.scrollHeight;
@@ -1017,10 +1018,10 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
 
     return (
       <motion.div
-        initial={{ x: initialX, opacity: 0 }}
+        initial={animOnceRef.current ? false : { x: initialX, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        transition={{ duration, delay }}
-        onAnimationComplete={onDoneAnim}
+        transition={animOnceRef.current ? { duration: 0 } : { duration, delay }}
+        onAnimationComplete={() => { if (!animOnceRef.current) animOnceRef.current = true; onDoneAnim && onDoneAnim(); }}
         className="rounded-3xl overflow-hidden border w-28 sm:w-32"
         style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
         ref={containerRef}
@@ -1028,7 +1029,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
         <div
           ref={titleRef}
           className="px-3 font-extrabold uppercase text-center break-words leading-tight grid place-items-center"
-          style={{ color: '#0a111d', minHeight: 56, fontSize }}
+          style={{ color: '#0a111d', minHeight: 64, fontSize }}
         >
           {title}
         </div>
@@ -1043,7 +1044,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   return (
     <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
-        <img src="/lessons/ending.svg" alt="" className="w-80 h-80" />
+        <img src="/lessons/ending.svg" alt="" className="w-80 h-80 -mt-6" />
         <div className="text-4xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
           <div className="text-lg text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер!</div>
