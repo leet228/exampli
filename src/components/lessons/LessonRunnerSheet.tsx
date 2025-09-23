@@ -52,6 +52,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const solvedRef = useRef<Set<string | number>>(new Set());
   const [viewKey, setViewKey] = useState<number>(0);
   const task = (mode === 'base') ? planned[baseIdx] : (repeatCurrent as any);
+  // Метрики завершения урока
+  const [answersTotal, setAnswersTotal] = useState<number>(0);
+  const [answersCorrect, setAnswersCorrect] = useState<number>(0);
+  const [hadAnyMistakes, setHadAnyMistakes] = useState<boolean>(false);
+  const [lessonStartedAt, setLessonStartedAt] = useState<number>(0);
+  const [showFinish, setShowFinish] = useState<boolean>(false);
+  const [finishReady, setFinishReady] = useState<boolean>(false); // все карточки показаны
+  const [finishMs, setFinishMs] = useState<number>(0);
 
   useEffect(() => {
     if (!open) return;
@@ -104,6 +112,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setCardBoxRect(null);
       setStatus('idle');
       setLoading(false);
+      // метрики
+      setAnswersTotal(0);
+      setAnswersCorrect(0);
+      setHadAnyMistakes(false);
+      setLessonStartedAt(Date.now());
+      setShowFinish(false);
+      setFinishReady(false);
+      setFinishMs(0);
     })();
   }, [open, lessonId]);
 
@@ -185,6 +201,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
+    // обновим метрики
+    setAnswersTotal((v) => v + 1);
+    if (ok) setAnswersCorrect((v) => v + 1); else setHadAnyMistakes(true);
 
     // Режим повторов: стрик не считаем, управляем очередью
     if (mode === 'repeat') {
@@ -242,7 +261,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       if (baseIdx + 1 < planned.length) {
         setBaseIdx(baseIdx + 1);
       } else {
-        if (repeatQueue.length > 0) { setMode('repeat'); setRepeatCurrent(repeatQueue[0] || null); } else { setStreakLocal(0); setStreakFlash(null); onClose(); return; }
+        if (repeatQueue.length > 0) { setMode('repeat'); setRepeatCurrent(repeatQueue[0] || null); } else { setStreakLocal(0); setStreakFlash(null); setShowFinish(true); setFinishMs(Date.now() - lessonStartedAt); return; }
       }
     } else {
       // Применяем результат последнего ответа к очереди
@@ -258,7 +277,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       // Если после применения очередь пуста — завершаем
       if ((repeatQueue.length === 0) || (ok && repeatQueue.length === 1)) {
         // после setRepeatQueue next будет пуст — закроем на следующем кадре
-        setTimeout(() => { if ((repeatQueue.length === 0) || (ok && repeatQueue.length === 1)) { setStreakLocal(0); setStreakFlash(null); onClose(); } }, 0);
+        setTimeout(() => { if ((repeatQueue.length === 0) || (ok && repeatQueue.length === 1)) { setStreakLocal(0); setStreakFlash(null); setShowFinish(true); setFinishMs(Date.now() - lessonStartedAt); } }, 0);
         // продолжаем reset стейтов ниже
       }
     }
@@ -327,7 +346,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             onClick={(e) => e.stopPropagation()}
           >
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
-            {!loading && (
+            {!loading && !showFinish && (
               <div className="px-5 pt-2 pb-2 border-b border-white/10 relative" ref={headerRef}>
                 <div className="flex items-center gap-2">
                   {mode === 'repeat' && repeatQueue.length > 0 && (
@@ -395,6 +414,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   <img src="/lessons/loading_lesson.svg" alt="" className="w-full h-auto" />
                   <div className="mt-6 w-8 h-8 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
                 </div>
+              ) : showFinish ? (
+                <FinishOverlay
+                  answersTotal={answersTotal}
+                  answersCorrect={answersCorrect}
+                  hadAnyMistakes={hadAnyMistakes}
+                  elapsedMs={finishMs}
+                  onDone={() => { setShowFinish(false); onClose(); }}
+                  onReady={() => setFinishReady(true)}
+                  canProceed={finishReady}
+                />
               ) : task ? (
                 <>
                   <div className="text-sm text-muted">{task.prompt}</div>
@@ -599,7 +628,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             </div>
 
             {/* Нижний фиксированный блок: фидбек + кнопка (скрыт во время загрузки) */}
-            {!loading && (
+            {!loading && !showFinish && (
               <div className="fixed inset-x-0 bottom-0 bg-[var(--bg)] border-t border-white/10" style={{ zIndex: 100 }}>
                 {/* Фидбек появится над кнопкой */}
                 {status !== 'idle' && (
@@ -702,7 +731,7 @@ function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: (
   );
 }
 // CTA с «нижней полоской» через box-shadow, мгновенная реакция
-function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6 }: { text: string; onClick?: () => void; baseColor?: string; shadowHeight?: number }) {
+function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6, disabled = false }: { text: string; onClick?: () => void; baseColor?: string; shadowHeight?: number; disabled?: boolean }) {
   const [pressed, setPressed] = useState(false);
   function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     const h = hex.replace('#', '').trim();
@@ -723,15 +752,17 @@ function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6 }: { 
     return `rgb(${f(rgb.r)}, ${f(rgb.g)}, ${f(rgb.b)})`;
   }
   const shadowColor = darken(baseColor, 18);
+  const effectivePressed = disabled ? false : pressed;
   return (
     <motion.button
       type="button"
-      onPointerDown={() => setPressed(true)}
+      disabled={disabled}
+      onPointerDown={() => { if (!disabled) setPressed(true); }}
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
-      onClick={onClick}
-      className="w-full rounded-2xl px-5 py-4 font-extrabold"
-      animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${shadowColor}` : `0px ${shadowHeight}px 0px ${shadowColor}` }}
+      onClick={() => { if (!disabled) onClick?.(); }}
+      className={`w-full rounded-2xl px-5 py-4 font-extrabold ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+      animate={{ y: effectivePressed ? shadowHeight : 0, boxShadow: effectivePressed ? `0px 0px 0px ${shadowColor}` : `0px ${shadowHeight}px 0px ${shadowColor}` }}
       transition={{ duration: 0 }}
       style={{ background: baseColor, color: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}
     >
@@ -928,6 +959,55 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
           {text}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ===== Экран завершения урока ===== */
+function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs, onDone, onReady, canProceed }: { answersTotal: number; answersCorrect: number; hadAnyMistakes: boolean; elapsedMs: number; onDone: () => void; onReady: () => void; canProceed: boolean }) {
+  const percent = Math.max(0, Math.min(100, Math.round((answersCorrect / Math.max(1, answersTotal)) * 100)));
+  const formatTime = (ms: number) => {
+    const totalSec = Math.max(0, Math.round((ms || 0) / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    const ss = String(s).padStart(2, '0');
+    return `${m}:${ss}`;
+  };
+  return (
+    <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
+      <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
+        <img src="/lessons/ending.svg" alt="" className="w-44 h-44" />
+        <div className="text-2xl font-extrabold text-center">Урок пройден!</div>
+        {!hadAnyMistakes && (
+          <div className="text-sm text-white/90 text-center">0 ошибок. Ты суперкомпьютер, признавайся.</div>
+        )}
+        <div className="mt-2 grid grid-cols-2 gap-3 w-full max-w-sm">
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.28, delay: 0.05 }}
+            className="rounded-2xl border px-4 py-3 flex items-center justify-between"
+            style={{ borderColor: 'rgba(34,197,94,0.6)', background: 'rgba(22,163,74,0.12)', color: '#4ade80' }}
+          >
+            <div className="text-xs font-extrabold uppercase opacity-80">Фантастично</div>
+            <div className="text-xl font-extrabold tabular-nums">{percent}%</div>
+          </motion.div>
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.28, delay: 0.42 }}
+            onAnimationComplete={onReady}
+            className="rounded-2xl border px-4 py-3 flex items-center justify-between"
+            style={{ borderColor: 'rgba(59,130,246,0.6)', background: 'rgba(37,99,235,0.12)', color: '#93c5fd' }}
+          >
+            <div className="text-xs font-extrabold uppercase opacity-80">Быстрота</div>
+            <div className="text-xl font-extrabold tabular-nums">{formatTime(elapsedMs)}</div>
+          </motion.div>
+        </div>
+      </div>
+      <div className="w-full px-4">
+        <PressCta text="ЗАБРАТЬ XP" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
+      </div>
     </div>
   );
 }
