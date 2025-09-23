@@ -977,6 +977,10 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   const darkInner = '#0a111d';
   const green = '#22c55e';
   const blue = '#3b82f6';
+  // Глобальная карта, чтобы карточки анимировались только один раз даже при повторных монтажах
+  const onceMap: Record<string, boolean> = (typeof window !== 'undefined')
+    ? (((window as any).__exampliCardOnce = (window as any).__exampliCardOnce || {}))
+    : ({} as any);
   // анимации проигрываются по одному разу при монтировании
   function hexToRgb(hex: string) {
     const h = hex.replace('#', '');
@@ -988,18 +992,17 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
-  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => {
+  const Card = ({ id, title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { id: string; title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => {
     const titleRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [fontSize, setFontSize] = useState<number>(22);
-    const animOnceRef = useRef<boolean>(false);
 
     useLayoutEffect(() => {
       const el = titleRef.current;
       const box = containerRef.current;
       if (!el || !box) return;
       // Подгоняем шрифт, чтобы текст помещался в одну-две строки
-      const max = 28; // базовый крупнее
+      const max = 32; // базовый ещё крупнее
       const min = 10; // минимальный
       let size = max;
       el.style.fontSize = `${size}px`;
@@ -1018,10 +1021,10 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
 
     return (
       <motion.div
-        initial={animOnceRef.current ? false : { x: initialX, opacity: 0 }}
+        initial={onceMap[id] ? false : { x: initialX, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        transition={animOnceRef.current ? { duration: 0 } : { duration, delay }}
-        onAnimationComplete={() => { if (!animOnceRef.current) animOnceRef.current = true; onDoneAnim && onDoneAnim(); }}
+        transition={onceMap[id] ? { duration: 0 } : { duration, delay }}
+        onAnimationComplete={() => { if (!onceMap[id]) onceMap[id] = true; onDoneAnim && onDoneAnim(); }}
         className="rounded-3xl overflow-hidden border w-28 sm:w-32"
         style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
         ref={containerRef}
@@ -1053,14 +1056,14 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
           {/* последовательная анимация: вторая стартует после первой с паузой */}
           {(() => { const firstDuration = 0.6; const firstDelay = 0.0; const secondDelay = firstDelay + firstDuration + 0.3; return (
             <>
-              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} />
-              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} onDoneAnim={onReady} />
+              <Card id="perf" key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} />
+              <Card id="time" key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} onDoneAnim={onReady} />
             </>
           ); })()}
         </div>
       </div>
       <div className="w-full px-4 mt-12 mb-40">
-        <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
+        <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={() => { try { hapticSelect(); } catch {} onDone(); }} disabled={!canProceed} />
       </div>
     </div>
   );
