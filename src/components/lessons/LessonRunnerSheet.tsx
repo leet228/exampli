@@ -993,31 +993,8 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
   const Card = ({ id, title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { id: string; title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => {
-    const titleRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const [fontSize, setFontSize] = useState<number>(22);
-
-    useLayoutEffect(() => {
-      const el = titleRef.current;
-      const box = containerRef.current;
-      if (!el || !box) return;
-      // Подгоняем шрифт, чтобы текст помещался в одну-две строки
-      const max = 32; // базовый ещё крупнее
-      const min = 10; // минимальный
-      let size = max;
-      el.style.fontSize = `${size}px`;
-      el.style.lineHeight = '1.1';
-      // ограничим по высоте контейнера
-      const limit = 64; // как minHeight заголовка
-      for (; size >= min; size -= 1) {
-        el.style.fontSize = `${size}px`;
-        const h = el.scrollHeight;
-        const w = el.scrollWidth;
-        const bw = box.clientWidth - 8; // с учётом паддингов
-        if (h <= limit && w <= bw * 1.05) break;
-      }
-      setFontSize(size);
-    }, [title]);
+    useLayoutEffect(() => {}, [title]);
 
     return (
       <motion.div
@@ -1029,11 +1006,8 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
         style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
         ref={containerRef}
       >
-        <div
-          ref={titleRef}
-          className="px-3 font-extrabold uppercase text-center break-words leading-tight grid place-items-center"
-          style={{ color: '#0a111d', minHeight: 64, fontSize }}
-        >
+        <div className="px-3 font-extrabold uppercase text-center leading-tight grid place-items-center text-3xl"
+          style={{ color: '#0a111d', minHeight: 64 }}>
           {title}
         </div>
         <div className="px-4 pb-4">
