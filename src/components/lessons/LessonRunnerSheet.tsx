@@ -731,7 +731,7 @@ function PressLetter({ letter, onClick, disabled }: { letter: string; onClick: (
   );
 }
 // CTA с «нижней полоской» через box-shadow, мгновенная реакция
-function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6, disabled = false }: { text: string; onClick?: () => void; baseColor?: string; shadowHeight?: number; disabled?: boolean }) {
+function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6, disabled = false, textSizeClass = '' }: { text: string; onClick?: () => void; baseColor?: string; shadowHeight?: number; disabled?: boolean; textSizeClass?: string }) {
   const [pressed, setPressed] = useState(false);
   function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     const h = hex.replace('#', '').trim();
@@ -761,7 +761,7 @@ function PressCta({ text, onClick, baseColor = '#3c73ff', shadowHeight = 6, disa
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => { if (!disabled) onClick?.(); }}
-      className={`w-full rounded-2xl px-5 py-4 font-extrabold ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+      className={`w-full rounded-2xl px-5 py-4 font-extrabold ${textSizeClass} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
       animate={{ y: effectivePressed ? shadowHeight : 0, boxShadow: effectivePressed ? `0px 0px 0px ${shadowColor}` : `0px ${shadowHeight}px 0px ${shadowColor}` }}
       transition={{ duration: 0 }}
       style={{ background: baseColor, color: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}
@@ -977,6 +977,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   const darkInner = '#0a111d';
   const green = '#22c55e';
   const blue = '#3b82f6';
+  const [animated, setAnimated] = useState<{left: boolean; right: boolean}>({ left: false, right: false });
   function hexToRgb(hex: string) {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -987,18 +988,18 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
-  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => (
+  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim, disableAnim = false }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void; disableAnim?: boolean }) => (
     <motion.div
-      initial={{ x: initialX, opacity: 0 }}
+      initial={disableAnim ? false : { x: initialX, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      transition={{ duration, delay }}
+      transition={disableAnim ? { duration: 0 } : { duration, delay }}
       onAnimationComplete={onDoneAnim}
-      className="rounded-3xl overflow-hidden border w-40 sm:w-44"
+      className="rounded-3xl overflow-hidden border w-32 sm:w-36"
       style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
     >
-      <div className="px-4 py-3 text-sm font-extrabold uppercase text-center" style={{ color: '#0a111d' }}>{title}</div>
+      <div className="px-4 py-3 text-base font-extrabold uppercase text-center" style={{ color: '#0a111d' }}>{title}</div>
       <div className="px-4 pb-4">
-        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 56 }}>
+        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 48 }}>
           <div className="text-2xl font-extrabold tabular-nums" style={{ color }}>{value}</div>
         </div>
       </div>
@@ -1007,7 +1008,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   return (
     <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
-        <img src="/lessons/ending.svg" alt="" className="w-64 h-64" />
+        <img src="/lessons/ending.svg" alt="" className="w-80 h-80" />
         <div className="text-2xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
           <div className="text-sm text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер</div>
@@ -1016,14 +1017,14 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
           {/* стабильные ключи исключают повторные проигрывания */}
           {(() => { const firstDuration = 0.6; const firstDelay = 0.05; const secondDelay = firstDelay + firstDuration + 0.3; return (
             <>
-              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-40} />
-              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={40} onDoneAnim={onReady} />
+              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} disableAnim={animated.left} onDoneAnim={() => setAnimated(s => ({ ...s, left: true }))} />
+              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} disableAnim={animated.right} onDoneAnim={() => { setAnimated(s => ({ ...s, right: true })); onReady(); }} />
             </>
           ); })()}
         </div>
       </div>
-      <div className="w-full px-4">
-        <PressCta text="продолжить" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
+      <div className="w-full px-4 mt-16 mb-12">
+        <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
       </div>
     </div>
   );
