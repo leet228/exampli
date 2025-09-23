@@ -973,40 +973,56 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const ss = String(s).padStart(2, '0');
     return `${m}:${ss}`;
   };
+  const perfLabel = percent > 90 ? 'Фантастично' : (percent >= 50 ? 'Хорошо' : 'Неплохо');
+  const darkInner = '#0a111d';
+  const green = '#22c55e';
+  const blue = '#3b82f6';
+  function hexToRgb(hex: string) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rgba(hex: string, a: number) {
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const Card = ({ title, value, color, delay, duration = 0.6, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; onDoneAnim?: () => void }) => (
+    <motion.div
+      initial={{ x: -20, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration, delay }}
+      onAnimationComplete={onDoneAnim}
+      className="rounded-3xl overflow-hidden border"
+      style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
+    >
+      <div className="px-4 py-3 text-xs font-extrabold uppercase" style={{ color: '#0a111d' }}>{title}</div>
+      <div className="px-4 pb-4">
+        <div className="rounded-2xl grid place-items-center" style={{ background: darkInner, minHeight: 64 }}>
+          <div className="text-2xl font-extrabold tabular-nums" style={{ color }}>{value}</div>
+        </div>
+      </div>
+    </motion.div>
+  );
   return (
     <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
-        <img src="/lessons/ending.svg" alt="" className="w-44 h-44" />
+        <img src="/lessons/ending.svg" alt="" className="w-56 h-56" />
         <div className="text-2xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
-          <div className="text-sm text-white/90 text-center">0 ошибок. Ты суперкомпьютер, признавайся.</div>
+          <div className="text-sm text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер</div>
         )}
         <div className="mt-2 grid grid-cols-2 gap-3 w-full max-w-sm">
-          <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.28, delay: 0.05 }}
-            className="rounded-2xl border px-4 py-3 flex items-center justify-between"
-            style={{ borderColor: 'rgba(34,197,94,0.6)', background: 'rgba(22,163,74,0.12)', color: '#4ade80' }}
-          >
-            <div className="text-xs font-extrabold uppercase opacity-80">Фантастично</div>
-            <div className="text-xl font-extrabold tabular-nums">{percent}%</div>
-          </motion.div>
-          <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.28, delay: 0.42 }}
-            onAnimationComplete={onReady}
-            className="rounded-2xl border px-4 py-3 flex items-center justify-between"
-            style={{ borderColor: 'rgba(59,130,246,0.6)', background: 'rgba(37,99,235,0.12)', color: '#93c5fd' }}
-          >
-            <div className="text-xs font-extrabold uppercase opacity-80">Быстрота</div>
-            <div className="text-xl font-extrabold tabular-nums">{formatTime(elapsedMs)}</div>
-          </motion.div>
+          {(() => { const firstDuration = 0.6; const firstDelay = 0.05; const secondDelay = firstDelay + firstDuration + 0.3; return (
+            <>
+              <Card title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} />
+              <Card title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} onDoneAnim={onReady} />
+            </>
+          ); })()}
         </div>
       </div>
       <div className="w-full px-4">
-        <PressCta text="ЗАБРАТЬ XP" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
+        <PressCta text="продолжить" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
       </div>
     </div>
   );
