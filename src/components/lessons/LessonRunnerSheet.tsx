@@ -1042,9 +1042,9 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     );
   };
   return (
-    <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6">
+    <div className="flex flex-col items-center justify-between w-full min-h-[70vh] pt-8 pb-6 overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-start gap-6 w-full">
-        <img src="/lessons/ending.svg" alt="" className="w-80 h-80 -mt-6" />
+        <img src="/lessons/ending.svg" alt="" className="w-80 h-80 -mt-10" />
         <div className="text-4xl font-extrabold text-center">Урок пройден!</div>
         {!hadAnyMistakes && (
           <div className="text-lg text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер!</div>
