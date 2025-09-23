@@ -977,8 +977,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
   const darkInner = '#0a111d';
   const green = '#22c55e';
   const blue = '#3b82f6';
-  const [animated, setAnimated] = useState<{left: boolean; right: boolean}>({ left: false, right: false });
-  const [startSecond, setStartSecond] = useState<boolean>(false);
+  // анимации проигрываются по одному разу при монтировании
   function hexToRgb(hex: string) {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -989,23 +988,23 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
-  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim, disableAnim = false }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void; disableAnim?: boolean }) => {
+  const Card = ({ title, value, color, delay, duration = 0.6, initialX = -20, onDoneAnim }: { title: string; value: string; color: string; delay: number; duration?: number; initialX?: number; onDoneAnim?: () => void }) => {
     const titleRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const [fontSize, setFontSize] = useState<number>(16);
+    const [fontSize, setFontSize] = useState<number>(18);
 
     useLayoutEffect(() => {
       const el = titleRef.current;
       const box = containerRef.current;
       if (!el || !box) return;
       // Подгоняем шрифт, чтобы текст помещался в одну-две строки
-      const max = 18; // базовый
+      const max = 22; // базовый побольше
       const min = 10; // минимальный
       let size = max;
       el.style.fontSize = `${size}px`;
-      el.style.lineHeight = '1.05';
+      el.style.lineHeight = '1.1';
       // ограничим по высоте контейнера
-      const limit = 44; // как minHeight заголовка
+      const limit = 56; // как minHeight заголовка
       for (; size >= min; size -= 1) {
         el.style.fontSize = `${size}px`;
         const h = el.scrollHeight;
@@ -1018,9 +1017,9 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
 
     return (
       <motion.div
-        initial={disableAnim ? false : { x: initialX, opacity: 0 }}
+        initial={{ x: initialX, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        transition={disableAnim ? { duration: 0 } : { duration, delay }}
+        transition={{ duration, delay }}
         onAnimationComplete={onDoneAnim}
         className="rounded-3xl overflow-hidden border w-28 sm:w-32"
         style={{ borderColor: rgba(color, 0.55), background: rgba(color, 0.18) }}
@@ -1028,8 +1027,8 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
       >
         <div
           ref={titleRef}
-          className="px-3 py-3 font-extrabold uppercase text-center break-words leading-tight"
-          style={{ color: '#0a111d', minHeight: 44, fontSize }}
+          className="px-3 font-extrabold uppercase text-center break-words leading-tight grid place-items-center"
+          style={{ color: '#0a111d', minHeight: 56, fontSize }}
         >
           {title}
         </div>
@@ -1050,38 +1049,16 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
           <div className="text-lg text-white/90 text-center"><span className="font-extrabold">0</span> ошибок. Ты суперкомпьютер!</div>
         )}
         <div className="mt-2 w-full flex justify-center items-start gap-4">
-          {/* стабильные ключи исключают повторные проигрывания */}
-          {(() => { const firstDuration = 0.6; const firstDelay = 0.0; return (
+          {/* последовательная анимация: вторая стартует после первой с паузой */}
+          {(() => { const firstDuration = 0.6; const firstDelay = 0.0; const secondDelay = firstDelay + firstDuration + 0.3; return (
             <>
-              <Card
-                key="perf"
-                title={perfLabel}
-                value={`${percent}%`}
-                color={green}
-                delay={firstDelay}
-                duration={firstDuration}
-                initialX={-60}
-                disableAnim={animated.left}
-                onDoneAnim={() => { setAnimated(s => ({ ...s, left: true })); setTimeout(() => setStartSecond(true), 300); }}
-              />
-              {(startSecond || animated.right) && (
-                <Card
-                  key="time"
-                  title="Время"
-                  value={formatTime(elapsedMs)}
-                  color={blue}
-                  delay={0}
-                  duration={firstDuration}
-                  initialX={60}
-                  disableAnim={animated.right}
-                  onDoneAnim={() => { setAnimated(s => ({ ...s, right: true })); onReady(); }}
-                />
-              )}
+              <Card key="perf" title={perfLabel} value={`${percent}%`} color={green} delay={firstDelay} duration={firstDuration} initialX={-60} />
+              <Card key="time" title="Время" value={formatTime(elapsedMs)} color={blue} delay={secondDelay} duration={firstDuration} initialX={60} onDoneAnim={onReady} />
             </>
           ); })()}
         </div>
       </div>
-      <div className="w-full px-4 mt-16 mb-24">
+      <div className="w-full px-4 mt-12 mb-40">
         <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={onDone} disabled={!canProceed} />
       </div>
     </div>
