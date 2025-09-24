@@ -193,6 +193,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
       });
       if (r.ok) {
         const js = await r.json();
+        if (js?.ok === false) { throw new Error(js?.code || 'streak_finish_failed'); }
         const serverStreak = Number(js?.streak ?? NaN);
         if (Number.isFinite(serverStreak)) {
           try {

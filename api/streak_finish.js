@@ -6,9 +6,12 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') { res.setHeader('Allow', 'POST, OPTIONS'); res.status(204).end(); return; }
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) { res.status(500).json({ error: 'Missing Supabase env' }); return; }
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      res.status(500).json({ ok: false, code: 'env_missing', error: 'Missing Supabase env', details: { hasUrl: !!supabaseUrl, hasKey: !!supabaseKey } });
+      return;
+    }
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await safeJson(req);
@@ -25,7 +28,7 @@ export default async function handler(req, res) {
       const { data } = await supabase.from('users').select('*').eq('tg_id', tgId).maybeSingle();
       userRow = data || null;
     }
-    if (!userRow?.id) { res.status(404).json({ error: 'user_not_found' }); return; }
+    if (!userRow?.id) { res.status(404).json({ ok: false, code: 'user_not_found' }); return; }
 
     const now = new Date();
     const tz = userRow?.timezone || tryTimezone();
@@ -64,25 +67,34 @@ export default async function handler(req, res) {
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
     if (shouldInc) {
-      const { data } = await supabase
+      const { data, error: updErr } = await supabase
         .from('users')
         .update({ streak: newStreak, last_active_at: now.toISOString() })
         .eq('id', userRow.id)
         .select('id, streak, last_active_at')
         .single();
+      if (updErr) {
+        try { console.error('[streak_finish] update users error:', updErr); } catch {}
+        res.status(403).json({ ok: false, code: 'update_failed', error: updErr.message, hint: 'Check RLS and service role key' });
+        return;
+      }
       if (data) updated = data;
       // Обновим историческую таблицу (если есть)
       try {
         const todayIso = toIsoDate(new Date(todayStart));
-        await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active' }, { onConflict: 'user_id,day' });
-        if (freezeDayIso) await supabase.from('streak_days').upsert({ user_id: userRow.id, day: freezeDayIso, kind: 'freeze' }, { onConflict: 'user_id,day' });
+        const a1 = await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active' }, { onConflict: 'user_id,day' });
+        if (a1.error) { try { console.warn('[streak_finish] streak_days(active) error:', a1.error); } catch {} }
+        if (freezeDayIso) {
+          const a2 = await supabase.from('streak_days').upsert({ user_id: userRow.id, day: freezeDayIso, kind: 'freeze' }, { onConflict: 'user_id,day' });
+          if (a2.error) { try { console.warn('[streak_finish] streak_days(freeze) error:', a2.error); } catch {} }
+        }
       } catch {}
     }
 
-    res.status(200).json({ user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz });
+    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
-    res.status(500).json({ error: 'Internal error' });
+    res.status(500).json({ ok: false, code: 'internal', error: 'Internal error' });
   }
 }
 
