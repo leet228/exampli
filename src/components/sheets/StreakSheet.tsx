@@ -139,9 +139,11 @@ export function StreakSheetContent() {
     <div>
       {/* Верхний блок с числом и иконкой */}
       <div className="flex items-start justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-        <div>
-          <div className="text-[64px] leading-none font-extrabold tabular-nums">{streak}</div>
-          <div className="-mt-1 text-base">дней подряд!</div>
+        <div className="flex-1 text-center">
+          <div className="inline-block">
+            <div className="text-[64px] leading-none font-extrabold tabular-nums" style={{ marginLeft: 6 }}>{streak}</div>
+            <div className="-mt-1 text-base">дней подряд!</div>
+          </div>
         </div>
         {(() => {
           const s = Number(streak || 0);
@@ -195,7 +197,19 @@ export function StreakSheetContent() {
             ›
           </button>
         </div>
-        <span className="text-[11px] font-extrabold bg-yellow-500/15 text-yellow-300 px-2 py-[2px] rounded-md border border-yellow-400/30">ХОРОШО</span>
+        {(() => {
+          const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+          const cur = (monthData as any)?.[key] || { active: 0 };
+          if (!cur.active) return null;
+          const isGood = Number(cur.active) < 10;
+          const text = isGood ? 'ХОРОШО' : 'ЗАМЕЧАТЕЛЬНО';
+          const color = isGood ? '#f6b73c' : '#22c55e';
+          const bg = isGood ? 'rgba(246,183,60,0.15)' : 'rgba(34,197,94,0.15)';
+          const brd = isGood ? 'rgba(246,183,60,0.30)' : 'rgba(34,197,94,0.30)';
+          return (
+            <span className="text-[11px] font-extrabold px-2 py-[2px] rounded-md" style={{ background: bg, color, border: `1px solid ${brd}` }}>{text}</span>
+          );
+        })()}
       </div>
 
       {/* Сводки */}
