@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BottomSheet from './BottomSheet';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
+import { supabase } from '../../lib/supabase';
 
 // Контент для верхней шторки HUD и для нижней шторки (переиспользуемый)
 export function StreakSheetContent() {
   const [streak, setStreak] = useState(0);
   const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [view, setView] = useState<Date>(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -16,6 +18,7 @@ export function StreakSheetContent() {
   const [minMonth, setMinMonth] = useState<Date | null>(null);
   const [createdAt, setCreatedAt] = useState<Date | null>(null);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const [monthData, setMonthData] = useState<Record<string, { days: Record<number, 'active' | 'freeze'>; active: number; freeze: number; loaded: boolean }>>({});
 
   useEffect(() => {
     // быстрый снимок из boot-кэша, чтобы число совпадало с HUD
@@ -28,6 +31,7 @@ export function StreakSheetContent() {
       const u = cacheGet<any>(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || null;
       if (u?.last_active_at) setLastActiveAt(String(u.last_active_at));
       if (u?.timezone) setTimezone(String(u.timezone));
+      if (u?.id) setUserId(String(u.id));
     } catch {}
     // created_at тоже берём из boot/user кэша (без запросов к БД)
     try {
@@ -45,11 +49,53 @@ export function StreakSheetContent() {
     const onStatsChanged = (evt: Event) => {
       const e = evt as CustomEvent<{ streak?: number; last_active_at?: string } & Record<string, any>>;
       if (typeof e.detail?.streak === 'number') setStreak(e.detail.streak);
-      if (typeof e.detail?.last_active_at === 'string') setLastActiveAt(e.detail.last_active_at);
+      if (typeof e.detail?.last_active_at === 'string') { setLastActiveAt(e.detail.last_active_at); try { void loadMonth(view.getFullYear(), view.getMonth(), true); } catch {} }
     };
     window.addEventListener('exampli:statsChanged', onStatsChanged as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onStatsChanged as EventListener);
   }, []);
+
+  const monthKey = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
+  const toIsoDate = (d: Date) => {
+    const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  async function resolveUserId(): Promise<string | null> {
+    if (userId) return userId;
+    try {
+      const tgId: string | null = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id ? String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id) : null;
+      if (tgId) {
+        const { data } = await supabase.from('users').select('id').eq('tg_id', tgId).maybeSingle();
+        const uid = (data as any)?.id ? String((data as any).id) : null;
+        if (uid) { setUserId(uid); return uid; }
+      }
+    } catch {}
+    try { const uid = (cacheGet<any>(CACHE_KEYS.user)?.id) || (window as any)?.__exampliBoot?.user?.id || null; if (uid) { setUserId(String(uid)); return String(uid); } } catch {}
+    return null;
+  }
+
+  async function loadMonth(y: number, m: number, force = false): Promise<void> {
+    const key = monthKey(y, m);
+    if (!force && monthData[key]?.loaded) return;
+    const uid = await resolveUserId(); if (!uid) return;
+    const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
+    const { data } = await supabase
+      .from('streak_days')
+      .select('day, kind')
+      .eq('user_id', uid)
+      .gte('day', toIsoDate(first))
+      .lte('day', toIsoDate(last));
+    const days: Record<number, 'active' | 'freeze'> = {}; let active = 0; let freeze = 0;
+    (data || []).forEach((r: any) => {
+      const d = new Date(String(r.day)); const dn = d.getDate(); const k = (String(r.kind || '').toLowerCase() === 'freeze') ? 'freeze' : 'active';
+      days[dn] = k as any; if (k === 'active') active += 1; else freeze += 1;
+    });
+    setMonthData(prev => ({ ...prev, [key]: { days, active, freeze, loaded: true } }));
+  }
+
+  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), false); }, []);
+  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), false); }, [view]);
 
   // Конструируем календарь на выбранный месяц (понедельник — первый)
   const year = view.getFullYear();
@@ -153,16 +199,17 @@ export function StreakSheetContent() {
       </div>
 
       {/* Сводки */}
+      {(() => { const currentKey = monthKey(year, month); const currentMonth = monthData[currentKey] || { days: {}, active: 0, freeze: 0, loaded: false }; return (
       <div className="grid grid-cols-2 gap-3 mt-3">
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
           <div className="w-5 h-5 rounded-full" style={{ background: '#f6b73c' }} />
-          <div className="text-sm"><span className="font-semibold">0</span> дней</div>
+          <div className="text-sm"><span className="font-semibold">{currentMonth.active}</span> дней</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center gap-2">
           <div className="w-5 h-5 rounded-full" style={{ background: '#5cc8ff' }} />
-          <div className="text-sm"><span className="font-semibold">0</span> заморозок</div>
+          <div className="text-sm"><span className="font-semibold">{currentMonth.freeze}</span> заморозок</div>
         </div>
-      </div>
+      </div> ); })()}
 
       {/* Календарь */}
       <div
@@ -197,6 +244,30 @@ export function StreakSheetContent() {
               transition={{ duration: 0.18, ease: [0.22,1,0.36,1] }}
               className="grid grid-cols-7 gap-2"
             >
+              {/* Соединяющие сегменты */}
+              {(() => {
+                const currentKey = monthKey(year, month); const currentMonth = monthData[currentKey] || { days: {} } as any;
+                const rows: Array<Array<{ day: number | null }>> = []; for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+                const segs: Array<{ row: number; start: number; end: number }> = [];
+                rows.forEach((row, rowIdx) => {
+                  let start: number | null = null;
+                  for (let col = 0; col < row.length; col++) {
+                    const d = row[col]?.day; const marked = d != null && !!currentMonth.days[d as number];
+                    if (marked && start == null) start = col + 1;
+                    const isLast = col === row.length - 1;
+                    if ((!marked && start != null) || (marked && isLast)) { const end = (marked && isLast) ? col + 1 : col; if (start <= end) segs.push({ row: rowIdx + 1, start, end }); start = null; }
+                  }
+                });
+                const rowsCount = Math.ceil(cells.length / 7);
+                return (
+                  <div className="absolute inset-0 grid grid-cols-7 gap-2 pointer-events-none" style={{ gridAutoRows: '2.5rem' }}>
+                    {Array.from({ length: rowsCount }).map((_, i) => <div key={`rh-${i}`} className="hidden" />)}
+                    {segs.map((s, idx) => (
+                      <div key={`seg-${idx}`} className="rounded-xl" style={{ gridColumn: `${s.start} / ${s.end + 1}`, gridRow: s.row, background: 'rgba(246,183,60,0.12)' }} />
+                    ))}
+                  </div>
+                );
+              })()}
               {cells.map((c, i) => {
                 if (c.day == null) return <div key={`e${i}`} />;
                 const d = c.day;
@@ -204,10 +275,12 @@ export function StreakSheetContent() {
                   if (!createdAt) return false;
                   return createdAt.getFullYear() === year && createdAt.getMonth() === month && d < createdAt.getDate();
                 })();
-                const cls = isBeforeFirstUse
-                  ? 'h-10 rounded-2xl border border-white/5 flex items-center justify-center text-sm text-white/35'
-                  : 'h-10 rounded-2xl border border-white/10 flex items-center justify-center text-sm text-white/90';
-                return <div key={d} className={cls}>{d}</div>;
+                const currentKey = monthKey(year, month); const currentMonth = monthData[currentKey] || { days: {} } as any;
+                const kind = currentMonth.days[d as number] as ('active' | 'freeze' | undefined);
+                if (isBeforeFirstUse) return <div key={d} className="h-10 rounded-2xl border border-white/5 flex items-center justify-center text-sm text-white/35">{d}</div>;
+                if (kind === 'active') return <div key={d} className="h-10 rounded-2xl border flex items-center justify-center text-sm font-extrabold" style={{ borderColor: 'rgba(246,183,60,0.45)', background: 'rgba(246,183,60,0.16)', color: '#f6b73c' }}>{d}</div>;
+                if (kind === 'freeze') return <div key={d} className="h-10 rounded-2xl border flex items-center justify-center text-sm font-extrabold" style={{ borderColor: 'rgba(86,200,255,0.45)', background: 'rgba(86,200,255,0.16)', color: '#5cc8ff' }}>{d}</div>;
+                return <div key={d} className="h-10 rounded-2xl border border-white/10 flex items-center justify-center text-sm text-white/90">{d}</div>;
               })}
             </motion.div>
           </AnimatePresence>
