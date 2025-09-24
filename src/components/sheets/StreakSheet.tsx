@@ -138,11 +138,11 @@ export function StreakSheetContent() {
   return (
     <div>
       {/* Верхний блок с числом и иконкой */}
-      <div className="flex items-start justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-        <div className="flex-1 text-center">
-          <div className="inline-block">
-            <div className="text-[64px] leading-none font-extrabold tabular-nums" style={{ marginLeft: 6 }}>{streak}</div>
-            <div className="-mt-1 text-base">дней подряд!</div>
+      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="flex-1 text-left pl-1">
+          <div className="inline-block align-middle">
+            <div className="text-[64px] leading-none font-extrabold tabular-nums" style={{ marginLeft: -4 }}>{streak}</div>
+            <div className="mt-1 text-base">дней подряд!</div>
           </div>
         </div>
         {(() => {
