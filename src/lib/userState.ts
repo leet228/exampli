@@ -185,24 +185,63 @@ export async function finishLesson({ correct }: { correct: boolean }) {
     // 2) Серверный апдейт — подтверждаем и правим кэш, если нужно
     try {
       const boot: any = (window as any).__exampliBoot || {};
-      const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
-      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
+      let userId: string | null = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+      const tgIdRaw: any = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
+      const tgId = tgIdRaw != null ? String(tgIdRaw) : null;
+      if (!userId && tgId) {
+        try {
+          const { data: urow } = await supabase.from('users').select('id, streak, last_active_at').eq('tg_id', tgId).maybeSingle();
+          if (urow?.id) {
+            userId = String(urow.id);
+            const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+            cacheSet(CACHE_KEYS.stats, { ...cs, streak: Number(urow.streak || cs.streak || 0) });
+            const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+            cacheSet(CACHE_KEYS.user, { ...cu, id: userId, last_active_at: urow.last_active_at ?? cu.last_active_at ?? null });
+          }
+        } catch {}
+      }
       const r = await fetch('/api/streak_finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, tg_id: tgId })
       });
       if (r.ok) {
-        const js = await r.json();
-        if (js?.ok === false) { throw new Error(js?.code || 'streak_finish_failed'); }
-        const serverStreak = Number(js?.streak ?? NaN);
-        if (Number.isFinite(serverStreak)) {
+        let js: any = null;
+        try { js = await r.json(); } catch {}
+        const ok = js && (js.ok !== false) && (typeof js.streak === 'number');
+        if (ok) {
+          const serverStreak = Number(js.streak);
           try {
             const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
             cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-            cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
+            cacheSet(CACHE_KEYS.user, { ...cu, id: js?.user_id || cu.id || userId, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
             window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
           } catch {}
+        } else {
+          // Fallback: сделаем клиентский апдейт users (если знаем userId)
+          if (userId) {
+            try {
+              let tz: string | null = null;
+              try { tz = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch {}
+              const now = new Date();
+              const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+              const current = Number(cs?.streak ?? 0);
+              const { data } = await supabase
+                .from('users')
+                .update({ streak: Math.max(1, current), last_active_at: now.toISOString() })
+                .eq('id', userId)
+                .select('id, streak, last_active_at')
+                .single();
+              if (data) {
+                const finalStreak = Number((data as any)?.streak ?? Math.max(1, current));
+                const finalLast = (data as any)?.last_active_at ?? now.toISOString();
+                cacheSet(CACHE_KEYS.stats, { ...cs, streak: finalStreak });
+                const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                cacheSet(CACHE_KEYS.user, { ...cu, id: userId, last_active_at: finalLast, timezone: tz });
+                window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: finalStreak, last_active_at: finalLast } } as any));
+              }
+            } catch {}
+          }
         }
       }
     } catch {}
