@@ -40,6 +40,17 @@ export function StreakSheetContent() {
     } catch {}
   }, []);
 
+  // Реакция на обновление статы в рантайме (после прохождения урока)
+  useEffect(() => {
+    const onStatsChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ streak?: number; last_active_at?: string } & Record<string, any>>;
+      if (typeof e.detail?.streak === 'number') setStreak(e.detail.streak);
+      if (typeof e.detail?.last_active_at === 'string') setLastActiveAt(e.detail.last_active_at);
+    };
+    window.addEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+  }, []);
+
   // Конструируем календарь на выбранный месяц (понедельник — первый)
   const year = view.getFullYear();
   const month = view.getMonth();

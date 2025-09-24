@@ -60,6 +60,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [showFinish, setShowFinish] = useState<boolean>(false);
   const [finishReady, setFinishReady] = useState<boolean>(false); // все карточки показаны
   const [finishMs, setFinishMs] = useState<number>(0);
+  const finishSavedRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!open) return;
@@ -120,6 +121,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setShowFinish(false);
       setFinishReady(false);
       setFinishMs(0);
+      finishSavedRef.current = false;
     })();
   }, [open, lessonId]);
 
@@ -290,6 +292,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setViewKey((k) => k + 1);
   }
 
+  // Когда показываем экран завершения — сразу фиксируем стрик (гарантированно один раз)
+  useEffect(() => {
+    if (showFinish && !finishSavedRef.current) {
+      finishSavedRef.current = true;
+      (async () => { try { await finishLesson({ correct: true }); } catch {} })();
+    }
+  }, [showFinish]);
+
   function onContinue(){
     try { hapticTiny(); } catch {}
     // мгновенно уменьшаем энергию и иконку
@@ -420,7 +430,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   answersCorrect={answersCorrect}
                   hadAnyMistakes={hadAnyMistakes}
                   elapsedMs={finishMs}
-                  onDone={() => { (async () => { try { await finishLesson({ correct: true }); } catch {} })(); setShowFinish(false); onClose(); }}
+                  onDone={() => { setShowFinish(false); onClose(); }}
                   onReady={() => setFinishReady(true)}
                   canProceed={finishReady}
                 />

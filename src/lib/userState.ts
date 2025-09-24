@@ -210,7 +210,26 @@ export async function finishLesson({ correct }: { correct: boolean }) {
     energy = Math.max(0, (energy || 0) - 1);
   }
 
-  await supabase.from('users').update({ streak, energy, last_active_at }).eq('id', (u as any).id);
+  try {
+    const { data: updated } = await supabase
+      .from('users')
+      .update({ streak, energy, last_active_at })
+      .eq('id', (u as any).id)
+      .select('id, streak, energy, last_active_at')
+      .single();
+    if (updated) {
+      // Подтвердим и разошлём серверные значения, чтобы HUD/шторка обновились гарантированно
+      const newStreak = Number((updated as any)?.streak ?? streak ?? 0);
+      const newLast = (updated as any)?.last_active_at ?? last_active_at ?? null;
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, streak: newStreak });
+        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+        cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: newLast });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: newStreak, last_active_at: newLast } } as any));
+      } catch {}
+    }
+  } catch {}
 }
 
 // ================== ЭНЕРГИЯ: ленивая регенерация через RPC ==================
