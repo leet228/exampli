@@ -430,7 +430,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   answersCorrect={answersCorrect}
                   hadAnyMistakes={hadAnyMistakes}
                   elapsedMs={finishMs}
-                  onDone={() => { setShowFinish(false); onClose(); }}
+                  onDone={() => { (async () => { try { await finishLesson({ correct: true }); } catch {} })(); setShowFinish(false); onClose(); }}
                   onReady={() => setFinishReady(true)}
                   canProceed={finishReady}
                 />

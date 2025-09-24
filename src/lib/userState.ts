@@ -140,96 +140,49 @@ export async function addUserSubject(subjectCode: string) {
 export async function finishLesson({ correct }: { correct: boolean }) {
   const u = await getStats();
   if (!u) return;
-  const nowUtc = new Date();
-
-  let { streak, energy, last_active_at } = u as any;
-
   if (correct) {
-    // Определяем локальную «дату дня» с учётом таймзоны пользователя (если есть)
-    let tz: string | null = null;
-    try { tz = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch {}
-    const toLocalDate = (d: Date | null): { y: number; m: number; d: number } | null => {
-      if (!d) return null;
-      try {
-        // Получаем локальные компоненты даты в IANA таймзоне через formatToParts
-        const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
-        const parts = fmt.formatToParts(d);
-        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
-        const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
-        const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
-        if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
-        return { y, m, d: dd };
-      } catch {
-        return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+    // Делаем серверный апдейт, чтобы обойти RLS/локальные часы и сразу получить итоговые значения
+    try {
+      const boot: any = (window as any).__exampliBoot || {};
+      const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || null;
+      const r = await fetch('/api/streak_finish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, tg_id: tgId })
+      });
+      if (r.ok) {
+        const js = await r.json();
+        const serverStreak = Number(js?.streak ?? NaN);
+        if (Number.isFinite(serverStreak)) {
+          try {
+            const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+            cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
+            const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+            cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
+            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
+          } catch {}
+        }
       }
-    };
-
-    const todayParts = toLocalDate(nowUtc)!;
-    const last = last_active_at ? new Date(last_active_at) : null;
-    const lastParts = toLocalDate(last);
-
-    // Считаем разницу в днях по локальным «полуночам»
-    const todayStart = new Date(todayParts.y, todayParts.m, todayParts.d).getTime();
-    const lastStart = lastParts ? new Date(lastParts.y, lastParts.m, lastParts.d).getTime() : null;
-
-    let newStreak = Number(streak || 0);
-    let shouldIncrementToday = true; // инкремент только один раз в текущий локальный день
-
-    if (lastStart == null) {
-      newStreak = 1;
-    } else {
-      const diffDays = Math.round((todayStart - lastStart) / 86400000);
-      if (diffDays <= 0) {
-        // уже был успешный урок сегодня — не увеличиваем повторно
-        shouldIncrementToday = false;
-      } else if (diffDays === 1) {
-        // вчера был активный день → продолжаем стрик
-        newStreak = newStreak + 1;
-      } else if (diffDays === 2) {
-        // «заморозка»: один пропуск допускаем, следующий успех размораживает (+1)
-        newStreak = newStreak + 1;
-      } else {
-        // 2+ пропусков — стрик сгорает, начинаем с 1
-        newStreak = 1;
-      }
-    }
-
-    if (shouldIncrementToday) {
-      streak = newStreak;
-      last_active_at = nowUtc.toISOString();
-      try {
-        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-        cacheSet(CACHE_KEYS.stats, { ...cs, streak });
-        // обновим кеш user.last_active_at для корректной иконки (frozen → fire)
-        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-        cacheSet(CACHE_KEYS.user, { ...cu, last_active_at });
-        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak, last_active_at } } as any));
-      } catch {}
-    }
-  } else {
-    energy = Math.max(0, (energy || 0) - 1);
+    } catch {}
   }
 
-  try {
-    const { data: updated } = await supabase
-      .from('users')
-      .update({ streak, energy, last_active_at })
-      .eq('id', (u as any).id)
-      .select('id, streak, energy, last_active_at')
-      .single();
-    if (updated) {
-      // Подтвердим и разошлём серверные значения, чтобы HUD/шторка обновились гарантированно
-      const newStreak = Number((updated as any)?.streak ?? streak ?? 0);
-      const newLast = (updated as any)?.last_active_at ?? last_active_at ?? null;
-      try {
+  // Если был неправильный ответ (энергия--) — синхронизируем энергию через RPC
+  if (!correct) {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .update({ energy: Math.max(0, Number((u as any)?.energy || 0) - 1) })
+        .eq('id', (u as any).id)
+        .select('id, energy')
+        .single();
+      if (data) {
+        const ne = Number((data as any)?.energy ?? 0);
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-        cacheSet(CACHE_KEYS.stats, { ...cs, streak: newStreak });
-        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-        cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: newLast });
-        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: newStreak, last_active_at: newLast } } as any));
-      } catch {}
-    }
-  } catch {}
+        cacheSet(CACHE_KEYS.stats, { ...cs, energy: ne });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: ne } } as any));
+      }
+    } catch {}
+  }
 }
 
 // ================== ЭНЕРГИЯ: ленивая регенерация через RPC ==================
