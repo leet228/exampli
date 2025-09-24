@@ -59,7 +59,11 @@ export default async function handler(req, res) {
       newStreak = 1; shouldInc = true;
     } else {
       const diffDays = Math.round((todayStart - lastStart) / 86400000);
-      if (diffDays <= 0) { shouldInc = false; }
+      if (diffDays <= 0) {
+        // Если предыдущие попытки по ошибке обновили last_active_at сегодня, но streak == 0 — считаем это первым успехом
+        if (newStreak <= 0) { newStreak = 1; shouldInc = true; }
+        else { shouldInc = false; }
+      }
       else if (diffDays === 1) { newStreak = newStreak + 1; shouldInc = true; }
       else if (diffDays === 2) { newStreak = newStreak + 1; shouldInc = true; freezeDayIso = toIsoDate(new Date(todayStart - 86400000)); }
       else { newStreak = 1; shouldInc = true; }
