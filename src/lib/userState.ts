@@ -138,10 +138,51 @@ export async function addUserSubject(subjectCode: string) {
 }
 
 export async function finishLesson({ correct }: { correct: boolean }) {
-  const u = await getStats();
-  if (!u) return;
+  // Не блокируемся на отсутствии getStats: для стрика достаточно user_id или tg_id
+  let u: any = null;
+  try { u = await getStats(); } catch {}
   if (correct) {
-    // Делаем серверный апдейт, чтобы обойти RLS/локальные часы и сразу получить итоговые значения
+    // 1) Оптимистично обновим локальный кэш и UI (мгновенно)
+    try {
+      const now = new Date();
+      const cu = (cacheGet<any>(CACHE_KEYS.user) || {}) as any;
+      const tz: string | null = (cu?.timezone as string) || (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } })();
+      const toParts = (d: Date | null): { y: number; m: number; d: number } | null => {
+        if (!d) return null;
+        try {
+          const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
+          const parts = fmt.formatToParts(d);
+          const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+          const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
+          const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+          if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+          return { y, m, d: dd };
+        } catch { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
+      };
+      const lastLocal = cu?.last_active_at ? new Date(String(cu.last_active_at)) : ((u as any)?.last_active_at ? new Date(String((u as any).last_active_at)) : null);
+      const tp = toParts(now)!;
+      const lp = toParts(lastLocal);
+      const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+      const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+      const currentStreak = Number((cacheGet<any>(CACHE_KEYS.stats)?.streak) ?? (u as any)?.streak ?? 0);
+      let optimisticStreak = currentStreak;
+      let shouldInc = false;
+      if (lastStart == null) { optimisticStreak = 1; shouldInc = true; }
+      else {
+        const diffDays = Math.round((todayStart - lastStart) / 86400000);
+        if (diffDays <= 0) { shouldInc = false; }
+        else if (diffDays === 1 || diffDays === 2) { optimisticStreak = currentStreak + 1; shouldInc = true; }
+        else { optimisticStreak = 1; shouldInc = true; }
+      }
+      if (shouldInc) {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, streak: optimisticStreak });
+        cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: now.toISOString(), timezone: tz });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: optimisticStreak, last_active_at: now.toISOString() } } as any));
+      }
+    } catch {}
+
+    // 2) Серверный апдейт — подтверждаем и правим кэш, если нужно
     try {
       const boot: any = (window as any).__exampliBoot || {};
       const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
@@ -166,13 +207,13 @@ export async function finishLesson({ correct }: { correct: boolean }) {
     } catch {}
   }
 
-  // Если был неправильный ответ (энергия--) — синхронизируем энергию через RPC
-  if (!correct) {
+  // Если был неправильный ответ (энергия--) — синхронизируем энергию, если знаем пользователя
+  if (!correct && u?.id) {
     try {
       const { data } = await supabase
         .from('users')
-        .update({ energy: Math.max(0, Number((u as any)?.energy || 0) - 1) })
-        .eq('id', (u as any).id)
+        .update({ energy: Math.max(0, Number(u?.energy || 0) - 1) })
+        .eq('id', u.id)
         .select('id, energy')
         .single();
       if (data) {
