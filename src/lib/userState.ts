@@ -140,25 +140,72 @@ export async function addUserSubject(subjectCode: string) {
 export async function finishLesson({ correct }: { correct: boolean }) {
   const u = await getStats();
   if (!u) return;
-  const now = new Date();
+  const nowUtc = new Date();
 
   let { streak, energy, last_active_at } = u as any;
 
   if (correct) {
-    // стрик: +1 если сегодня первый успех и вчера был активный день, иначе 1 если большая пауза
+    // Определяем локальную «дату дня» с учётом таймзоны пользователя (если есть)
+    let tz: string | null = null;
+    try { tz = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch {}
+    const toLocalDate = (d: Date | null): { y: number; m: number; d: number } | null => {
+      if (!d) return null;
+      try {
+        // Получаем локальные компоненты даты в IANA таймзоне через formatToParts
+        const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
+        const parts = fmt.formatToParts(d);
+        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+        const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
+        const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+        if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+        return { y, m, d: dd };
+      } catch {
+        return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+      }
+    };
+
+    const todayParts = toLocalDate(nowUtc)!;
     const last = last_active_at ? new Date(last_active_at) : null;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastDay = last ? new Date(last.getFullYear(), last.getMonth(), last.getDate()) : null;
-    let newStreak = streak || 0;
-    if (!last) newStreak = 1;
-    else {
-      const diffDays = Math.round((today.getTime() - (lastDay as Date).getTime()) / 86400000);
-      if (diffDays >= 2) newStreak = 1; // пропуск
-      else if (diffDays === 1) newStreak = newStreak + 1; // продолжил
-      // diffDays 0 — тот же день — не меняем
+    const lastParts = toLocalDate(last);
+
+    // Считаем разницу в днях по локальным «полуночам»
+    const todayStart = new Date(todayParts.y, todayParts.m, todayParts.d).getTime();
+    const lastStart = lastParts ? new Date(lastParts.y, lastParts.m, lastParts.d).getTime() : null;
+
+    let newStreak = Number(streak || 0);
+    let shouldIncrementToday = true; // инкремент только один раз в текущий локальный день
+
+    if (lastStart == null) {
+      newStreak = 1;
+    } else {
+      const diffDays = Math.round((todayStart - lastStart) / 86400000);
+      if (diffDays <= 0) {
+        // уже был успешный урок сегодня — не увеличиваем повторно
+        shouldIncrementToday = false;
+      } else if (diffDays === 1) {
+        // вчера был активный день → продолжаем стрик
+        newStreak = newStreak + 1;
+      } else if (diffDays === 2) {
+        // «заморозка»: один пропуск допускаем, следующий успех размораживает (+1)
+        newStreak = newStreak + 1;
+      } else {
+        // 2+ пропусков — стрик сгорает, начинаем с 1
+        newStreak = 1;
+      }
     }
-    streak = newStreak;
-    last_active_at = now.toISOString();
+
+    if (shouldIncrementToday) {
+      streak = newStreak;
+      last_active_at = nowUtc.toISOString();
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, streak });
+        // обновим кеш user.last_active_at для корректной иконки (frozen → fire)
+        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+        cacheSet(CACHE_KEYS.user, { ...cu, last_active_at });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak, last_active_at } } as any));
+      } catch {}
+    }
   } else {
     energy = Math.max(0, (energy || 0) - 1);
   }

@@ -22,6 +22,8 @@ export default function HUD() {
   const [courseCode, setCourseCode] = useState<string | null>(null);
   const [iconOk, setIconOk] = useState<boolean>(true);
   const [streak, setStreak] = useState(0);
+  const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
+  const [timezone, setTimezone] = useState<string | null>(null);
   const [energy, setEnergy] = useState(25);
 
   // коины (счётчик); при клике — переход на подписку с подсветкой
@@ -42,6 +44,14 @@ export default function HUD() {
         setStreak(cs.streak ?? 0);
         setEnergy(cs.energy ?? 25);
         setCoins(cs.coins ?? 0);
+      }
+    } catch {}
+    // быстрый путь: достанем last_active_at и timezone из boot user-кэша
+    try {
+      const cu = cacheGet<any>(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || null;
+      if (cu) {
+        if (cu.last_active_at != null) setLastActiveAt(String(cu.last_active_at));
+        if (cu.timezone != null) setTimezone(String(cu.timezone));
       }
     } catch {}
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -66,7 +76,7 @@ export default function HUD() {
 
     const { data: user } = await supabase
       .from('users')
-      .select('id, streak, energy, coins')
+      .select('id, streak, energy, coins, last_active_at, timezone')
       .eq('tg_id', String(tgId))
       .single();
 
@@ -74,6 +84,8 @@ export default function HUD() {
       setStreak(user.streak ?? 0);
       setEnergy((user.energy ?? 25) as number);
       setCoins(user.coins ?? 0);
+      setLastActiveAt((user as any)?.last_active_at ?? null);
+      setTimezone((user as any)?.timezone ?? null);
     }
 
     if (user?.id) {
@@ -183,6 +195,30 @@ export default function HUD() {
           cacheSet(CACHE_KEYS.stats, { ...cs, energy: ne });
         } catch {}
       }
+      const ns = e.detail?.streak;
+      if (typeof ns === 'number') {
+        setStreak(ns);
+        try {
+          const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+          cacheSet(CACHE_KEYS.stats, { ...cs, streak: ns });
+        } catch {}
+      }
+      const nc = e.detail?.coins;
+      if (typeof nc === 'number') {
+        setCoins(nc);
+        try {
+          const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+          cacheSet(CACHE_KEYS.stats, { ...cs, coins: nc });
+        } catch {}
+      }
+      const la = (e as any).detail?.last_active_at as string | undefined;
+      if (typeof la === 'string') {
+        setLastActiveAt(la);
+        try {
+          const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+          cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: la });
+        } catch {}
+      }
     };
 
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
@@ -257,7 +293,37 @@ export default function HUD() {
               className="justify-self-start ml-2 flex items-center gap-0 text-sm text-[color:var(--muted)]"
               aria-label="Стрик"
             >
-              <img src="/stickers/dead_fire.svg" alt="" aria-hidden className="w-9 h-9" />
+              {(() => {
+                // Вычисляем состояние иконки: fire (есть активность сегодня), ice (заморожен), dead (0)
+                const s = Number(streak || 0);
+                let icon = '/stickers/dead_fire.svg';
+                if (s > 0) {
+                  // определим diffDays относительно last_active_at
+                  const toParts = (d: Date | null) => {
+                    if (!d) return null;
+                    try {
+                      const fmt = new Intl.DateTimeFormat((timezone || undefined) as any, { timeZone: (timezone || undefined) as any, year: 'numeric', month: 'numeric', day: 'numeric' });
+                      const parts = fmt.formatToParts(d);
+                      const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+                      const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
+                      const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+                      if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+                      return { y, m, d: dd };
+                    } catch { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
+                  };
+                  const now = new Date();
+                  const la = lastActiveAt ? new Date(String(lastActiveAt)) : null;
+                  const tp = toParts(now)!;
+                  const lp = toParts(la);
+                  const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+                  const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+                  const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
+                  if (diffDays <= 1) icon = '/stickers/fire.svg';
+                  else if (diffDays === 2) icon = '/stickers/ice_version.svg';
+                  else icon = '/stickers/dead_fire.svg';
+                }
+                return <img src={icon} alt="" aria-hidden className="w-9 h-9" />;
+              })()}
               <span className="tabular-nums font-bold text-lg -ml-1 text-[color:var(--muted)]">{streak}</span>
             </button>
 

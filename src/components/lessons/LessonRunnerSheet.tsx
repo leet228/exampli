@@ -5,7 +5,7 @@ import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMiles
 import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
-import { spendEnergy, rewardEnergy } from '../../lib/userState';
+import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
 
 type TaskRow = {
   id: number | string;
@@ -420,7 +420,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   answersCorrect={answersCorrect}
                   hadAnyMistakes={hadAnyMistakes}
                   elapsedMs={finishMs}
-                  onDone={() => { setShowFinish(false); onClose(); }}
+                  onDone={() => { (async () => { try { await finishLesson({ correct: true }); } catch {} })(); setShowFinish(false); onClose(); }}
                   onReady={() => setFinishReady(true)}
                   canProceed={finishReady}
                 />

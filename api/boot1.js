@@ -106,6 +106,37 @@ export default async function handler(req, res) {
       }
     } catch {}
 
+    // Пересчёт стрика на входе (заморозка/сгорание). Если 2+ пропусков — сбрасываем до 0 здесь,
+    // чтобы пользователь видел «заморожен/сгорел» сразу. Инкремент происходит только при прохождении урока.
+    try {
+      const tz = userRow?.timezone || null;
+      const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
+      const toParts = (d) => {
+        if (!d) return null;
+        const parts = fmt.formatToParts(d);
+        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+        const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
+        const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+        if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() };
+        return { y, m, d: dd };
+      };
+      const now = new Date();
+      const lp = userRow?.last_active_at ? toParts(new Date(userRow.last_active_at)) : null;
+      if (lp) {
+        const tp = toParts(now);
+        const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+        const lastStart = new Date(lp.y, lp.m, lp.d).getTime();
+        const diffDays = Math.round((todayStart - lastStart) / 86400000);
+        if (diffDays >= 3) {
+          // 3 календарных локальных дня и более без активности: стрик сгорел
+          if ((userRow?.streak || 0) !== 0) {
+            await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id);
+            userRow.streak = 0;
+          }
+        }
+      }
+    } catch {}
+
     const onboarding = {
       phone_given: !!(userProfile?.phone_number || userRow.phone_number),
       course_taken: true,

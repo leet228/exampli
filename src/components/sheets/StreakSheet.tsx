@@ -6,6 +6,8 @@ import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 // Контент для верхней шторки HUD и для нижней шторки (переиспользуемый)
 export function StreakSheetContent() {
   const [streak, setStreak] = useState(0);
+  const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
+  const [timezone, setTimezone] = useState<string | null>(null);
   const [view, setView] = useState<Date>(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -20,6 +22,12 @@ export function StreakSheetContent() {
     try {
       const cs = cacheGet<any>(CACHE_KEYS.stats);
       if (cs?.streak != null) setStreak(Number(cs.streak));
+    } catch {}
+    // last_active_at и timezone из boot user-кэша
+    try {
+      const u = cacheGet<any>(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || null;
+      if (u?.last_active_at) setLastActiveAt(String(u.last_active_at));
+      if (u?.timezone) setTimezone(String(u.timezone));
     } catch {}
     // created_at тоже берём из boot/user кэша (без запросов к БД)
     try {
@@ -78,7 +86,35 @@ export function StreakSheetContent() {
           <div className="text-[64px] leading-none font-extrabold tabular-nums">{streak}</div>
           <div className="-mt-1 text-base">дней подряд!</div>
         </div>
-        <img src="/stickers/dead_fire.svg" alt="dead fire" className="w-[112px] h-[112px] opacity-60 select-none" />
+        {(() => {
+          const s = Number(streak || 0);
+          let icon = '/stickers/dead_fire.svg';
+          if (s > 0) {
+            const toParts = (d: Date | null) => {
+              if (!d) return null;
+              try {
+                const fmt = new Intl.DateTimeFormat((timezone || undefined) as any, { timeZone: (timezone || undefined) as any, year: 'numeric', month: 'numeric', day: 'numeric' });
+                const parts = fmt.formatToParts(d);
+                const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+                const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
+                const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+                if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+                return { y, m, d: dd };
+              } catch { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
+            };
+            const now = new Date();
+            const la = lastActiveAt ? new Date(String(lastActiveAt)) : null;
+            const tp = toParts(now)!;
+            const lp = toParts(la);
+            const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+            const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+            const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
+            if (diffDays <= 1) icon = '/stickers/fire.svg';
+            else if (diffDays === 2) icon = '/stickers/ice_version.svg';
+            else icon = '/stickers/dead_fire.svg';
+          }
+          return <img src={icon} alt="streak" className="w-[112px] h-[112px] opacity-60 select-none" />;
+        })()}
       </div>
 
       {/* Заголовок месяца и бейдж */}
