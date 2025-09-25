@@ -47,46 +47,64 @@ export default async function handler(req, res) {
 
     const tp = toParts(now);
     const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
-    const last = userRow?.last_active_at ? new Date(userRow.last_active_at) : null;
-    const lp = toParts(last);
-    const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+    const todayIso = toIsoDate(new Date(todayStart));
 
-    let newStreak = Number(userRow?.streak || 0);
-    let shouldInc = false;
-    let freezeDayIso = null; // YYYY-MM-DD локального «вчера» если была заморозка
+    // Считываем последние до 60 дней активности
+    let days = [];
+    try {
+      const { data } = await supabase
+        .from('streak_days')
+        .select('day')
+        .eq('user_id', userRow.id)
+        .lte('day', todayIso)
+        .order('day', { ascending: false })
+        .limit(60);
+      days = Array.isArray(data) ? data.map(r => new Date(String(r.day))) : [];
+    } catch {}
 
-    if (lastStart == null) { newStreak = 1; shouldInc = true; }
-    else {
-      const diffDays = Math.round((todayStart - lastStart) / 86400000);
-      if (diffDays <= 0) { // уже был успех сегодня
-        if (newStreak <= 0) { newStreak = 1; shouldInc = true; } else { shouldInc = false; }
-      } else if (diffDays === 1) { // подряд
-        newStreak = Math.max(0, newStreak) + 1; shouldInc = true;
-      } else if (diffDays >= 2) { // пропущен хотя бы один день — стрик сгорает
-        newStreak = 1; shouldInc = true;
+    const dayKey = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const hasDay = (d) => days.some(x => dayKey(x) === dayKey(d));
+
+    const yesterday = new Date(todayStart - 86400000);
+    const hasToday = hasDay(new Date(todayStart));
+
+    // Вычисляем длину цепочки подряд идущих дней, заканчивающейся baseDay
+    const computeChainLen = (baseDay) => {
+      let len = 0;
+      let cur = new Date(baseDay.getTime());
+      while (hasDay(cur)) { len += 1; cur = new Date(cur.getTime() - 86400000); }
+      return len;
+    };
+
+    if (hasToday) {
+      // Уже есть запись на сегодня: просто актуализируем текущее значение стрика по streak_days
+      const chain = computeChainLen(new Date(todayStart));
+      res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), timezone: tz });
+      return;
+    }
+
+    // Нет записи за сегодня — определим, можно ли инкрементить
+    const latest = days[0] || null; // последний активный день (<= сегодня)
+    let newStreak = 1;
+    if (latest) {
+      const gapDays = Math.round((todayStart - dayKey(latest)) / 86400000);
+      if (gapDays === 1) {
+        // цепочка до вчера + сегодня
+        const chainYesterday = computeChainLen(yesterday);
+        newStreak = chainYesterday + 1;
+      } else if (gapDays >= 2) {
+        // пропущен хотя бы один день — начинаем сначала
+        newStreak = 1;
+      } else {
+        // gapDays <= 0 — странный кейс, но на всякий случай считаем today как +0
+        const chainToday = computeChainLen(new Date(todayStart));
+        newStreak = chainToday; // обычно 0
       }
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
     if (shouldInc) {
       // 1) Определяем, был ли успех уже сегодня по streak_days
-      let hasToday = false;
-      try {
-        const todayIso = toIsoDate(new Date(todayStart));
-        const { data: chk } = await supabase
-          .from('streak_days')
-          .select('day')
-          .eq('user_id', userRow.id)
-          .eq('day', todayIso)
-          .maybeSingle();
-        hasToday = !!chk?.day;
-      } catch {}
-      if (hasToday) {
-        // если сегодня уже есть запись — ничего не инкрементим, просто вернём текущие значения
-        res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(userRow.streak || 0), last_active_at: userRow.last_active_at || null, timezone: tz });
-        return;
-      }
-
       const { data, error: updErr } = await supabase
         .from('users')
         .update({ streak: newStreak, last_active_at: now.toISOString() })
@@ -101,8 +119,7 @@ export default async function handler(req, res) {
       if (data) updated = data;
       // Обновим историческую таблицу (если есть)
       try {
-        const todayIso = toIsoDate(new Date(todayStart));
-        await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active' }, { onConflict: 'user_id,day' });
+        await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active', timezone: tz }, { onConflict: 'user_id,day' });
       } catch {}
     }
 

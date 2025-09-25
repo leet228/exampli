@@ -143,6 +143,34 @@ export default async function handler(req, res) {
           userRow.streak = 0;
         }
       }
+      // Дополнительно: вычислим актуальную длину цепочки по streak_days и вернём её (без записи), чтобы HUD имел консистентное число
+      try {
+        const firstOfChain = new Date(todayStart);
+        // если пропущено >=2 дней, цепочка равна 0; иначе посчитаем back-to-back
+        let chain = 0;
+        if (lastDayTs != null) {
+          const diffDays = Math.round((todayStart - lastDayTs) / 86400000);
+          if (diffDays >= 2) chain = 0;
+          else {
+            // запросим до 60 дней и посчитаем подряд
+            const { data } = await supabase
+              .from('streak_days')
+              .select('day')
+              .eq('user_id', userRow.id)
+              .lte('day', toIsoDate(new Date(todayStart)))
+              .order('day', { ascending: false })
+              .limit(60);
+            const days = (data || []).map(r => new Date(String(r.day)));
+            const dayKey = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            const hasDay = (d) => days.some(x => dayKey(x) === dayKey(d));
+            // начнём с сегодня, если он есть, иначе со вчера
+            let cur = hasDay(new Date(todayStart)) ? new Date(todayStart) : new Date(todayStart - 86400000);
+            while (hasDay(cur)) { chain += 1; cur = new Date(cur.getTime() - 86400000); }
+          }
+        }
+        // Переопределим выводимое число стрика, не трогая userRow.streak (оно обновится при первом успехе сегодня)
+        userRow.streak = chain;
+      } catch {}
     } catch {}
 
     const onboarding = {
