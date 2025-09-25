@@ -55,18 +55,16 @@ export default async function handler(req, res) {
     let shouldInc = false;
     let freezeDayIso = null; // YYYY-MM-DD локального «вчера» если была заморозка
 
-    if (lastStart == null) {
-      newStreak = 1; shouldInc = true;
-    } else {
+    if (lastStart == null) { newStreak = 1; shouldInc = true; }
+    else {
       const diffDays = Math.round((todayStart - lastStart) / 86400000);
-      if (diffDays <= 0) {
-        // Если предыдущие попытки по ошибке обновили last_active_at сегодня, но streak == 0 — считаем это первым успехом
-        if (newStreak <= 0) { newStreak = 1; shouldInc = true; }
-        else { shouldInc = false; }
+      if (diffDays <= 0) { // уже был успех сегодня
+        if (newStreak <= 0) { newStreak = 1; shouldInc = true; } else { shouldInc = false; }
+      } else if (diffDays === 1) { // подряд
+        newStreak = Math.max(0, newStreak) + 1; shouldInc = true;
+      } else if (diffDays >= 2) { // пропущен хотя бы один день — стрик сгорает
+        newStreak = 1; shouldInc = true;
       }
-      else if (diffDays === 1) { newStreak = newStreak + 1; shouldInc = true; }
-      else if (diffDays === 2) { newStreak = newStreak + 1; shouldInc = true; freezeDayIso = toIsoDate(new Date(todayStart - 86400000)); }
-      else { newStreak = 1; shouldInc = true; }
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
@@ -86,12 +84,7 @@ export default async function handler(req, res) {
       // Обновим историческую таблицу (если есть)
       try {
         const todayIso = toIsoDate(new Date(todayStart));
-        const a1 = await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active' }, { onConflict: 'user_id,day' });
-        if (a1.error) { try { console.warn('[streak_finish] streak_days(active) error:', a1.error); } catch {} }
-        if (freezeDayIso) {
-          const a2 = await supabase.from('streak_days').upsert({ user_id: userRow.id, day: freezeDayIso, kind: 'freeze' }, { onConflict: 'user_id,day' });
-          if (a2.error) { try { console.warn('[streak_finish] streak_days(freeze) error:', a2.error); } catch {} }
-        }
+        await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active' }, { onConflict: 'user_id,day' });
       } catch {}
     }
 

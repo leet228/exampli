@@ -106,8 +106,8 @@ export default async function handler(req, res) {
       }
     } catch {}
 
-    // Пересчёт стрика на входе (заморозка/сгорание). Если 2+ пропусков — сбрасываем до 0 здесь,
-    // чтобы пользователь видел «заморожен/сгорел» сразу. Инкремент происходит только при прохождении урока.
+    // Пересчёт стрика на входе. Если пропущен хотя бы один полный день (diffDays >= 2) — стрик сбрасываем до 0,
+    // чтобы пользователь видел «сброшен» сразу. Инкремент происходит только при прохождении урока.
     try {
       const tz = userRow?.timezone || null;
       const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
         const lastStart = new Date(lp.y, lp.m, lp.d).getTime();
         const diffDays = Math.round((todayStart - lastStart) / 86400000);
-        if (diffDays >= 3) {
+        if (diffDays >= 2) {
           // 3 календарных локальных дня и более без активности: стрик сгорел
           if ((userRow?.streak || 0) !== 0) {
             await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id);

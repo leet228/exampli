@@ -168,8 +168,8 @@ export function StreakSheetContent() {
             const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
             const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
             const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-            if (diffDays <= 1) icon = '/stickers/fire.svg';
-            else if (diffDays === 2) icon = '/stickers/ice_version.svg';
+            if (diffDays <= 0) icon = '/stickers/fire.svg';
+            else if (diffDays === 1) icon = '/stickers/almost_dead_fire.svg';
             else icon = '/stickers/dead_fire.svg';
           }
           return <img src={icon} alt="streak" className="w-[112px] h-[112px] opacity-60 select-none" />;

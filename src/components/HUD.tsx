@@ -294,9 +294,10 @@ export default function HUD() {
               aria-label="Стрик"
             >
               {(() => {
-                // Вычисляем состояние иконки: fire (есть активность сегодня), ice (заморожен), dead (0)
+                // Вычисляем состояние иконки: fire (есть активность сегодня), almost_dead_fire (можно увеличить сегодня), dead_fire (0)
                 const s = Number(streak || 0);
                 let icon = '/stickers/dead_fire.svg';
+                let streakColorClass = 'text-[color:var(--muted)]';
                 if (s > 0) {
                   // определим diffDays относительно last_active_at
                   const toParts = (d: Date | null) => {
@@ -318,13 +319,15 @@ export default function HUD() {
                   const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
                   const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
                   const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-                  if (diffDays <= 1) icon = '/stickers/fire.svg';
-                  else if (diffDays === 2) icon = '/stickers/ice_version.svg';
-                  else icon = '/stickers/dead_fire.svg';
+                  if (diffDays <= 0) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
+                  else if (diffDays === 1) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
+                  else { icon = '/stickers/dead_fire.svg'; streakColorClass = 'text-[color:var(--muted)]'; }
                 }
-                return <img src={icon} alt="" aria-hidden className="w-9 h-9" />;
+                return <>
+                  <img src={icon} alt="" aria-hidden className="w-9 h-9" />
+                  <span className={["tabular-nums font-bold text-lg -ml-1", streakColorClass].join(' ')}>{streak}</span>
+                </>;
               })()}
-              <span className="tabular-nums font-bold text-lg -ml-1 text-[color:var(--muted)]">{streak}</span>
             </button>
 
             {/* Коины (иконка + число справа) */}
