@@ -7,6 +7,8 @@ export default function Subscription() {
   // Общие утилиты для кнопок с «нижней полоской»
   const accentColor = '#3c73ff';
   const shadowHeight = 6;
+  // Цвет фона карточек монет (сама кнопка)
+  const coinButtonColor = '#121923';
   const darken = (hex: string, amount = 18) => {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -19,6 +21,11 @@ export default function Subscription() {
     { id: 'm1', months: 1,  price: 499,  title: 'КУРСИК' },
     { id: 'm6', months: 6,  price: 2699, title: 'КУРСИК' },
     { id: 'm12', months: 12, price: 4999, title: 'КУРСИК' },
+  ];
+  const gems = [
+    { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 499 },
+    { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 999 },
+    { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1999 },
   ];
 
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -79,7 +86,7 @@ export default function Subscription() {
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-xl font-bold">{p.title} <span style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>Plus</span></div>
+                  <div className="text-xl font-bold">{p.title} <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>PLUS</span></div>
                   <div className="text-sm text-muted mt-0.5">
                     {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
                   </div>
@@ -88,8 +95,9 @@ export default function Subscription() {
               </div>
 
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center gap-2 text-sm"><span>✔</span><span>Безлимит ⚡ энергии</span></div>
-                <div className="flex items-center gap-2 text-sm"><span>✔</span><span>Без рекламы</span></div>
+                <div className="flex items-center gap-3 text-sm"><span className="text-lg">⚡</span><span>Бесконечная энергия — учись без пауз</span></div>
+                <div className="flex items-center gap-3 text-sm"><span className="text-lg">🤖</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span> — умные подсказки и объяснения</span></div>
+                <div className="flex items-center gap-3 text-sm"><span className="text-lg">❄️</span><span>Заморозка стрика — не теряй прогресс в загруженные дни</span></div>
               </div>
 
               <div className="mt-5">
@@ -120,7 +128,7 @@ export default function Subscription() {
         ))}
       </div>
 
-      {/* Коины */}
+      {/* Gems (монеты) */}
       <div ref={coinsRef} className="relative mt-2 px-1">
         {highlight && (
           <motion.div
@@ -147,24 +155,28 @@ export default function Subscription() {
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.5, 0.8, 1] }}
           />
         )}
-        <div className="text-xl font-extrabold">Коины</div>
-        <div className="grid gap-3">
-          {[{ icon:'💰', amount:1200, price:'99 ₽' }, { icon:'🧺', amount:3000, price:'199 ₽' }, { icon:'🛒', amount:6500, price:'399 ₽' }].map((g,i)=>(
-            <div key={i} className="rounded-3xl p-4 border border-white/10 bg-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl" aria-hidden>{g.icon}</div>
-                <div className="text-lg font-semibold tabular-nums">{g.amount}</div>
-              </div>
+        <div className="text-3xl font-extrabold">Gems</div>
+        <div className="mt-2 grid gap-4">
+          {gems.map((g) => {
+            const rub = g.rub;
+            return (
               <PressButton
-                className="px-5 py-2 rounded-3xl font-semibold text-white"
-                baseColor={accentColor}
+                key={g.id}
+                className="w-full rounded-3xl px-4 py-4 text-left text-white"
+                baseColor={coinButtonColor}
                 shadowHeight={shadowHeight}
                 darken={darken}
               >
-                {g.price}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <img src={g.icon} alt="" className="h-14 w-14 select-none" draggable={false} />
+                    <div className="text-xl font-semibold tabular-nums">{g.amount}</div>
+                  </div>
+                  <div className="text-sky-400 font-extrabold tabular-nums">{rub.toLocaleString('ru-RU')} ₽</div>
+                </div>
               </PressButton>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
