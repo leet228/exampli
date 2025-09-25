@@ -31,8 +31,8 @@ export default async function handler(req, res) {
     if (!userRow?.id) { res.status(404).json({ ok: false, code: 'user_not_found' }); return; }
 
     const now = new Date();
-    // Важно: считаем «сегодня» в таймзоне пользователя; если не задана — используем Москву
-    const tz = userRow?.timezone || tryTimezone() || 'Europe/Moscow';
+    // Важно: считаем «сегодня» в таймзоне пользователя; если не задана — используем Москву (не берем таймзону сервера)
+    const tz = userRow?.timezone || 'Europe/Moscow';
     const toParts = (d) => {
       if (!d) return null;
       try {
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
     if (hasToday) {
       // Уже есть запись на сегодня: просто актуализируем текущее значение стрика по streak_days
       const chain = computeChainLen(new Date(todayStart));
-      res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), timezone: tz });
+      res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), timezone: tz, debug: { todayIso, hasToday: true } });
       return;
     }
 
@@ -142,7 +142,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz });
+    const latestIso = days[0] ? toIsoDate(days[0]) : null;
+    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz, debug: { todayIso, hasToday: false, hasYesterday, latestIso, computed: newStreak } });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
     res.status(500).json({ ok: false, code: 'internal', error: 'Internal error' });
