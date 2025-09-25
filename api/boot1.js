@@ -108,8 +108,8 @@ export default async function handler(req, res) {
 
     // Пересчёт стрика на входе по streak_days (timezone пользователя). Если пропущен хотя бы один полный день (diffDays >= 2) — сбрасываем до 0.
     try {
-      const tz = userRow?.timezone || null;
-      const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
+      const tz = userRow?.timezone || 'Europe/Moscow';
+      const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' });
       const toParts = (d) => {
         if (!d) return null;
         const parts = fmt.formatToParts(d);

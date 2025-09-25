@@ -146,7 +146,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
     try {
       const now = new Date();
       const cu = (cacheGet<any>(CACHE_KEYS.user) || {}) as any;
-      const tz: string | null = (cu?.timezone as string) || (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } })();
+      const tz: string | null = (cu?.timezone as string) || (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow'; } catch { return 'Europe/Moscow'; } })();
       const toParts = (d: Date | null): { y: number; m: number; d: number } | null => {
         if (!d) return null;
         try {

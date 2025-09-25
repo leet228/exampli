@@ -31,7 +31,8 @@ export default async function handler(req, res) {
     if (!userRow?.id) { res.status(404).json({ ok: false, code: 'user_not_found' }); return; }
 
     const now = new Date();
-    const tz = userRow?.timezone || tryTimezone();
+    // Важно: считаем «сегодня» в таймзоне пользователя; если не задана — используем Москву
+    const tz = userRow?.timezone || tryTimezone() || 'Europe/Moscow';
     const toParts = (d) => {
       if (!d) return null;
       try {
@@ -85,21 +86,41 @@ export default async function handler(req, res) {
 
     // Нет записи за сегодня — определим, можно ли инкрементить
     const latest = days[0] || null; // последний активный день (<= сегодня)
+    const hasYesterday = days.some(d => dayKey(d) === dayKey(yesterday));
     let newStreak = 1;
-    if (latest) {
+    if (hasYesterday) {
+      // есть отметка за вчера — считаем цепочку по истории
+      const chainYesterday = computeChainLen(yesterday);
+      newStreak = chainYesterday + 1;
+    } else if (latest) {
       const gapDays = Math.round((todayStart - dayKey(latest)) / 86400000);
-      if (gapDays === 1) {
-        // цепочка до вчера + сегодня
-        const chainYesterday = computeChainLen(yesterday);
-        newStreak = chainYesterday + 1;
-      } else if (gapDays >= 2) {
-        // пропущен хотя бы один день — начинаем сначала
-        newStreak = 1;
-      } else {
-        // gapDays <= 0 — странный кейс, но на всякий случай считаем today как +0
+      if (gapDays <= 0) {
         const chainToday = computeChainLen(new Date(todayStart));
         newStreak = chainToday; // обычно 0
+      } else if (gapDays >= 2) {
+        newStreak = 1;
+      } else {
+        // Пограничные случаи — попробуем восстановить по last_active_at/streak
+        const la = userRow?.last_active_at ? new Date(String(userRow.last_active_at)) : null;
+        const lp = toParts(la);
+        const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+        const gapByLast = lastStart == null ? Infinity : Math.round((todayStart - lastStart) / 86400000);
+        if (gapByLast === 1) {
+          newStreak = Math.max(1, Number(userRow?.streak || 0) + 1);
+        } else if (gapByLast <= 0) {
+          const chainToday = computeChainLen(new Date(todayStart));
+          newStreak = chainToday;
+        } else {
+          newStreak = 1;
+        }
       }
+    } else {
+      // История пуста — используем last_active_at как подсказку
+      const la = userRow?.last_active_at ? new Date(String(userRow.last_active_at)) : null;
+      const lp = toParts(la);
+      const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
+      const gapByLast = lastStart == null ? Infinity : Math.round((todayStart - lastStart) / 86400000);
+      newStreak = (gapByLast === 1) ? Math.max(1, Number(userRow?.streak || 0) + 1) : 1;
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
