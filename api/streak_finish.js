@@ -69,6 +69,24 @@ export default async function handler(req, res) {
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
     if (shouldInc) {
+      // 1) Определяем, был ли успех уже сегодня по streak_days
+      let hasToday = false;
+      try {
+        const todayIso = toIsoDate(new Date(todayStart));
+        const { data: chk } = await supabase
+          .from('streak_days')
+          .select('day')
+          .eq('user_id', userRow.id)
+          .eq('day', todayIso)
+          .maybeSingle();
+        hasToday = !!chk?.day;
+      } catch {}
+      if (hasToday) {
+        // если сегодня уже есть запись — ничего не инкрементим, просто вернём текущие значения
+        res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(userRow.streak || 0), last_active_at: userRow.last_active_at || null, timezone: tz });
+        return;
+      }
+
       const { data, error: updErr } = await supabase
         .from('users')
         .update({ streak: newStreak, last_active_at: now.toISOString() })

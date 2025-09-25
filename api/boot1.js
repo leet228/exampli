@@ -106,8 +106,7 @@ export default async function handler(req, res) {
       }
     } catch {}
 
-    // Пересчёт стрика на входе. Если пропущен хотя бы один полный день (diffDays >= 2) — стрик сбрасываем до 0,
-    // чтобы пользователь видел «сброшен» сразу. Инкремент происходит только при прохождении урока.
+    // Пересчёт стрика на входе по streak_days (timezone пользователя). Если пропущен хотя бы один полный день (diffDays >= 2) — сбрасываем до 0.
     try {
       const tz = userRow?.timezone || null;
       const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -121,18 +120,27 @@ export default async function handler(req, res) {
         return { y, m, d: dd };
       };
       const now = new Date();
-      const lp = userRow?.last_active_at ? toParts(new Date(userRow.last_active_at)) : null;
-      if (lp) {
-        const tp = toParts(now);
-        const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
-        const lastStart = new Date(lp.y, lp.m, lp.d).getTime();
-        const diffDays = Math.round((todayStart - lastStart) / 86400000);
-        if (diffDays >= 2) {
-          // 3 календарных локальных дня и более без активности: стрик сгорел
-          if ((userRow?.streak || 0) !== 0) {
-            await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id);
-            userRow.streak = 0;
-          }
+      const tp = toParts(now);
+      const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+      let lastDayTs = null;
+      try {
+        const { data: lastRow } = await supabase
+          .from('streak_days')
+          .select('day')
+          .eq('user_id', userRow.id)
+          .order('day', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastRow?.day) {
+          const d = new Date(String(lastRow.day));
+          lastDayTs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        }
+      } catch {}
+      if (lastDayTs != null) {
+        const diffDays = Math.round((todayStart - lastDayTs) / 86400000);
+        if (diffDays >= 2 && (userRow?.streak || 0) !== 0) {
+          await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id);
+          userRow.streak = 0;
         }
       }
     } catch {}
