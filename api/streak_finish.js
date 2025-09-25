@@ -103,25 +103,23 @@ export default async function handler(req, res) {
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
-    if (shouldInc) {
-      // 1) Определяем, был ли успех уже сегодня по streak_days
-      const { data, error: updErr } = await supabase
-        .from('users')
-        .update({ streak: newStreak, last_active_at: now.toISOString() })
-        .eq('id', userRow.id)
-        .select('id, streak, last_active_at')
-        .single();
-      if (updErr) {
-        try { console.error('[streak_finish] update users error:', updErr); } catch {}
-        res.status(403).json({ ok: false, code: 'update_failed', error: updErr.message, hint: 'Check RLS and service role key' });
-        return;
-      }
-      if (data) updated = data;
-      // Обновим историческую таблицу (если есть)
-      try {
-        await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active', timezone: tz }, { onConflict: 'user_id,day' });
-      } catch {}
+    // Всегда пишем сегодняшний день и users (мы точно в ветке hasToday === false)
+    const { data, error: updErr } = await supabase
+      .from('users')
+      .update({ streak: newStreak, last_active_at: now.toISOString() })
+      .eq('id', userRow.id)
+      .select('id, streak, last_active_at')
+      .single();
+    if (updErr) {
+      try { console.error('[streak_finish] update users error:', updErr); } catch {}
+      res.status(403).json({ ok: false, code: 'update_failed', error: updErr.message, hint: 'Check RLS and service role key' });
+      return;
     }
+    if (data) updated = data;
+    // Обновим историческую таблицу (если есть)
+    try {
+      await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active', timezone: tz }, { onConflict: 'user_id,day' });
+    } catch {}
 
     res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz });
   } catch (e) {
