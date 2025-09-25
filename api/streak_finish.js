@@ -89,45 +89,32 @@ export default async function handler(req, res) {
     const hasYesterday = days.some(d => dayKey(d) === dayKey(yesterday));
     let newStreak = 1;
     if (hasYesterday) {
-      // есть отметка за вчера — считаем цепочку по истории
+      // есть отметка за вчера — считаем цепочку строго по истории
       const chainYesterday = computeChainLen(yesterday);
       newStreak = chainYesterday + 1;
     } else if (latest) {
       const gapDays = Math.round((todayStart - dayKey(latest)) / 86400000);
       if (gapDays <= 0) {
+        // последний активный день — сегодня
         const chainToday = computeChainLen(new Date(todayStart));
         newStreak = chainToday; // обычно 0
-      } else if (gapDays >= 2) {
+      } else if (gapDays === 1) {
+        // вчера отсутствует в выборке (например, отфильтровано) — начинаем новую цепочку
         newStreak = 1;
       } else {
-        // Пограничные случаи — попробуем восстановить по last_active_at/streak
-        const la = userRow?.last_active_at ? new Date(String(userRow.last_active_at)) : null;
-        const lp = toParts(la);
-        const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-        const gapByLast = lastStart == null ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-        if (gapByLast === 1) {
-          newStreak = Math.max(1, Number(userRow?.streak || 0) + 1);
-        } else if (gapByLast <= 0) {
-          const chainToday = computeChainLen(new Date(todayStart));
-          newStreak = chainToday;
-        } else {
-          newStreak = 1;
-        }
+        // пропущен хотя бы один полный день
+        newStreak = 1;
       }
     } else {
-      // История пуста — используем last_active_at как подсказку
-      const la = userRow?.last_active_at ? new Date(String(userRow.last_active_at)) : null;
-      const lp = toParts(la);
-      const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-      const gapByLast = lastStart == null ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-      newStreak = (gapByLast === 1) ? Math.max(1, Number(userRow?.streak || 0) + 1) : 1;
+      // истории нет — первая активность
+      newStreak = 1;
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
     // Всегда пишем сегодняшний день и users (мы точно в ветке hasToday === false)
     const { data, error: updErr } = await supabase
       .from('users')
-      .update({ streak: newStreak, last_active_at: now.toISOString() })
+      .update({ streak: newStreak, last_active_at: new Date(todayStart).toISOString() })
       .eq('id', userRow.id)
       .select('id, streak, last_active_at')
       .single();
