@@ -95,9 +95,9 @@ export default function Subscription() {
               </div>
 
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center gap-3 text-sm"><span className="text-lg">⚡</span><span>Бесконечная энергия — учись без пауз</span></div>
-                <div className="flex items-center gap-3 text-sm"><span className="text-lg">🤖</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span> — умные подсказки и объяснения</span></div>
-                <div className="flex items-center gap-3 text-sm"><span className="text-lg">❄️</span><span>Заморозка стрика — не теряй прогресс в загруженные дни</span></div>
+                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
+                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
+                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
               </div>
 
               <div className="mt-5">
@@ -155,7 +155,7 @@ export default function Subscription() {
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], times: [0, 0.2, 0.5, 0.8, 1] }}
           />
         )}
-        <div className="text-3xl font-extrabold">Gems</div>
+        <div className="text-3xl font-extrabold">Монеты</div>
         <div className="mt-2 grid gap-4">
           {gems.map((g) => {
             const rub = g.rub;
