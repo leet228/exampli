@@ -38,8 +38,8 @@ export default async function handler(req, res) {
     const todayIso = localNow.toISOString().slice(0, 10); // YYYY-MM-DD в выбранной TZ
     const todayStart = Date.parse(`${todayIso}T00:00:00.000Z`) - offsetMs; // UTC-начало локального дня
 
-    // Считываем последние до 60 дней активности
-    let days = [];
+    // Считываем последние до 60 дней активности (как ISO-строки YYYY-MM-DD)
+    let daysIsoArr = [];
     try {
       const { data } = await supabase
         .from('streak_days')
@@ -48,43 +48,44 @@ export default async function handler(req, res) {
         .lte('day', todayIso)
         .order('day', { ascending: false })
         .limit(60);
-      days = Array.isArray(data) ? data.map(r => new Date(String(r.day))) : [];
+      daysIsoArr = Array.isArray(data) ? data.map(r => String(r.day)) : [];
     } catch {}
 
-    const dayKey = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const hasDay = (d) => days.some(x => dayKey(x) === dayKey(d));
-
-    const yesterday = new Date(todayStart - 86400000);
-    const hasToday = hasDay(new Date(todayStart));
+    const daysIso = new Set(daysIsoArr);
+    const yesterdayIso = new Date(Date.parse(todayIso + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+    const hasToday = daysIso.has(todayIso);
 
     // Вычисляем длину цепочки подряд идущих дней, заканчивающейся baseDay
-    const computeChainLen = (baseDay) => {
+    const computeChainLen = (baseIso) => {
       let len = 0;
-      let cur = new Date(baseDay.getTime());
-      while (hasDay(cur)) { len += 1; cur = new Date(cur.getTime() - 86400000); }
+      let cur = baseIso;
+      while (daysIso.has(cur)) {
+        len += 1;
+        cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+      }
       return len;
     };
 
     if (hasToday) {
       // Уже есть запись на сегодня: просто актуализируем текущее значение стрика по streak_days
-      const chain = computeChainLen(new Date(todayStart));
+      const chain = computeChainLen(todayIso);
       res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), timezone: tz, debug: { todayIso, hasToday: true } });
       return;
     }
 
     // Нет записи за сегодня — определим, можно ли инкрементить
-    const latest = days[0] || null; // последний активный день (<= сегодня)
-    const hasYesterday = days.some(d => dayKey(d) === dayKey(yesterday));
+    const latestIso = daysIsoArr[0] || null; // последний активный день (<= сегодня)
+    const hasYesterday = daysIso.has(yesterdayIso);
     let newStreak = 1;
     if (hasYesterday) {
       // есть отметка за вчера — считаем цепочку строго по истории
-      const chainYesterday = computeChainLen(yesterday);
+      const chainYesterday = computeChainLen(yesterdayIso);
       newStreak = chainYesterday + 1;
-    } else if (latest) {
-      const gapDays = Math.round((todayStart - dayKey(latest)) / 86400000);
+    } else if (latestIso) {
+      const gapDays = Math.round((Date.parse(todayIso + 'T00:00:00Z') - Date.parse(latestIso + 'T00:00:00Z')) / 86400000);
       if (gapDays <= 0) {
         // последний активный день — сегодня
-        const chainToday = computeChainLen(new Date(todayStart));
+        const chainToday = computeChainLen(todayIso);
         newStreak = chainToday; // обычно 0
       } else if (gapDays === 1) {
         // вчера отсутствует в выборке (например, отфильтровано) — начинаем новую цепочку
@@ -130,7 +131,6 @@ export default async function handler(req, res) {
       return;
     }
 
-    const latestIso = days[0] ? toIsoDate(days[0]) : null;
     res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz, debug: { todayIso, hasToday: false, hasYesterday, latestIso, computed: newStreak } });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
