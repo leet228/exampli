@@ -31,24 +31,12 @@ export default async function handler(req, res) {
     if (!userRow?.id) { res.status(404).json({ ok: false, code: 'user_not_found' }); return; }
 
     const now = new Date();
-    // Важно: считаем «сегодня» в таймзоне пользователя; если не задана — используем Москву (не берем таймзону сервера)
+    // Вычисляем «сегодня» строго в таймзоне пользователя; если не задана — используем МСК (+03:00)
     const tz = userRow?.timezone || 'Europe/Moscow';
-    const toParts = (d) => {
-      if (!d) return null;
-      try {
-        const fmt = new Intl.DateTimeFormat(tz || undefined, { timeZone: tz || undefined, year: 'numeric', month: 'numeric', day: 'numeric' });
-        const parts = fmt.formatToParts(d);
-        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
-        const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
-        const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
-        if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() };
-        return { y, m, d: dd };
-      } catch { return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() }; }
-    };
-
-    const tp = toParts(now);
-    const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
-    const todayIso = toIsoDate(new Date(todayStart));
+    const offsetMs = (tz === 'Europe/Moscow') ? 3 * 60 * 60 * 1000 : 0; // фоллбек — UTC
+    const localNow = new Date(now.getTime() + offsetMs);
+    const todayIso = localNow.toISOString().slice(0, 10); // YYYY-MM-DD в выбранной TZ
+    const todayStart = Date.parse(`${todayIso}T00:00:00.000Z`) - offsetMs; // UTC-начало локального дня
 
     // Считываем последние до 60 дней активности
     let days = [];
