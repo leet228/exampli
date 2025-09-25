@@ -116,10 +116,23 @@ export default async function handler(req, res) {
       return;
     }
     if (data) updated = data;
-    // Обновим историческую таблицу (если есть)
+    // Обновим историческую таблицу и явно обработаем ошибку
     try {
-      await supabase.from('streak_days').upsert({ user_id: userRow.id, day: todayIso, kind: 'active', timezone: tz }, { onConflict: 'user_id,day' });
-    } catch {}
+      const { data: sd, error: sdErr } = await supabase
+        .from('streak_days')
+        .upsert({ user_id: userRow.id, day: todayIso, kind: 'active', timezone: tz }, { onConflict: 'user_id,day' })
+        .select('user_id, day')
+        .single();
+      if (sdErr) {
+        try { console.error('[streak_finish] upsert streak_days error:', sdErr); } catch {}
+        res.status(403).json({ ok: false, code: 'streak_days_upsert_failed', error: sdErr.message });
+        return;
+      }
+    } catch (e) {
+      try { console.error('[streak_finish] upsert streak_days throw:', e); } catch {}
+      res.status(500).json({ ok: false, code: 'streak_days_upsert_throw', error: String(e?.message || e) });
+      return;
+    }
 
     res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz });
   } catch (e) {
