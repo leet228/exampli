@@ -122,7 +122,9 @@ export default async function handler(req, res) {
       const now = new Date();
       const tp = toParts(now);
       const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
+      const todayIso = `${tp.y}-${String(tp.m + 1).padStart(2, '0')}-${String(tp.d).padStart(2, '0')}`;
       let lastDayTs = null;
+      let lastDayIso = null;
       try {
         const { data: lastRow } = await supabase
           .from('streak_days')
@@ -132,12 +134,14 @@ export default async function handler(req, res) {
           .limit(1)
           .maybeSingle();
         if (lastRow?.day) {
-          const d = new Date(String(lastRow.day));
+          lastDayIso = String(lastRow.day);
+          const d = new Date(lastDayIso);
           lastDayTs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
         }
       } catch {}
       if (lastDayTs != null) {
-        const diffDays = Math.round((todayStart - lastDayTs) / 86400000);
+        // Считаем разницу дней через ISO-даты, чтобы избежать ошибок округления
+        const diffDays = Math.floor((Date.parse(`${todayIso}T00:00:00Z`) - Date.parse(`${lastDayIso}T00:00:00Z`)) / 86400000);
         if (diffDays >= 2 && (userRow?.streak || 0) !== 0) {
           await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id);
           userRow.streak = 0;
@@ -149,7 +153,7 @@ export default async function handler(req, res) {
         // если пропущено >=2 дней, цепочка равна 0; иначе посчитаем back-to-back
         let chain = 0;
         if (lastDayTs != null) {
-          const diffDays = Math.round((todayStart - lastDayTs) / 86400000);
+          const diffDays = Math.floor((Date.parse(`${todayIso}T00:00:00Z`) - Date.parse(`${lastDayIso}T00:00:00Z`)) / 86400000);
           if (diffDays >= 2) chain = 0;
           else {
             // запросим до 60 дней и посчитаем подряд
@@ -157,7 +161,7 @@ export default async function handler(req, res) {
               .from('streak_days')
               .select('day')
               .eq('user_id', userRow.id)
-              .lte('day', toIsoDate(new Date(todayStart)))
+              .lte('day', todayIso)
               .order('day', { ascending: false })
               .limit(60);
             const days = (data || []).map(r => new Date(String(r.day)));
