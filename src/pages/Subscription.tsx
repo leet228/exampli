@@ -40,6 +40,7 @@ export default function Subscription() {
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const [coins, setCoins] = useState<number>(0);
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -72,6 +73,50 @@ export default function Subscription() {
     window.addEventListener('exampli:statsChanged', onStats as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
+
+  // Поймаем возврат c ?paid=1 и покажем лаконичное уведомление
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const paid = url.searchParams.get('paid');
+      if (paid === '1') {
+        url.searchParams.delete('paid');
+        window.history.replaceState({}, '', url.toString());
+        // Вибрация + всплывашка через кастомное событие (остальной UI может подписаться)
+        try { hapticSelect(); } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата прошла успешно' } } as any));
+        } catch {}
+      }
+    } catch {}
+  }, []);
+
+  async function createPaymentAndRedirect(kind: 'plan' | 'gems', id: string) {
+    if (loadingId) return;
+    setLoadingId(`${kind}:${id}`);
+    try {
+      const boot: any = (window as any).__exampliBoot || {};
+      const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
+      const r = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: kind, id, user_id: userId, tg_id: tgId, return_url: `${location.origin}/subscription?paid=1` })
+      });
+      if (!r.ok) throw new Error('create_failed');
+      const js = await r.json();
+      const url = js?.confirmation_url;
+      if (url) {
+        // Telegram WebApp: лучше открыть во внешнем браузере
+        try { (window as any)?.Telegram?.WebApp?.openLink?.(url, { try_instant_view: false }); return; } catch {}
+        location.href = url;
+      }
+    } catch (e) {
+      try { console.warn('[subscription] create payment failed', e); } catch {}
+    } finally {
+      setTimeout(() => setLoadingId(null), 400);
+    }
+  }
 
   useEffect(() => {
     const flag = sessionStorage.getItem('exampli:highlightCoins');
@@ -150,8 +195,9 @@ export default function Subscription() {
                   shadowHeight={shadowHeight}
                   darken={darken}
                   onSelectHaptic={hapticSelect}
+                  onClick={() => createPaymentAndRedirect('plan', p.id)}
                 >
-                  Купить за {p.price.toLocaleString('ru-RU')} ₽
+                  {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${p.price.toLocaleString('ru-RU')} ₽`}
                 </PressButton>
               </div>
             </motion.div>
@@ -240,13 +286,16 @@ export default function Subscription() {
                 shadowHeight={shadowHeight}
                 darken={darken}
                 onSelectHaptic={hapticSelect}
+                onClick={() => createPaymentAndRedirect('gems', g.id)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <img src={g.icon} alt="" className="h-14 w-14 select-none" draggable={false} />
                     <div className="text-xl font-semibold tabular-nums">{g.amount}</div>
                   </div>
-                  <div className="text-sky-400 font-extrabold tabular-nums">{rub.toLocaleString('ru-RU')} ₽</div>
+                  <div className="text-sky-400 font-extrabold tabular-nums">
+                    {loadingId === `gems:${g.id}` ? '...' : `${rub.toLocaleString('ru-RU')} ₽`}
+                  </div>
                 </div>
               </PressButton>
             );
@@ -367,7 +416,7 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
               style={{ background: 'var(--bg)', border: 'none' }}
               onClick={() => { try { hapticTiny(); } catch {} onClose(); }}
             >
-              <span className="text-sky-400">Отменить</span>
+               <span style={{ color: '#3c73ff' }}>Отменить</span>
             </button>
           </div>
         </div>
