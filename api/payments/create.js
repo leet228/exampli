@@ -1,5 +1,6 @@
 // ESM serverless function: Create YooKassa payment (demo)
 import { randomUUID } from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   try {
@@ -70,12 +71,62 @@ export default async function handler(req, res) {
       tg_id: body?.tg_id || null,
     };
 
+    // --- Build receipt (cheque) to satisfy YooKassa fiscalization requirements ---
+    // Try to resolve customer contact
+    let customer = undefined;
+    try {
+      // Prefer explicit values from body
+      const bodyPhone = (body?.customer?.phone || body?.phone || '').toString().trim();
+      const bodyEmail = (body?.customer?.email || body?.email || '').toString().trim();
+      if (bodyPhone) customer = { phone: normalizePhone(bodyPhone) };
+      else if (bodyEmail) customer = { email: bodyEmail };
+      // If still not set, try Supabase user phone
+      if (!customer && (body?.user_id || body?.tg_id)) {
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          let userRow = null;
+          if (body?.user_id) {
+            const { data } = await supabase.from('users').select('id, phone_number').eq('id', body.user_id).maybeSingle();
+            userRow = data || null;
+          } else if (body?.tg_id) {
+            const { data } = await supabase.from('users').select('id, phone_number').eq('tg_id', String(body.tg_id)).maybeSingle();
+            userRow = data || null;
+          }
+          const p = userRow?.phone_number && String(userRow.phone_number).trim();
+          if (p) customer = { phone: normalizePhone(p) };
+        }
+      }
+    } catch {}
+    if (!customer) {
+      const fallbackEmail = process.env.YOOKASSA_DEFAULT_CUSTOMER_EMAIL || 'billing@example.com';
+      customer = { email: fallbackEmail };
+    }
+
+    const vatCode = Number(process.env.YOOKASSA_VAT_CODE || 1); // 1 = без НДС
+    const taxSystem = process.env.YOOKASSA_TAX_SYSTEM_CODE ? Number(process.env.YOOKASSA_TAX_SYSTEM_CODE) : undefined; // optional 1..6
+
+    const receipt = {
+      customer,
+      ...(taxSystem ? { tax_system_code: taxSystem } : {}),
+      items: [
+        {
+          description: String(description).slice(0, 128) || 'Услуга',
+          quantity: 1,
+          amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
+          vat_code: vatCode,
+        },
+      ],
+    };
+
     const payload = {
       amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
       capture: true,
       description,
       confirmation: { type: 'redirect', return_url: returnUrl },
       metadata,
+      receipt,
     };
 
     const ykRes = await fetch('https://api.yookassa.ru/v3/payments', {
@@ -112,6 +163,16 @@ async function safeJson(req) {
     req.on?.('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
     req.on?.('error', () => resolve({}));
   });
+}
+
+function normalizePhone(phone) {
+  try {
+    let p = String(phone).replace(/\D+/g, '');
+    if (p.startsWith('8') && p.length === 11) p = '7' + p.slice(1);
+    if (p.length === 10) p = '7' + p; // assume RU
+    if (!p.startsWith('+')) p = '+' + p;
+    return p;
+  } catch { return String(phone || ''); }
 }
 
 
