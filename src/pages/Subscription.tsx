@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { hapticSelect } from '../lib/haptics';
 
 type Plan = { id: string; months: number; price: number; title: string };
 
@@ -26,6 +27,10 @@ export default function Subscription() {
     { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 499 },
     { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 999 },
     { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1999 },
+  ];
+  const freezes = [
+    { id: 's1', icon: '/shop/streak_1.svg', label: '1 день', coins: 425 },
+    { id: 's2', icon: '/shop/streak_2.svg', label: '2 дня',  coins: 850 },
   ];
 
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -69,6 +74,10 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
+      {/* верхний баннер на всю ширину */}
+      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen">
+        <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
+      </div>
       {/* карусель тарифов */}
       <div
         ref={trackRef}
@@ -106,6 +115,7 @@ export default function Subscription() {
                   baseColor={accentColor}
                   shadowHeight={shadowHeight}
                   darken={darken}
+                  onSelectHaptic={hapticSelect}
                 >
                   Купить за {p.price.toLocaleString('ru-RU')} ₽
                 </PressButton>
@@ -126,6 +136,34 @@ export default function Subscription() {
             ].join(' ')}
           />
         ))}
+      </div>
+
+      {/* Заморозка стрика */}
+      <div className="relative mt-2 px-1">
+        <div className="text-3xl font-extrabold">Заморозка стрика</div>
+        <div className="mt-2 grid gap-4">
+          {freezes.map((s) => (
+            <PressButton
+              key={s.id}
+              className="w-full rounded-3xl px-4 py-4 text-left text-white"
+              baseColor={coinButtonColor}
+              shadowHeight={shadowHeight}
+              darken={darken}
+              onSelectHaptic={hapticSelect}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <img src={s.icon} alt="" className="h-14 w-14 select-none" draggable={false} />
+                  <div className="text-xl font-semibold">{s.label}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src="/stickers/coin_cat.svg" alt="" className="h-6 w-6 select-none" draggable={false} />
+                  <div className="text-yellow-300 font-extrabold tabular-nums">{s.coins.toLocaleString('ru-RU')}</div>
+                </div>
+              </div>
+            </PressButton>
+          ))}
+        </div>
       </div>
 
       {/* Gems (монеты) */}
@@ -166,6 +204,7 @@ export default function Subscription() {
                 baseColor={coinButtonColor}
                 shadowHeight={shadowHeight}
                 darken={darken}
+                onSelectHaptic={hapticSelect}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -190,12 +229,14 @@ function PressButton({
   shadowHeight = 6,
   darken,
   children,
+  onSelectHaptic,
 }: {
   className?: string;
   baseColor: string;
   shadowHeight?: number;
   darken: (hex: string, amount?: number) => string;
   children: React.ReactNode;
+  onSelectHaptic?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
   const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
@@ -204,7 +245,7 @@ function PressButton({
       type="button"
       className={className}
       onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
+      onPointerUp={() => { setPressed(false); try { onSelectHaptic?.(); } catch {} }}
       onPointerCancel={() => setPressed(false)}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
       transition={{ duration: 0 }}
