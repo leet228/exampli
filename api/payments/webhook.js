@@ -59,6 +59,24 @@ export default async function handler(req, res) {
                 await supabase.from('users').update({ coins: (Number(userRow.coins || 0) + addCoins) }).eq('id', userRow.id);
               }
             }
+            // Запишем платёж в журнал payments
+            try {
+              if (paymentId) {
+                await supabase.from('payments').upsert({
+                  id: paymentId,
+                  user_id: userRow.id,
+                  type: 'gems',
+                  product_id: String(metadata?.product_id || ''),
+                  amount_rub: Number(object?.amount?.value || 0),
+                  currency: String(object?.amount?.currency || 'RUB'),
+                  status: String(object?.status || 'succeeded'),
+                  test: Boolean(object?.test || false),
+                  payment_method: object?.payment_method || null,
+                  metadata: metadata || null,
+                  captured_at: object?.captured_at || new Date().toISOString(),
+                });
+              }
+            } catch {}
           } else if (metadata?.type === 'plan') {
             const months = Number(metadata?.months || 1);
             const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';

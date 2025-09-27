@@ -147,7 +147,7 @@ export default async function handler(req, res) {
           userRow.streak = 0;
         }
       }
-      // Дополнительно: вычислим актуальную длину цепочки по streak_days и вернём её (без записи), чтобы HUD имел консистентное число
+      // Дополнительно: вычислим актуальную длину цепочки по streak_days и вернём её; если обнулилась — синхронизируем users
       try {
         const firstOfChain = new Date(todayStart);
         // если пропущено >=2 дней, цепочка равна 0; иначе посчитаем back-to-back
@@ -172,7 +172,10 @@ export default async function handler(req, res) {
             while (hasDay(cur)) { chain += 1; cur = new Date(cur.getTime() - 86400000); }
           }
         }
-        // Переопределим выводимое число стрика, не трогая userRow.streak (оно обновится при первом успехе сегодня)
+        // Если по истории цепочка стала 0 — обновим и users, чтобы фронт не видел старое значение
+        if (chain === 0 && (userRow?.streak || 0) !== 0) {
+          try { await supabase.from('users').update({ streak: 0 }).eq('id', userRow.id); } catch {}
+        }
         userRow.streak = chain;
       } catch {}
     } catch {}
