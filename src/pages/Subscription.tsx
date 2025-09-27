@@ -41,6 +41,12 @@ export default function Subscription() {
   const [coins, setCoins] = useState<number>(0);
 
   useEffect(() => {
+    // Включаем горизонтальный градиент для верхнего бэкграунда страницы
+    try { document.body.classList.add('subscription-gradient'); } catch {}
+    return () => { try { document.body.classList.remove('subscription-gradient'); } catch {} };
+  }, []);
+
+  useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
     const onScroll = () => {
@@ -110,11 +116,7 @@ export default function Subscription() {
       {/* верхний баннер на всю ширину */}
       <div
         className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen"
-        style={{
-          marginTop: 'calc(-1 * (var(--hud-h) + 28px))',
-          paddingTop: 'calc(var(--hud-h) + 28px)',
-          background: 'linear-gradient(180deg,#3c73ff 0%, #7c3aed 100%)'
-        }}
+        style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))', paddingTop: 'calc(var(--hud-h) + 28px)' }}
       >
         <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
       </div>
