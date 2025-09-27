@@ -43,6 +43,7 @@ export default function Subscription() {
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isPlus, setIsPlus] = useState<boolean>(false);
+  const [autoRenew, setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: true, loading: false });
 
   useEffect(() => {
     const el = trackRef.current;
@@ -99,6 +100,56 @@ export default function Subscription() {
       }
     } catch {}
   }, []);
+
+  // Признак активной подписки: читаем из кэша и обновляем по plus_until
+  useEffect(() => {
+    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    const onStatsPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      const pu = e.detail?.plus_until;
+      if (pu) {
+        try {
+          const active = new Date(pu).getTime() > Date.now();
+          setIsPlus(active);
+          cacheSet(CACHE_KEYS.isPlus, active);
+        } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onStatsPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStatsPlus as EventListener);
+  }, []);
+
+  // Загрузка состояния автопродления при наличии подписки
+  useEffect(() => {
+    (async () => {
+      if (!isPlus) return;
+      try {
+        const boot: any = (window as any).__exampliBoot || {};
+        const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+        if (!userId) return;
+        const r = await fetch(`/api/payments/auto_renew?user_id=${encodeURIComponent(userId)}`, { headers: { 'Cache-Control': 'no-store' } });
+        if (!r.ok) return;
+        const js = await r.json();
+        if (js?.ok) setAutoRenew({ enabled: Boolean(js.enabled), loading: false });
+      } catch {}
+    })();
+  }, [isPlus]);
+
+  async function toggleAutoRenew() {
+    try {
+      setAutoRenew((s) => ({ ...s, loading: true }));
+      const boot: any = (window as any).__exampliBoot || {};
+      const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+      if (!userId) { setAutoRenew((s) => ({ ...s, loading: false })); return; }
+      const next = !autoRenew.enabled;
+      const r = await fetch('/api/payments/auto_renew', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, enabled: next })
+      });
+      if (r.ok) setAutoRenew({ enabled: next, loading: false });
+      else setAutoRenew((s) => ({ ...s, loading: false }));
+    } catch { setAutoRenew((s) => ({ ...s, loading: false })); }
+  }
 
   // Признак активной подписки: читаем из кэша и обновляем по plus_until
   useEffect(() => {
@@ -314,6 +365,34 @@ export default function Subscription() {
                 </div>
               </motion.div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Тумблер автопродления — только при активной подписке */}
+      {isPlus && (
+        <div className="px-1">
+          <div className="mt-2 rounded-3xl border border-white/10 bg-white/5 p-4 flex items-center justify-between">
+            <div>
+              <div className="text-lg font-semibold">Автопродление подписки</div>
+              <div className="text-sm text-muted">Можно отключить в любой момент</div>
+            </div>
+            <button
+              type="button"
+              onClick={autoRenew.loading ? undefined : toggleAutoRenew}
+              className={[
+                'relative inline-flex h-7 w-12 items-center rounded-full transition-colors',
+                autoRenew.enabled ? 'bg-sky-500' : 'bg-white/20',
+                autoRenew.loading ? 'opacity-60 cursor-wait' : 'cursor-pointer'
+              ].join(' ')}
+            >
+              <span
+                className={[
+                  'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
+                  autoRenew.enabled ? 'translate-x-6' : 'translate-x-1'
+                ].join(' ')}
+              />
+            </button>
           </div>
         </div>
       )}
