@@ -85,12 +85,18 @@ export default async function handler(req, res) {
             const expired = s?.expires_at ? (new Date(s.expires_at).getTime() <= Date.now()) : false;
             if (expired) {
               try {
+                // Удаляем истёкшие активные подписки пользователя
                 await supabase
                   .from('user_subscriptions')
-                  .update({ status: 'expired', updated_at: new Date().toISOString() })
+                  .delete()
                   .eq('user_id', s.user_id)
-                  .eq('plan_code', s.plan_code)
-                  .eq('status', 'active');
+                  .eq('status', 'active')
+                  .lte('expires_at', new Date().toISOString());
+                // Удаляем сохранённые методы оплаты пользователя
+                await supabase
+                  .from('user_payment_methods')
+                  .delete()
+                  .eq('user_id', s.user_id);
                 await supabase.from('users').update({ plus_until: null }).eq('id', s.user_id);
               } catch {}
             }
