@@ -41,8 +41,6 @@ export default function Subscription() {
   const [coins, setCoins] = useState<number>(0);
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [widgetToken, setWidgetToken] = useState<string | null>(null);
-  const widgetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -103,21 +101,13 @@ export default function Subscription() {
       const r = await fetch('/api/payments/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: kind, id, user_id: userId, tg_id: tgId, return_url: `${location.origin}/subscription?paid=1`, mode: 'embedded' })
+        body: JSON.stringify({ type: kind, id, user_id: userId, tg_id: tgId, return_url: `${location.origin}/subscription?paid=1` })
       });
       if (!r.ok) throw new Error('create_failed');
       const js = await r.json();
-      // Embedded приоритетно: если есть confirmation_token — покажем виджет
-      if (js?.confirmation_token) {
-        setWidgetToken(js.confirmation_token);
-        await ensureYooKassaWidgetLoaded();
-        renderEmbeddedWidget(js.confirmation_token);
-        return;
-      }
-      // Fallback: redirect
       const url = js?.confirmation_url;
       if (url) {
-        try { (window as any)?.Telegram?.WebApp?.openLink?.(url, { try_instant_view: false }); return; } catch {}
+        // Откроем в том же WebView, чтобы остаться внутри Telegram
         location.href = url;
       }
     } catch (e) {
@@ -127,59 +117,6 @@ export default function Subscription() {
     }
   }
 
-  async function ensureYooKassaWidgetLoaded() {
-    if ((window as any).YooMoneyCheckoutWidget) return;
-    await new Promise<void>((resolve) => {
-      const s = document.createElement('script');
-      // официальная библиотека виджета
-      s.src = 'https://yookassa.ru/checkout-widget/v1/checkout-widget.js';
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => resolve();
-      document.head.appendChild(s);
-    });
-  }
-
-  function renderEmbeddedWidget(token: string) {
-    try {
-      const YM = (window as any).YooMoneyCheckoutWidget;
-      if (!YM) return;
-      // создаём/чистим контейнер
-      const id = 'yk-widget';
-      if (!document.getElementById(id)) {
-        const box = document.createElement('div');
-        box.id = id;
-        box.style.position = 'fixed';
-        box.style.inset = '0';
-        box.style.background = 'rgba(0,0,0,0.65)';
-        box.style.zIndex = '9999';
-        box.style.display = 'flex';
-        box.style.alignItems = 'center';
-        box.style.justifyContent = 'center';
-        const panel = document.createElement('div');
-        panel.id = 'yk-widget-panel';
-        panel.style.width = '100%';
-        panel.style.maxWidth = '560px';
-        panel.style.background = 'var(--bg, #0b1017)';
-        panel.style.borderRadius = '16px';
-        panel.style.padding = '8px';
-        const mount = document.createElement('div');
-        mount.id = 'yookassa-widget';
-        panel.appendChild(mount);
-        box.appendChild(panel);
-        document.body.appendChild(box);
-      }
-      const checkout = new YM({
-        confirmation_token: token,
-        return_url: `${location.origin}/subscription?paid=1`,
-        customization: { color: { background: '#0b1017', primary: '#3c73ff' } },
-        error_callback: function(err: any) {
-          try { console.warn('[yookassa] widget error', err); } catch {}
-        }
-      });
-      checkout.render('yookassa-widget');
-    } catch {}
-  }
 
   useEffect(() => {
     const flag = sessionStorage.getItem('exampli:highlightCoins');
