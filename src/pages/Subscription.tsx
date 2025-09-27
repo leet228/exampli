@@ -154,6 +154,8 @@ export default function Subscription() {
           } catch {}
           // Обновим баланс монет из БД (вебхук мог уже начислить)
           try { await refreshCoinsFromServer(); } catch {}
+          // Обновим plus_until для HUD
+          try { await refreshPlusUntilFromServer(); } catch {}
         }
       } catch {}
       if (attempts >= 60) clearInterval(timer); // ~5 минут при 5с интервале
@@ -179,6 +181,22 @@ export default function Subscription() {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, coins: newCoins });
         window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: newCoins } } as any));
+      } catch {}
+    }
+  }
+
+  async function refreshPlusUntilFromServer() {
+    const boot: any = (window as any).__exampliBoot || {};
+    const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+    if (!userId) return;
+    const { data } = await supabase.from('users').select('id, plus_until').eq('id', userId).maybeSingle();
+    const val = (data as any)?.plus_until || null;
+    if (val) {
+      try {
+        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+        cacheSet(CACHE_KEYS.user, { ...cu, plus_until: val });
+        (window as any).__exampliBoot = { ...(window as any).__exampliBoot, user: { ...(boot?.user || {}), plus_until: val } };
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: val } } as any));
       } catch {}
     }
   }

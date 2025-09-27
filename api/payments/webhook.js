@@ -61,11 +61,37 @@ export default async function handler(req, res) {
             }
           } else if (metadata?.type === 'plan') {
             const months = Number(metadata?.months || 1);
-            const now = new Date();
-            const until = new Date(now.getTime());
-            until.setMonth(until.getMonth() + (Number.isFinite(months) && months > 0 ? months : 1));
-            // Save into users table minimal flags (you may have separate table user_subscriptions)
-            await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
+            const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
+            // 1) Зафиксируем платёж в журнале (upsert на случай повтора вебхука)
+            if (paymentId) {
+              await supabase.from('payments').upsert({
+                id: paymentId,
+                user_id: userRow.id,
+                type: 'plan',
+                product_id: pcode,
+                amount_rub: Number(object?.amount?.value || 0),
+                currency: String(object?.amount?.currency || 'RUB'),
+                status: 'succeeded',
+                test: Boolean(object?.test || false),
+                payment_method: object?.payment_method || null,
+                metadata: metadata || null,
+                captured_at: object?.captured_at || new Date().toISOString(),
+              });
+            }
+            // 2) Продлим подписку атомарно
+            const { data: ext, error: extErr } = await supabase.rpc('extend_subscription', {
+              p_user_id: userRow.id,
+              p_plan_code: pcode,
+              p_months: Number.isFinite(months) && months > 0 ? months : 1,
+              p_payment_id: paymentId || null,
+            });
+            // fallback на прямое обновление users.plus_until (не обязательно, но на всякий случай)
+            if (extErr && months > 0) {
+              const now = new Date();
+              const until = new Date(now.getTime());
+              until.setMonth(until.getMonth() + months);
+              await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
+            }
           }
         }
       }
