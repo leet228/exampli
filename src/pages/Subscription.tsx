@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { hapticSelect, hapticSlideReveal, hapticSlideClose } from '../lib/haptics';
+import { hapticSelect, hapticTiny } from '../lib/haptics';
 import { cacheGet, CACHE_KEYS } from '../lib/cache';
 
 type Plan = { id: string; months: number; price: number; title: string };
@@ -184,7 +184,7 @@ export default function Subscription() {
               shadowHeight={shadowHeight}
               darken={darken}
               onSelectHaptic={hapticSelect}
-              onClick={() => { try { hapticSlideReveal(); } catch {} setSheetOpen({ days: s.id === 's1' ? 1 : 2, price: s.coins, icon: s.icon }); }}
+              onClick={() => { setSheetOpen({ days: s.id === 's1' ? 1 : 2, price: s.coins, icon: s.icon }); }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -306,9 +306,17 @@ function PressButton({
 // Локальная нижняя шторка для покупки заморозки
 function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolean; onClose: () => void; coins: number; days: 1 | 2; price: number; icon: string }) {
   if (!open) return null as any;
+  const darkenStrong = (hex: string, amount = 32) => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
+    return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
+  };
   return (
     <>
-      <div className="sheet-backdrop" onClick={() => { try { hapticSlideClose(); } catch {} onClose(); }} />
+      <div className="sheet-backdrop" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'none', WebkitBackdropFilter: 'none' }} onClick={() => { try { hapticTiny(); } catch {} onClose(); }} />
       <motion.div
         className="sheet-panel"
         initial={{ y: 500, opacity: 0 }}
@@ -338,13 +346,13 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
 
           <div className="mt-6">
             <PressButton
-              className="w-full rounded-3xl px-5 py-4 font-extrabold text-white"
+              className="w-full rounded-3xl px-5 py-4 font-extrabold"
               baseColor="#3c73ff"
               shadowHeight={6}
-              darken={(h) => h}
+              darken={darkenStrong}
               onSelectHaptic={hapticSelect}
             >
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2" style={{ color: 'var(--bg)' }}>
                 <span>Купить за</span>
                 <img src="/stickers/coin_cat.svg" alt="" className="w-6 h-6" />
                 <span className="tabular-nums">{price.toLocaleString('ru-RU')}</span>
@@ -355,9 +363,9 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
           <div className="mt-3">
             <button
               type="button"
-              className="w-full rounded-3xl px-5 py-4 font-semibold border border-white/10"
-              style={{ background: 'var(--bg)' }}
-              onClick={() => { try { hapticSelect(); } catch {} onClose(); }}
+              className="w-full rounded-3xl px-5 py-4 font-semibold"
+              style={{ background: 'var(--bg)', border: 'none' }}
+              onClick={() => { try { hapticTiny(); } catch {} onClose(); }}
             >
               <span className="text-sky-400">Отменить</span>
             </button>
