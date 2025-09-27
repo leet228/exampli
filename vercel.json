@@ -1,6 +1,7 @@
 {
     "crons": [
-        { "path": "/api/payments/renew", "schedule": "0 10 * * *" }
+        { "path": "/api/payments/renew", "schedule": "0 10 * * *" },
+        { "path": "/api/streak/reset", "schedule": "0 9 * * *" }
     ],
     "headers": [
         {
