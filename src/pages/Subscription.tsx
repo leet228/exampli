@@ -106,6 +106,12 @@ export default function Subscription() {
       if (!r.ok) throw new Error('create_failed');
       const js = await r.json();
       const url = js?.confirmation_url;
+      const paymentId = js?.payment_id || null;
+      // Сохраним id платежа и начнём фоновую проверку статуса
+      if (paymentId) {
+        try { sessionStorage.setItem('yk:lastPaymentId', String(paymentId)); } catch {}
+        try { startPaymentWatcher(String(paymentId)); } catch {}
+      }
       if (url) {
         // Откроем через Telegram WebApp API, чтобы избежать iframe (X-Frame-Options)
         try { (window as any)?.Telegram?.WebApp?.openLink?.(url, { try_instant_view: false }); return; } catch {}
@@ -120,6 +126,37 @@ export default function Subscription() {
       setTimeout(() => setLoadingId(null), 400);
     }
   }
+
+  function startPaymentWatcher(paymentId: string) {
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const r = await fetch(`/api/payments/status?payment_id=${encodeURIComponent(paymentId)}`, { headers: { 'Cache-Control': 'no-store' } });
+        if (!r.ok) return;
+        const js = await r.json();
+        if (js?.paid || js?.status === 'succeeded') {
+          clearInterval(timer);
+          try { sessionStorage.removeItem('yk:lastPaymentId'); } catch {}
+          try { hapticSelect(); } catch {}
+          try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any)); } catch {}
+          // Подсветим монеты блоком
+          try {
+            window.dispatchEvent(new CustomEvent('exampli:highlightCoins'));
+          } catch {}
+        }
+      } catch {}
+      if (attempts >= 60) clearInterval(timer); // ~5 минут при 5с интервале
+    }, 5000);
+  }
+
+  // Если пользователь вернулся вручную — продолжим проверку по сохранённому id
+  useEffect(() => {
+    try {
+      const pid = sessionStorage.getItem('yk:lastPaymentId');
+      if (pid) startPaymentWatcher(pid);
+    } catch {}
+  }, []);
 
 
   useEffect(() => {
