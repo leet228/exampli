@@ -120,6 +120,8 @@ export default async function handler(req, res) {
           quantity: 1,
           amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
           vat_code: vatCode,
+          payment_mode: 'full_payment',
+          payment_subject: 'service',
         },
       ],
     };
@@ -175,9 +177,9 @@ function normalizePhone(phone) {
     let p = String(phone).replace(/\D+/g, '');
     if (p.startsWith('8') && p.length === 11) p = '7' + p.slice(1);
     if (p.length === 10) p = '7' + p; // assume RU
-    if (!p.startsWith('+')) p = '+' + p;
+    // Для receipt.customer.phone ЮKassa ожидает номер без плюса
     return p;
-  } catch { return String(phone || ''); }
+  } catch { return String(phone || '').replace(/\D+/g, ''); }
 }
 
 
