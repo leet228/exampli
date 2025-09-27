@@ -107,6 +107,31 @@ export default async function handler(req, res) {
       }
     }
 
+    // Глобальная очистка: удаляем все истёкшие активные подписки, даже если не пытались списать
+    try {
+      const nowIso = new Date().toISOString();
+      const { data: expiredList } = await supabase
+        .from('user_subscriptions')
+        .select('user_id')
+        .eq('status', 'active')
+        .lte('expires_at', nowIso);
+      const usersToPurge = Array.from(new Set((expiredList || []).map((r) => r.user_id).filter(Boolean)));
+      for (const uid of usersToPurge) {
+        try {
+          await supabase.from('user_subscriptions')
+            .delete()
+            .eq('user_id', uid)
+            .eq('status', 'active')
+            .lte('expires_at', nowIso);
+          await supabase.from('user_payment_methods').delete().eq('user_id', uid);
+          await supabase.from('users').update({ plus_until: null }).eq('id', uid);
+          results.push({ user_id: uid, purged: true });
+        } catch (e) {
+          results.push({ user_id: uid, purged: false, error: String(e?.message || e) });
+        }
+      }
+    } catch {}
+
     res.status(200).json({ ok: true, results });
   } catch (e) {
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
