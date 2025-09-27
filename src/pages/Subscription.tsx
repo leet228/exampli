@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { hapticSelect } from '../lib/haptics';
+import { cacheGet, CACHE_KEYS } from '../lib/cache';
 
 type Plan = { id: string; months: number; price: number; title: string };
 
@@ -37,6 +38,7 @@ export default function Subscription() {
   const [idx, setIdx] = useState(0);
   const [highlight, setHighlight] = useState(false);
   const coinsRef = useRef<HTMLDivElement | null>(null);
+  const [coins, setCoins] = useState<number>(0);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -51,6 +53,25 @@ export default function Subscription() {
   }, [plans.length]);
 
   // ловим сигнал для подсветки секции коинов
+  useEffect(() => {
+    // локальный счётчик монет для верхнего HUD страницы
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      if (cs?.coins != null) setCoins(Number(cs.coins));
+    } catch {}
+    try {
+      const boot = (window as any)?.__exampliBoot;
+      const bc = boot?.stats?.coins;
+      if (bc != null) setCoins(Number(bc));
+    } catch {}
+    const onStats = (evt: Event) => {
+      const e = evt as CustomEvent<{ coins?: number }>;
+      if (typeof e.detail?.coins === 'number') setCoins(e.detail.coins);
+    };
+    window.addEventListener('exampli:statsChanged', onStats as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
+  }, []);
+
   useEffect(() => {
     const flag = sessionStorage.getItem('exampli:highlightCoins');
     if (flag === '1') {
@@ -75,8 +96,13 @@ export default function Subscription() {
   return (
     <div className="space-y-6">
       {/* верхний баннер на всю ширину */}
-      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen">
+      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen mt-[-20px]">
         <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
+        {/* локальный верхний HUD: справа счётчик монет */}
+        <div className="absolute top-3 right-4 flex items-center gap-1">
+          <img src="/stickers/coin_cat.svg" alt="" className="w-7 h-7 select-none" draggable={false} />
+          <span className="text-yellow-300 font-extrabold tabular-nums">{coins}</span>
+        </div>
       </div>
       {/* карусель тарифов */}
       <div
