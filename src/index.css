@@ -498,7 +498,7 @@ body::before {
 
 /* На странице подписки — бесконечный горизонтальный градиент сверху (слева→направо) */
 body.subscription-gradient::before {
-    background: linear-gradient(90deg, #3c73ff 0%, #7c3aed 100%);
+    background: var(--bg);
 }
 
 /* Контейнер для «прогрева» UI во время boot: монтируем реальное дерево, но скрываем */
