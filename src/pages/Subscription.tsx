@@ -323,7 +323,7 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 500, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-        style={{ padding: '18px 16px 18px 16px' }}
+        style={{ padding: '18px 16px 18px 16px', background: 'var(--bg)', border: 'none' }}
       >
         <div className="max-w-xl mx-auto">
           <div className="flex items-center justify-end">
