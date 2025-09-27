@@ -53,7 +53,10 @@ export default async function handler(req, res) {
     const proto = (req.headers['x-forwarded-proto'] || 'https');
     const host = (req.headers['x-forwarded-host'] || req.headers.host || '');
     const origin = `${proto}://${host}`;
-    const returnUrl = (typeof body?.return_url === 'string' && body.return_url) || `${origin}/subscription?paid=1`;
+    const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+    const preferTelegramReturn = Boolean(botUsername) && (body?.prefer_tg_return !== false);
+    const returnUrl = (typeof body?.return_url === 'string' && body.return_url)
+      || (preferTelegramReturn ? `https://t.me/${botUsername}?startapp=paid` : `${origin}/subscription?paid=1`);
     const preferEmbedded = String(body?.mode || body?.confirmation || '').toLowerCase() === 'embedded';
 
     const description = type === 'plan'

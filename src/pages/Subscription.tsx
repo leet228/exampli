@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { hapticSelect, hapticTiny } from '../lib/haptics';
-import { cacheGet, CACHE_KEYS } from '../lib/cache';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
+import { supabase } from '../lib/supabase';
 
 type Plan = { id: string; months: number; price: number; title: string };
 
@@ -74,15 +75,22 @@ export default function Subscription() {
     return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
 
-  // Поймаем возврат c ?paid=1 и покажем лаконичное уведомление
+  // Поймаем возврат c ?paid=1 или startapp=paid (из t.me/...) и покажем уведомление
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
       const paid = url.searchParams.get('paid');
+      const tgStartApp = url.searchParams.get('tgWebAppStartParam') || url.searchParams.get('startapp');
       if (paid === '1') {
         url.searchParams.delete('paid');
         window.history.replaceState({}, '', url.toString());
         // Вибрация + всплывашка через кастомное событие (остальной UI может подписаться)
+        try { hapticSelect(); } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата прошла успешно' } } as any));
+        } catch {}
+      }
+      if (tgStartApp === 'paid') {
         try { hapticSelect(); } catch {}
         try {
           window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата прошла успешно' } } as any));
@@ -144,10 +152,35 @@ export default function Subscription() {
           try {
             window.dispatchEvent(new CustomEvent('exampli:highlightCoins'));
           } catch {}
+          // Обновим баланс монет из БД (вебхук мог уже начислить)
+          try { await refreshCoinsFromServer(); } catch {}
         }
       } catch {}
       if (attempts >= 60) clearInterval(timer); // ~5 минут при 5с интервале
     }, 5000);
+  }
+
+  async function refreshCoinsFromServer() {
+    const boot: any = (window as any).__exampliBoot || {};
+    const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+    const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
+    let row: any = null;
+    if (userId) {
+      const { data } = await supabase.from('users').select('id, coins').eq('id', userId).maybeSingle();
+      row = data || null;
+    } else if (tgId) {
+      const { data } = await supabase.from('users').select('id, coins').eq('tg_id', String(tgId)).maybeSingle();
+      row = data || null;
+    }
+    const newCoins = Number(row?.coins ?? NaN);
+    if (Number.isFinite(newCoins)) {
+      setCoins(newCoins);
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, coins: newCoins });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: newCoins } } as any));
+      } catch {}
+    }
   }
 
   // Если пользователь вернулся вручную — продолжим проверку по сохранённому id
