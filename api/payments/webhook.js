@@ -96,44 +96,6 @@ export default async function handler(req, res) {
                 captured_at: object?.captured_at || new Date().toISOString(),
               });
             }
-            // TEST MODE: короткие подписки по минутам для отладки автосписаний
-            try {
-              const testMinutes = Number(process.env.SUBS_TEST_MINUTES || 0);
-              if (testMinutes > 0) {
-                const now = new Date();
-                // найдём текущую активную
-                let current = null;
-                try {
-                  const { data } = await supabase
-                    .from('user_subscriptions')
-                    .select('id, expires_at, status')
-                    .eq('user_id', userRow.id)
-                    .eq('status', 'active')
-                    .order('expires_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                  current = data || null;
-                } catch {}
-                const base = (current?.expires_at && new Date(current.expires_at).getTime() > now.getTime())
-                  ? new Date(current.expires_at)
-                  : now;
-                const until = new Date(base.getTime() + testMinutes * 60 * 1000);
-                if (current?.id) {
-                  await supabase
-                    .from('user_subscriptions')
-                    .update({ expires_at: until.toISOString(), last_payment_id: paymentId || null, updated_at: new Date().toISOString() })
-                    .eq('id', current.id);
-                } else {
-                  await supabase
-                    .from('user_subscriptions')
-                    .insert({ user_id: userRow.id, plan_code: pcode, status: 'active', started_at: now.toISOString(), expires_at: until.toISOString(), last_payment_id: paymentId || null, auto_renew: true });
-                }
-                await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
-                res.status(200).json({ ok: true, test_short_expiry: true, expires_at: until.toISOString() });
-                return;
-              }
-            } catch {}
-
             // 2) Продлим подписку атомарно
             const { data: ext, error: extErr } = await supabase.rpc('extend_subscription', {
               p_user_id: userRow.id,

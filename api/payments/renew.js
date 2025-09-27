@@ -21,36 +21,9 @@ export default async function handler(req, res) {
     const q = (req.query || {});
     const days = Number((req.method === 'GET' ? (q.days_before || q.days) : (body?.days_before)) || 3);
 
-    // Тестовые минуты: если включены, берём истекающие в ближайшие SUBS_TEST_MINUTES
-    const testMinutes = Number(process.env.SUBS_TEST_MINUTES || 0);
-    let subs = null;
-    if (testMinutes > 0) {
-      const untilIso = new Date(Date.now() + testMinutes * 60 * 1000).toISOString();
-      const { data } = await supabase
-        .from('user_subscriptions')
-        .select('user_id, plan_code, expires_at')
-        .eq('status', 'active')
-        .eq('auto_renew', true)
-        .lte('expires_at', untilIso);
-      subs = data || [];
-      // enrich
-      for (const s of subs) {
-        const [{ data: sp }, { data: pm }, { data: u }] = await Promise.all([
-          supabase.from('subscription_plans').select('code, months, price_rub, title').eq('code', s.plan_code).maybeSingle(),
-          supabase.from('user_payment_methods').select('method_id').eq('user_id', s.user_id).eq('is_default', true).maybeSingle(),
-          supabase.from('users').select('phone_number, email').eq('id', s.user_id).maybeSingle(),
-        ]);
-        s.months = sp?.months || 1;
-        s.price_rub = sp?.price_rub || 0;
-        s.title = sp?.title || 'Подписка';
-        s.method_id = pm?.method_id || null;
-        s.customer_phone = u?.phone_number ? String(u.phone_number).replace(/\D+/g, '') : null;
-        s.customer_email = u?.email || null;
-      }
-    } else {
-      const resp = await supabase.rpc('list_subscriptions_for_autorenew', { p_days_before: Math.max(1, days) }).catch(() => ({ data: null }));
-      subs = resp.data || [];
-    }
+    // Продакшн: берём по дням до истечения
+    const resp = await supabase.rpc('list_subscriptions_for_autorenew', { p_days_before: Math.max(1, days) }).catch(() => ({ data: null }));
+    const subs = resp.data || [];
 
     const results = [];
     if (Array.isArray(subs)) {
