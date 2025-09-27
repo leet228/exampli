@@ -1,4 +1,7 @@
 {
+    "crons": [
+        { "path": "/api/payments/renew", "schedule": "0 10 * * *" }
+    ],
     "headers": [
         {
             "source": "/(.*).svg",

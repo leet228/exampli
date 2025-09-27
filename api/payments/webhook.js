@@ -62,6 +62,21 @@ export default async function handler(req, res) {
           } else if (metadata?.type === 'plan') {
             const months = Number(metadata?.months || 1);
             const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
+            // 0) Сохраним payment_method для автоплатежей, если он доступен
+            try {
+              const pm = object?.payment_method || null;
+              const methodId = pm?.id || null;
+              if (methodId) {
+                await supabase.from('user_payment_methods').upsert({
+                  user_id: userRow.id,
+                  method_id: methodId,
+                  type: pm?.type || null,
+                  title: pm?.title || null,
+                  saved: Boolean(pm?.saved ?? true),
+                  is_default: true,
+                }, { onConflict: 'method_id' });
+              }
+            } catch {}
             // 1) Зафиксируем платёж в журнале (upsert на случай повтора вебхука)
             if (paymentId) {
               await supabase.from('payments').upsert({

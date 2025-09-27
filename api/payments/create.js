@@ -126,6 +126,7 @@ export default async function handler(req, res) {
       ],
     };
 
+    const isPlan = type === 'plan';
     const payload = {
       amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
       capture: true,
@@ -133,6 +134,7 @@ export default async function handler(req, res) {
       confirmation: preferEmbedded ? { type: 'embedded' } : { type: 'redirect', return_url: returnUrl },
       metadata,
       receipt,
+      ...(isPlan ? { save_payment_method: true } : {}),
     };
 
     const ykRes = await fetch('https://api.yookassa.ru/v3/payments', {
