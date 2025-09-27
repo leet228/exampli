@@ -42,6 +42,7 @@ export default function Subscription() {
   const [coins, setCoins] = useState<number>(0);
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [isPlus, setIsPlus] = useState<boolean>(false);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -97,6 +98,24 @@ export default function Subscription() {
         } catch {}
       }
     } catch {}
+  }, []);
+
+  // Признак активной подписки: читаем из кэша и обновляем по plus_until
+  useEffect(() => {
+    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    const onStatsPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      const pu = e.detail?.plus_until;
+      if (pu) {
+        try {
+          const active = new Date(pu).getTime() > Date.now();
+          setIsPlus(active);
+          cacheSet(CACHE_KEYS.isPlus, active);
+        } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onStatsPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStatsPlus as EventListener);
   }, []);
 
   async function createPaymentAndRedirect(kind: 'plan' | 'gems', id: string) {
@@ -249,66 +268,70 @@ export default function Subscription() {
       <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
         <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
       </div>
-      {/* карусель тарифов */}
-      <div
-        ref={trackRef}
-        className="w-full overflow-x-auto no-scrollbar mt-[-85px]"
-        style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
-      >
-        <div className="flex gap-4 px-1" style={{ width: '100%' }}>
-          {plans.map((p, i) => (
-            <motion.div
-              key={p.id}
-              className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
-              style={{ minWidth: '100%', scrollSnapAlign: 'start' }}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-xl font-bold">{p.title} <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>PLUS</span></div>
-                  <div className="text-sm text-muted mt-0.5">
-                    {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
+      {/* карусель тарифов — скрываем если активна подписка */}
+      {!isPlus && (
+        <div
+          ref={trackRef}
+          className="w-full overflow-x-auto no-scrollbar mt-[-85px]"
+          style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
+        >
+          <div className="flex gap-4 px-1" style={{ width: '100%' }}>
+            {plans.map((p, i) => (
+              <motion.div
+                key={p.id}
+                className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
+                style={{ minWidth: '100%', scrollSnapAlign: 'start' }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-xl font-bold">{p.title} <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>PLUS</span></div>
+                    <div className="text-sm text-muted mt-0.5">
+                      {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
+                    </div>
                   </div>
+                  <div className="text-3xl">∞</div>
                 </div>
-                <div className="text-3xl">∞</div>
-              </div>
 
-              <div className="mt-4 grid gap-2">
-                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
-                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
-                <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
-              </div>
+                <div className="mt-4 grid gap-2">
+                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
+                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
+                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
+                </div>
 
-              <div className="mt-5">
-                <PressButton
-                  className="w-full rounded-3xl px-5 py-4 font-semibold text-white"
-                  baseColor={accentColor}
-                  shadowHeight={shadowHeight}
-                  darken={darken}
-                  onSelectHaptic={hapticSelect}
-                  onClick={() => createPaymentAndRedirect('plan', p.id)}
-                >
-                  {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${p.price.toLocaleString('ru-RU')} ₽`}
-                </PressButton>
-              </div>
-            </motion.div>
+                <div className="mt-5">
+                  <PressButton
+                    className="w-full rounded-3xl px-5 py-4 font-semibold text-white"
+                    baseColor={accentColor}
+                    shadowHeight={shadowHeight}
+                    darken={darken}
+                    onSelectHaptic={hapticSelect}
+                    onClick={() => createPaymentAndRedirect('plan', p.id)}
+                  >
+                    {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${p.price.toLocaleString('ru-RU')} ₽`}
+                  </PressButton>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* индикаторы — только если нет подписки */}
+      {!isPlus && (
+        <div className="flex items-center justify-center gap-2">
+          {plans.map((_, i) => (
+            <span
+              key={i}
+              className={[
+                'inline-block w-2 h-2 rounded-full transition-all',
+                i === idx ? 'bg-white w-6' : 'bg-white/30',
+              ].join(' ')}
+            />
           ))}
         </div>
-      </div>
-
-      {/* индикаторы */}
-      <div className="flex items-center justify-center gap-2">
-        {plans.map((_, i) => (
-          <span
-            key={i}
-            className={[
-              'inline-block w-2 h-2 rounded-full transition-all',
-              i === idx ? 'bg-white w-6' : 'bg-white/30',
-            ].join(' ')}
-          />
-        ))}
-      </div>
+      )}
 
       {/* Заморозка стрика */}
       <div className="relative mt-2 px-1">
