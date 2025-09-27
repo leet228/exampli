@@ -78,7 +78,23 @@ export default async function handler(req, res) {
           });
           const text = await r.text();
           let js = null; try { js = text ? JSON.parse(text) : null; } catch {}
-          results.push({ user_id: s.user_id, plan: s.plan_code, ok: r.ok, status: js?.status || null, id: js?.id || null, error: r.ok ? null : (js || text) });
+          const ok = r.ok && (js?.status === 'succeeded' || js?.paid === true || js?.status === 'pending');
+          results.push({ user_id: s.user_id, plan: s.plan_code, ok, status: js?.status || null, id: js?.id || null, error: ok ? null : (js || text) });
+          // Если платёж не прошёл, и подписка уже истекла — пометим её как expired и уберём plus_until
+          if (!ok) {
+            const expired = s?.expires_at ? (new Date(s.expires_at).getTime() <= Date.now()) : false;
+            if (expired) {
+              try {
+                await supabase
+                  .from('user_subscriptions')
+                  .update({ status: 'expired', updated_at: new Date().toISOString() })
+                  .eq('user_id', s.user_id)
+                  .eq('plan_code', s.plan_code)
+                  .eq('status', 'active');
+                await supabase.from('users').update({ plus_until: null }).eq('id', s.user_id);
+              } catch {}
+            }
+          }
         } catch (e) {
           results.push({ user_id: s?.user_id, plan: s?.plan_code, ok: false, error: String(e?.message || e) });
         }

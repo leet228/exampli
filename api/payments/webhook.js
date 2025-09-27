@@ -62,17 +62,20 @@ export default async function handler(req, res) {
           } else if (metadata?.type === 'plan') {
             const months = Number(metadata?.months || 1);
             const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
-            // 0) Сохраним payment_method для автоплатежей, если он доступен
+            // 0) Сохраним payment_method для автоплатежей, если он доступен и сохранён
             try {
               const pm = object?.payment_method || null;
               const methodId = pm?.id || null;
-              if (methodId) {
+              const saved = pm?.saved === true;
+              const pmType = String(pm?.type || '').toLowerCase();
+              // Для автосписаний требуется сохранённая карта
+              if (methodId && saved && pmType === 'bank_card') {
                 await supabase.from('user_payment_methods').upsert({
                   user_id: userRow.id,
                   method_id: methodId,
-                  type: pm?.type || null,
+                  type: pmType,
                   title: pm?.title || null,
-                  saved: Boolean(pm?.saved ?? true),
+                  saved: true,
                   is_default: true,
                 }, { onConflict: 'method_id' });
               }
