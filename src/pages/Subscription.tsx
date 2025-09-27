@@ -107,7 +107,11 @@ export default function Subscription() {
       const js = await r.json();
       const url = js?.confirmation_url;
       if (url) {
-        // Откроем в том же WebView, чтобы остаться внутри Telegram
+        // Откроем через Telegram WebApp API, чтобы избежать iframe (X-Frame-Options)
+        try { (window as any)?.Telegram?.WebApp?.openLink?.(url, { try_instant_view: false }); return; } catch {}
+        // Резерв: новое окно
+        try { window.open(url, '_blank'); return; } catch {}
+        // Последний резерв: прямой переход
         location.href = url;
       }
     } catch (e) {
