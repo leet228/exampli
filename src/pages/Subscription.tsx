@@ -107,13 +107,15 @@ export default function Subscription() {
           </div>
         </div>
       </div>
-      {/* Градиентный фон над баннером (только контент страницы) */}
+      {/* верхний баннер на всю ширину */}
       <div
         className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen"
-        style={{ height: 'calc(var(--hud-h) + 28px)', background: 'linear-gradient(180deg,#3c73ff 0%, #7c3aed 65%, var(--bg) 100%)' }}
-      />
-      {/* верхний баннер на всю ширину */}
-      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
+        style={{
+          marginTop: 'calc(-1 * (var(--hud-h) + 28px))',
+          paddingTop: 'calc(var(--hud-h) + 28px)',
+          background: 'linear-gradient(180deg,#3c73ff 0%, #7c3aed 100%)'
+        }}
+      >
         <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
       </div>
       {/* карусель тарифов */}
