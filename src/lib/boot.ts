@@ -88,6 +88,12 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   try { cacheSet(CACHE_KEYS.userAvatarUrl, (step1?.avatar_url as string) || (userRow?.avatar_url as string) || null); } catch {}
   const stats = step1.stats;
   cacheSet(CACHE_KEYS.stats, stats);
+  // Отметим признак активной подписки локально (по plus_until > now)
+  try {
+    const plusUntil = (step1?.user?.plus_until as string) || null;
+    const active = plusUntil ? (new Date(plusUntil).getTime() > Date.now()) : false;
+    cacheSet(CACHE_KEYS.isPlus, active);
+  } catch {}
   report(33);
 
   // 2a) Обработка ИНВАЙТА ПО ССЫЛКЕ (friend_invites) — отдельная ветка от обычных pending
