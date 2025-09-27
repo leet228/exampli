@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { hapticSelect } from '../lib/haptics';
+import { hapticSelect, hapticSlideReveal, hapticSlideClose } from '../lib/haptics';
 import { cacheGet, CACHE_KEYS } from '../lib/cache';
 
 type Plan = { id: string; months: number; price: number; title: string };
@@ -39,6 +39,7 @@ export default function Subscription() {
   const [highlight, setHighlight] = useState(false);
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const [coins, setCoins] = useState<number>(0);
+  const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
 
   useEffect(() => {
     const el = trackRef.current;
@@ -183,6 +184,7 @@ export default function Subscription() {
               shadowHeight={shadowHeight}
               darken={darken}
               onSelectHaptic={hapticSelect}
+              onClick={() => { try { hapticSlideReveal(); } catch {} setSheetOpen({ days: s.id === 's1' ? 1 : 2, price: s.coins, icon: s.icon }); }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -251,6 +253,15 @@ export default function Subscription() {
           })}
         </div>
       </div>
+      {/* Нижняя шторка покупки заморозки */}
+      <FreezeSheet
+        open={Boolean(sheetOpen)}
+        onClose={() => setSheetOpen(null)}
+        coins={coins}
+        days={(sheetOpen?.days || 1) as 1 | 2}
+        price={sheetOpen?.price || 425}
+        icon={sheetOpen?.icon || '/shop/streak_1.svg'}
+      />
     </div>
   );
 }
@@ -263,6 +274,7 @@ function PressButton({
   darken,
   children,
   onSelectHaptic,
+  onClick,
 }: {
   className?: string;
   baseColor: string;
@@ -270,6 +282,7 @@ function PressButton({
   darken: (hex: string, amount?: number) => string;
   children: React.ReactNode;
   onSelectHaptic?: () => void;
+  onClick?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
   const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
@@ -280,11 +293,77 @@ function PressButton({
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => { setPressed(false); try { onSelectHaptic?.(); } catch {} }}
       onPointerCancel={() => setPressed(false)}
+      onClick={onClick}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
       transition={{ duration: 0 }}
       style={{ background: baseColor, border: '1px solid rgba(0,0,0,0.08)' }}
     >
       {children}
     </motion.button>
+  );
+}
+
+// Локальная нижняя шторка для покупки заморозки
+function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolean; onClose: () => void; coins: number; days: 1 | 2; price: number; icon: string }) {
+  if (!open) return null as any;
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={() => { try { hapticSlideClose(); } catch {} onClose(); }} />
+      <motion.div
+        className="sheet-panel"
+        initial={{ y: 500, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 500, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+        style={{ padding: '18px 16px 18px 16px' }}
+      >
+        <div className="max-w-xl mx-auto">
+          <div className="flex items-center justify-end">
+            <div className="flex items-center gap-1">
+              <img src="/stickers/coin_cat.svg" alt="" className="w-7 h-7 select-none" draggable={false} />
+              <span className="text-yellow-300 font-extrabold tabular-nums text-lg">{coins}</span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-center">
+            <img src={icon} alt="" className="w-28 h-28 select-none" draggable={false} />
+          </div>
+
+          <div className="mt-4 text-center">
+            <div className="text-xl font-extrabold">Защитить ваш стрик</div>
+            <div className="text-base mt-1">
+              с <span className="text-sky-400 font-extrabold">{days === 1 ? '1 днём' : '2 днями'} заморозки</span>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <PressButton
+              className="w-full rounded-3xl px-5 py-4 font-extrabold text-white"
+              baseColor="#3c73ff"
+              shadowHeight={6}
+              darken={(h) => h}
+              onSelectHaptic={hapticSelect}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span>Купить за</span>
+                <img src="/stickers/coin_cat.svg" alt="" className="w-6 h-6" />
+                <span className="tabular-nums">{price.toLocaleString('ru-RU')}</span>
+              </div>
+            </PressButton>
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              className="w-full rounded-3xl px-5 py-4 font-semibold border border-white/10"
+              style={{ background: 'var(--bg)' }}
+              onClick={() => { try { hapticSelect(); } catch {} onClose(); }}
+            >
+              <span className="text-sky-400">Отменить</span>
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </>
   );
 }
