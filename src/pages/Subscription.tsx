@@ -95,14 +95,21 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      {/* верхний баннер на всю ширину */}
-      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen mt-[-20px]">
-        <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
-        {/* локальный верхний HUD: справа счётчик монет */}
-        <div className="absolute top-3 right-4 flex items-center gap-1">
-          <img src="/stickers/coin_cat.svg" alt="" className="w-7 h-7 select-none" draggable={false} />
-          <span className="text-yellow-300 font-extrabold tabular-nums">{coins}</span>
+      {/* Локальный фиксированный HUD для страницы подписки (только счётчик монет справа) */}
+      <div className="hud-fixed bg-[var(--bg)]">
+        <div className="max-w-xl mx-auto px-5 py-0">
+          <div className="grid grid-cols-4 items-center">
+            <div className="col-span-3" />
+            <div className="justify-self-end flex items-center gap-1">
+              <img src="/stickers/coin_cat.svg" alt="" className="w-8 h-8 select-none" draggable={false} />
+              <span className="text-yellow-300 font-extrabold tabular-nums text-lg">{coins}</span>
+            </div>
+          </div>
         </div>
+      </div>
+      {/* верхний баннер на всю ширину */}
+      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
+        <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
       </div>
       {/* карусель тарифов */}
       <div
