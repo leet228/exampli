@@ -96,7 +96,7 @@ export default function Subscription() {
   return (
     <div className="space-y-6">
       {/* Локальный фиксированный HUD для страницы подписки (только счётчик монет справа) */}
-      <div className="hud-fixed hud-compact hud-top-gradient">
+      <div className="hud-fixed hud-compact bg-[var(--bg)]">
         <div className="max-w-xl mx-auto px-5 py-2">
           <div className="grid grid-cols-4 items-center">
             <div className="col-span-3" />
@@ -107,6 +107,11 @@ export default function Subscription() {
           </div>
         </div>
       </div>
+      {/* Градиентный фон над баннером (только контент страницы) */}
+      <div
+        className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen"
+        style={{ height: 'calc(var(--hud-h) + 28px)', background: 'linear-gradient(180deg,#3c73ff 0%, #7c3aed 65%, var(--bg) 100%)' }}
+      />
       {/* верхний баннер на всю ширину */}
       <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
         <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
