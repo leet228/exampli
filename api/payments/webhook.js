@@ -14,11 +14,29 @@ export default async function handler(req, res) {
     const object = event?.object || null;
     const status = object?.status || null;
     const metadata = object?.metadata || {};
+    const paymentId = object?.id || null;
+
+    // Если требуется, дожмём capture для waiting_for_capture
+    if ((event?.event === 'payment.waiting_for_capture' || status === 'waiting_for_capture') && paymentId) {
+      try {
+        const shopId = process.env.YOOKASSA_SHOP_ID;
+        const secretKey = process.env.YOOKASSA_SECRET_KEY;
+        if (shopId && secretKey) {
+          const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
+          const idk = (Math.random().toString(36).slice(2) + Date.now());
+          await fetch(`https://api.yookassa.ru/v3/payments/${encodeURIComponent(paymentId)}/capture`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${auth}`, 'Idempotence-Key': idk },
+            body: JSON.stringify({})
+          });
+        }
+      } catch (e) { try { console.warn('[yookassa:webhook] capture failed', e); } catch {} }
+    }
 
     if (event?.event === 'payment.succeeded' || status === 'succeeded') {
       // Demo: update Supabase user based on metadata
       const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
       if (supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         const userId = metadata?.user_id || null;
@@ -36,9 +54,10 @@ export default async function handler(req, res) {
           if (metadata?.type === 'gems') {
             const addCoins = Number(metadata?.coins || 0);
             if (Number.isFinite(addCoins) && addCoins > 0) {
-              await supabase.rpc('rpc_add_coins', { p_user_id: userRow.id, p_delta: addCoins }).catch(async () => {
+              const rpcRes = await supabase.rpc('rpc_add_coins', { p_user_id: userRow.id, p_delta: addCoins });
+              if (rpcRes?.error) {
                 await supabase.from('users').update({ coins: (Number(userRow.coins || 0) + addCoins) }).eq('id', userRow.id);
-              });
+              }
             }
           } else if (metadata?.type === 'plan') {
             const months = Number(metadata?.months || 1);
