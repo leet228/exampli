@@ -120,6 +120,16 @@ body {
     /* под контентом HUD */
 }
 
+/* Компактный вариант HUD — подложка заканчивается сразу под контентом */
+.hud-fixed.hud-compact::before {
+    bottom: 0;
+}
+
+/* Градиентная заливка только выше баннера: сверху → фиолетовый → ниже — обычный фон */
+.hud-fixed.hud-top-gradient::before {
+    background: linear-gradient(180deg, #3c73ff 0%, #7c3aed 65%, var(--bg) 65%);
+}
+
 .hud-stick {
     position: sticky;
     top: var(--hud-top);

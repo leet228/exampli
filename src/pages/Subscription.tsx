@@ -96,8 +96,8 @@ export default function Subscription() {
   return (
     <div className="space-y-6">
       {/* Локальный фиксированный HUD для страницы подписки (только счётчик монет справа) */}
-      <div className="hud-fixed bg-[var(--bg)]">
-        <div className="max-w-xl mx-auto px-5 py-0">
+      <div className="hud-fixed hud-compact hud-top-gradient">
+        <div className="max-w-xl mx-auto px-5 py-2">
           <div className="grid grid-cols-4 items-center">
             <div className="col-span-3" />
             <div className="justify-self-end flex items-center gap-1">
