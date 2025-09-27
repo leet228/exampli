@@ -54,6 +54,7 @@ export default async function handler(req, res) {
     const host = (req.headers['x-forwarded-host'] || req.headers.host || '');
     const origin = `${proto}://${host}`;
     const returnUrl = (typeof body?.return_url === 'string' && body.return_url) || `${origin}/subscription?paid=1`;
+    const preferEmbedded = String(body?.mode || body?.confirmation || '').toLowerCase() === 'embedded';
 
     const description = type === 'plan'
       ? `${product.title} — ${product.months} мес.`
@@ -124,7 +125,7 @@ export default async function handler(req, res) {
       amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
       capture: true,
       description,
-      confirmation: { type: 'redirect', return_url: returnUrl },
+      confirmation: preferEmbedded ? { type: 'embedded' } : { type: 'redirect', return_url: returnUrl },
       metadata,
       receipt,
     };
@@ -148,7 +149,8 @@ export default async function handler(req, res) {
     }
 
     const confirmationUrl = js?.confirmation?.confirmation_url || js?.confirmation?.url || null;
-    res.status(200).json({ ok: true, payment_id: js?.id || null, confirmation_url: confirmationUrl });
+    const confirmationToken = js?.confirmation?.confirmation_token || null;
+    res.status(200).json({ ok: true, payment_id: js?.id || null, confirmation_url: confirmationUrl, confirmation_token: confirmationToken });
   } catch (e) {
     try { console.error('[api/payments/create] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
