@@ -12,7 +12,6 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [incomeMinorByMonth, setIncomeMinorByMonth] = useState<ReturnType<typeof aggregateStats> | null>(null)
   const [payments, setPayments] = useState<PaymentRow[]>([])
-  const [incomes, setIncomes] = useState<ReturnType<typeof paymentsToIncome>>([])
 
   useEffect(() => {
     (async () => {
@@ -23,7 +22,6 @@ export default function Dashboard() {
         const inc = paymentsToIncome(rows)
         const stats = aggregateStats(inc, [])
         setPayments(rows)
-        setIncomes(inc)
         setIncomeMinorByMonth(stats)
       } catch (e: any) {
         setError(e?.message || 'Ошибка загрузки платежей')

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from '@/pages/Dashboard'
 import { BottomNav } from '@/components/BottomNav'
 import RegistrationPage from '@/pages/Registration'
