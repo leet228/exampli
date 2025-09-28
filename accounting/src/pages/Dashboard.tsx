@@ -3,13 +3,16 @@ import { StatCard } from '@/components/StatCard'
 import { BarChart } from '@/components/BarChart'
 import { formatMoneyFromMinor } from '@/lib/format'
 import { aggregateStats } from '@/lib/stats'
-import { fetchPayments } from '@/lib/payments'
+import { fetchPayments, type PaymentRow } from '@/lib/payments'
 import { paymentsToIncome } from '@/lib/payments.adapter'
+import { ExportButtons } from '@/components/ExportButtons'
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [incomeMinorByMonth, setIncomeMinorByMonth] = useState<ReturnType<typeof aggregateStats> | null>(null)
+  const [payments, setPayments] = useState<PaymentRow[]>([])
+  const [incomes, setIncomes] = useState<ReturnType<typeof paymentsToIncome>>([])
 
   useEffect(() => {
     (async () => {
@@ -17,8 +20,10 @@ export default function Dashboard() {
         setLoading(true)
         setError(null)
         const rows = await fetchPayments(2000)
-        const incomes = paymentsToIncome(rows)
-        const stats = aggregateStats(incomes, [])
+        const inc = paymentsToIncome(rows)
+        const stats = aggregateStats(inc, [])
+        setPayments(rows)
+        setIncomes(inc)
         setIncomeMinorByMonth(stats)
       } catch (e: any) {
         setError(e?.message || 'Ошибка загрузки платежей')
@@ -60,6 +65,26 @@ export default function Dashboard() {
             } />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Экспорт</h2>
+        <ExportButtons
+          fileBase={`accounting-${new Date().toISOString().slice(0,10)}`}
+          rawRows={payments.map(p => ({
+            id: p.id,
+            user_id: p.user_id,
+            type: p.type,
+            product_id: p.product_id,
+            amount_rub: p.amount_rub,
+            currency: p.currency,
+            status: p.status,
+            captured_at: p.captured_at,
+            test: p.test,
+          }))}
+          monthly={stats.byMonth.map(m => ({ year: m.year, month: m.month, income_rub: Math.round(m.incomeMinor) / 100, expense_rub: Math.round(m.expenseMinor) / 100 }))}
+          yearly={stats.byYear.map(y => ({ year: y.year, income_rub: Math.round(y.incomeMinor) / 100, expense_rub: Math.round(y.expenseMinor) / 100 }))}
+        />
       </section>
     </div>
   )
