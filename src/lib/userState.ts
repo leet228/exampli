@@ -14,6 +14,19 @@ function getTgId(): string | null {
   return id ? String(id) : null;
 }
 
+// Локальная проверка активности подписки (PLUS)
+function isPlusActiveLocal(): boolean {
+  try {
+    const flag = cacheGet<boolean>(CACHE_KEYS.isPlus);
+    if (typeof flag === 'boolean') return Boolean(flag);
+  } catch {}
+  try {
+    const pu = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+    if (pu) return new Date(String(pu)).getTime() > Date.now();
+  } catch {}
+  return false;
+}
+
 export async function ensureUser(): Promise<UserStats | null> {
   const tgId = getTgId();
   if (!tgId) return null;
@@ -110,6 +123,7 @@ export async function getStats(): Promise<UserStats | null> {
 }
 
 export async function canStartLesson(): Promise<boolean> {
+  if (isPlusActiveLocal()) return true;
   const u = await getStats();
   return (u?.energy ?? 0) > 0;
 }
@@ -249,6 +263,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 
   // Если был неправильный ответ (энергия--) — синхронизируем энергию, если знаем пользователя
   if (!correct && u?.id) {
+    if (isPlusActiveLocal()) { /* при активной подписке энергию не тратим */ return; }
     try {
       const { data } = await supabase
         .from('users')
@@ -272,6 +287,17 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 // Возвращает текущую энергию и опционально next_at/full_at
 export async function syncEnergy(delta: number = 0): Promise<{ energy: number; next_at?: string | null; full_at?: string | null } | null> {
   try {
+    // При активной подписке считаем энергию безлимитной (визуально 25)
+    if (isPlusActiveLocal()) {
+      const energy = 25;
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, energy, energy_full_at: null });
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy } } as any));
+        window.dispatchEvent(new CustomEvent('exampli:energySynced', { detail: { energy, next_at: null, full_at: null } } as any));
+      } catch {}
+      return { energy, next_at: null, full_at: null };
+    }
     // Получаем tg_id из Telegram или из кэша boot.user
     let tgId: string | null = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id
       ? String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id)
@@ -299,6 +325,13 @@ export async function syncEnergy(delta: number = 0): Promise<{ energy: number; n
 }
 
 export async function spendEnergy(): Promise<number | null> {
+  if (isPlusActiveLocal()) {
+    try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+      const energy = Math.max(0, Math.min(25, Number(cs?.energy ?? 25)));
+      return energy;
+    } catch { return 25; }
+  }
   const res = await syncEnergy(-1);
   return res?.energy ?? null;
 }

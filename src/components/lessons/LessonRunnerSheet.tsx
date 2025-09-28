@@ -48,6 +48,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
   const [rewardBonus, setRewardBonus] = useState<0 | 2 | 5>(0);
+  const [isPlus, setIsPlus] = useState<boolean>(() => { try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; } });
   const rewardKeyRef = useRef<number>(0);
   const solvedRef = useRef<Set<string | number>>(new Set());
   const [viewKey, setViewKey] = useState<number>(0);
@@ -124,6 +125,24 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       finishSavedRef.current = false;
     })();
   }, [open, lessonId]);
+
+  // Следим за признаком подписки
+  useEffect(() => {
+    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    const onPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      const pu = e.detail?.plus_until;
+      if (pu) {
+        try {
+          const active = new Date(pu).getTime() > Date.now();
+          setIsPlus(active);
+          cacheSet(CACHE_KEYS.isPlus, active);
+        } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+  }, []);
 
   useEffect(() => {
     const updatePos = () => {
@@ -302,7 +321,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   function onContinue(){
     try { hapticTiny(); } catch {}
-    // мгновенно уменьшаем энергию и иконку
+    // Подписчики: энергия не тратится — просто продолжаем
+    if (isPlus) {
+      next();
+      return;
+    }
+    // Остальные: мгновенно уменьшаем энергию и иконку
     setEnergy(prev => {
       const nextVal = Math.max(0, Math.min(25, (prev || 0) - 1));
       try {
@@ -312,15 +336,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         // фоновое обновление на сервере (RPC с ленивой регенерацией)
         (async () => { try { await spendEnergy(); } catch {} })();
       } catch {}
-      // если 0 — выходим из урока сразу (с учётом возможного бонуса)
-      if (nextVal <= 0) {
-        // вылет из урока по нехватке энергии — сбросить стрик
-        setStreakLocal(0);
-        setStreakFlash(null);
-        onClose();
-        return nextVal;
-      }
-      // иначе двигаем к следующему заданию
+      if (nextVal <= 0) { setStreakLocal(0); setStreakFlash(null); onClose(); return nextVal; }
       next();
       return nextVal;
     });
@@ -366,11 +382,17 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                   <div className="flex items-center gap-1">
-                    <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-6 h-6" />
-                    <span className={[
-                      'tabular-nums font-bold text-base',
-                      energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
-                    ].join(' ')}>{energy}</span>
+                    {isPlus ? (
+                      <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-6 h-6" />
+                    ) : (
+                      <>
+                        <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-6 h-6" />
+                        <span className={[
+                          'tabular-nums font-bold text-base',
+                          energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
+                        ].join(' ')}>{energy}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 {/* streak flash */}

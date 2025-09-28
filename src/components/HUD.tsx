@@ -25,6 +25,10 @@ export default function HUD() {
   const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [energy, setEnergy] = useState(25);
+  // Признак активной подписки (PLUS)
+  const [isPlus, setIsPlus] = useState<boolean>(() => {
+    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+  });
 
   // коины (счётчик); при клике — переход на подписку с подсветкой
   const [coins, setCoins] = useState(0);
@@ -236,6 +240,24 @@ export default function HUD() {
     };
   }, [loadUserSnapshot]);
 
+  // Следим за признаком подписки через кэш и события
+  useEffect(() => {
+    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    const onPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      const pu = e.detail?.plus_until;
+      if (pu) {
+        try {
+          const active = new Date(pu).getTime() > Date.now();
+          setIsPlus(active);
+          cacheSet(CACHE_KEYS.isPlus, active);
+        } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+  }, []);
+
   // последовательно: закрыть TopSheet → на следующий кадр открыть AddCourseSheet
   const openAddCourse = () => {
     setOpen(null);
@@ -360,20 +382,26 @@ export default function HUD() {
               className="justify-self-end flex items-center gap-1 text-sm text-[color:var(--muted)]"
               aria-label="Энергия"
             >
-              <img
-                src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`}
-                alt=""
-                aria-hidden
-                className="w-9 h-9"
-              />
-              <span
-                className={[
-                  'tabular-nums font-bold text-base',
-                  energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
-                ].join(' ')}
-              >
-                {energy}
-              </span>
+              {isPlus ? (
+                <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-9 h-9" />
+              ) : (
+                <>
+                  <img
+                    src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`}
+                    alt=""
+                    aria-hidden
+                    className="w-9 h-9"
+                  />
+                  <span
+                    className={[
+                      'tabular-nums font-bold text-base',
+                      energy <= 0 ? 'text-gray-400' : (energy <= 5 ? 'text-red-400' : 'text-green-400')
+                    ].join(' ')}
+                  >
+                    {energy}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>
