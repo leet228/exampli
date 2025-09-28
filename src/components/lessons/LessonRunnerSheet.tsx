@@ -383,7 +383,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   </div>
                   <div className="flex items-center gap-1">
                     {isPlus ? (
-                      <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-6 h-6" />
+                      <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-9 h-9" />
                     ) : (
                       <>
                         <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-6 h-6" />
