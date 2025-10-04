@@ -89,6 +89,12 @@ export default async function handler(req, res) {
       }
 
       if (userRow?.id) {
+        // Convert Stars → RUB using env RUB_PER_STAR (default 1)
+        const RUB_PER_STAR = Number(process.env.RUB_PER_STAR || '1');
+        const starsPaid = Number(successfulPayment.total_amount || 0);
+        const amountRub = Number.isFinite(starsPaid) && Number.isFinite(RUB_PER_STAR)
+          ? Math.round(starsPaid * (RUB_PER_STAR > 0 ? RUB_PER_STAR : 1))
+          : 0;
         const paymentId = String(
           successfulPayment.provider_payment_charge_id ||
           successfulPayment.telegram_payment_charge_id ||
@@ -107,37 +113,39 @@ export default async function handler(req, res) {
             }
           }
           try {
-            await supabase.from('payments').upsert({
+            const { data: payIns, error: payErr } = await supabase.from('payments').upsert({
               id: paymentId,
               user_id: userRow.id,
               type: 'gems',
               product_id: String(metadata?.product_id || ''),
-              amount_rub: null,
+              amount_rub: amountRub,
               currency: 'XTR',
               status: 'succeeded',
               test: false,
               payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount },
+              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
               captured_at: new Date().toISOString(),
             });
+            if (payErr) { try { console.error('[payments upsert gems] error:', payErr); } catch {} }
           } catch (e) { try { console.error('payments upsert (gems) failed', e); } catch {} }
         } else if (metadata?.type === 'plan') {
           const months = Number(metadata?.months || 1);
           const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
           try {
-            await supabase.from('payments').upsert({
+            const { data: payIns2, error: payErr2 } = await supabase.from('payments').upsert({
               id: paymentId,
               user_id: userRow.id,
               type: 'plan',
               product_id: pcode,
-              amount_rub: null,
+              amount_rub: amountRub,
               currency: 'XTR',
               status: 'succeeded',
               test: false,
               payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount },
+              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
               captured_at: new Date().toISOString(),
             });
+            if (payErr2) { try { console.error('[payments upsert plan] error:', payErr2); } catch {} }
           } catch (e) { try { console.error('payments upsert (plan) failed', e); } catch {} }
 
           const { error: extErr } = await supabase.rpc('extend_subscription', {

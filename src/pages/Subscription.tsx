@@ -160,7 +160,18 @@ export default function Subscription() {
       if (link) {
         const tg = (window as any)?.Telegram?.WebApp;
         try {
-          const ok = tg?.openInvoice?.(link, (_status: any) => {});
+          const ok = tg?.openInvoice?.(link, (status: any) => {
+            if (status === 'paid') {
+              // мгновенный апдейт без ожидания вебхука
+              void (async () => {
+                try { await refreshCoinsFromServer(); } catch {}
+                try { await refreshPlusUntilFromServer(); } catch {}
+              })();
+              try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата успешно завершена' } } as any)); } catch {}
+            } else if (status === 'cancelled') {
+              try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'warn', text: 'Оплата отменена' } } as any)); } catch {}
+            }
+          });
           if (ok !== true) {
             try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'error', text: 'Оплата недоступна в этом клиенте' } } as any)); } catch {}
           }

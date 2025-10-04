@@ -76,10 +76,9 @@ export default async function handler(req, res) {
       .join(';');
     const payload = rawPayload.slice(0, 120);
 
-    // For Bot API payments, amount is in the smallest units of currency.
-    // For XTR (Telegram Stars) it should be specified in star-cents (1 ⭐ = 100 units).
+    // Для XTR (Telegram Stars) используем количество звёзд напрямую
     const prices = [
-      { label: `${human}`.slice(0, 32) || 'Покупка', amount: Number(product.stars) * 100 }
+      { label: `${human}`.slice(0, 32) || 'Покупка', amount: Number(product.stars) }
     ];
 
     const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/createInvoiceLink`;
