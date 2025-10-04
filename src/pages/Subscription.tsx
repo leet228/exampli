@@ -10,14 +10,8 @@ export default function Subscription() {
   // Общие утилиты для кнопок с «нижней полоской»
   const accentColor = '#3c73ff';
   const shadowHeight = 6;
-  // Конвертация ₽→⭐ для отображения. Сервер использует RUB_PER_STAR; клиент — VITE_RUB_PER_STAR
-  const RUB_PER_STAR = Number((import.meta as any)?.env?.VITE_RUB_PER_STAR || '1');
-  const toStars = (rub: number): number => {
-    const r = Number(rub);
-    if (!Number.isFinite(r) || r <= 0) return 0;
-    const k = Number.isFinite(RUB_PER_STAR) && RUB_PER_STAR > 0 ? RUB_PER_STAR : 1;
-    return Math.max(1, Math.ceil(r / k));
-  };
+  // Для тестов: все цены показываем как 1 ⭐
+  const toStars = (_rub: number): number => 1;
   // Цвет фона карточек монет (сама кнопка)
   const coinButtonColor = '#121923';
   const darken = (hex: string, amount = 18) => {
@@ -165,16 +159,16 @@ export default function Subscription() {
       const link = js?.invoice_link as string | undefined;
       if (link) {
         const tg = (window as any)?.Telegram?.WebApp;
-        // Предпочитаем открывать через openInvoice, fallback — openLink
         try {
-          const ok = tg?.openInvoice?.(link, (_status: any) => {
-            // колбэк спецификации может вернуть "paid"/"cancelled"; обработаем через invoiceClosed ниже
-          });
-          if (ok === true) return;
-        } catch {}
-        try { tg?.openLink?.(link, { try_instant_view: false }); return; } catch {}
-        try { window.open(link, '_blank'); return; } catch {}
-        location.href = link;
+          const ok = tg?.openInvoice?.(link, (_status: any) => {});
+          if (ok !== true) {
+            try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'error', text: 'Оплата недоступна в этом клиенте' } } as any)); } catch {}
+          }
+          return;
+        } catch {
+          try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'error', text: 'Не удалось открыть оплату' } } as any)); } catch {}
+          return;
+        }
       }
     } catch (e) {
       try { console.warn('[subscription] create payment failed', e); } catch {}

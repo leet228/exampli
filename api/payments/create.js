@@ -28,13 +28,8 @@ export default async function handler(req, res) {
     }
 
     // Conversion: RUB -> Stars (XTR). Configure RUB_PER_STAR env if needed (default 1).
-    const RUB_PER_STAR = Number(process.env.RUB_PER_STAR || '1');
-    const toStars = (rub) => {
-      const r = Number(rub);
-      if (!Number.isFinite(r) || r <= 0) return 0;
-      const k = Number.isFinite(RUB_PER_STAR) && RUB_PER_STAR > 0 ? RUB_PER_STAR : 1;
-      return Math.max(1, Math.ceil(r / k));
-    };
+    // For testing: force all prices to 1 Star
+    const toStars = () => 1;
 
     // Server-side price/metadata map
     const PRODUCTS = {
