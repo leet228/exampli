@@ -88,6 +88,11 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   try { cacheSet(CACHE_KEYS.userAvatarUrl, (step1?.avatar_url as string) || (userRow?.avatar_url as string) || null); } catch {}
   const stats = step1.stats;
   cacheSet(CACHE_KEYS.stats, stats);
+  try {
+    if (step1?.last_streak_day) {
+      cacheSet(CACHE_KEYS.lastStreakDay, String(step1.last_streak_day));
+    }
+  } catch {}
   // Отметим признак активной подписки локально (по plus_until > now)
   try {
     const plusUntil = (step1?.user?.plus_until as string) || null;

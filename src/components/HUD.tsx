@@ -24,6 +24,7 @@ export default function HUD() {
   const [streak, setStreak] = useState(0);
   const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [lastStreakDay, setLastStreakDay] = useState<string | null>(null);
   const [energy, setEnergy] = useState(25);
   // Признак активной подписки (PLUS)
   const [isPlus, setIsPlus] = useState<boolean>(() => {
@@ -49,6 +50,11 @@ export default function HUD() {
         setEnergy(cs.energy ?? 25);
         setCoins(cs.coins ?? 0);
       }
+    } catch {}
+    // last_streak_day из boot‑кэша (если был положен на этапе boot)
+    try {
+      const lsd = cacheGet<string>(CACHE_KEYS.lastStreakDay) || (window as any)?.__exampliBoot?.last_streak_day || null;
+      if (lsd) setLastStreakDay(String(lsd));
     } catch {}
     // быстрый путь: достанем last_active_at и timezone из boot user-кэша
     try {
@@ -190,7 +196,7 @@ export default function HUD() {
 
     const onVisible = () => { if (!document.hidden) refresh(); };
     const onStatsChanged = (evt: Event) => {
-      const e = evt as CustomEvent<{ energy?: number; coins?: number; streak?: number }>;
+      const e = evt as CustomEvent<{ energy?: number; coins?: number; streak?: number; last_streak_day?: string }>;
       const ne = e.detail?.energy;
       if (typeof ne === 'number') {
         setEnergy(ne);
@@ -206,6 +212,11 @@ export default function HUD() {
           const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
           cacheSet(CACHE_KEYS.stats, { ...cs, streak: ns });
         } catch {}
+      }
+      const lsd = e.detail?.last_streak_day;
+      if (typeof lsd === 'string') {
+        setLastStreakDay(lsd);
+        try { cacheSet(CACHE_KEYS.lastStreakDay, lsd); } catch {}
       }
       const nc = e.detail?.coins;
       if (typeof nc === 'number') {
@@ -316,37 +327,31 @@ export default function HUD() {
               aria-label="Стрик"
             >
               {(() => {
-                // Иконка и отображаемое число: если сегодня уроков не было, показываем 0 и almost_dead_fire
+                // Иконка и отображаемое число: используем последний день стрика (boot)
                 const s = Number(streak || 0);
                 let icon = '/stickers/dead_fire.svg';
                 let streakColorClass = 'text-[color:var(--muted)]';
                 let display = s;
                 if (s > 0) {
-                  const toParts = (d: Date | null) => {
-                    if (!d) return null;
-                    try {
-                      const fmt = new Intl.DateTimeFormat((timezone || undefined) as any, { timeZone: (timezone || undefined) as any, year: 'numeric', month: 'numeric', day: 'numeric' });
-                      const parts = fmt.formatToParts(d);
-                      const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
-                      const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
-                      const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
-                      if ([y, m, dd].some(n => !Number.isFinite(n))) return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
-                      return { y, m, d: dd };
-                    } catch { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
-                  };
+                  const tz = (timezone || 'Europe/Moscow') as any;
+                  const fmt = (() => { try { return new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return new Intl.DateTimeFormat('Europe/Moscow', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }); } })();
                   const now = new Date();
-                  const la = lastActiveAt ? new Date(String(lastActiveAt)) : null;
-                  const tp = toParts(now)!;
-                  const lp = toParts(la);
-                  const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
-                  const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-                  const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-                  if (diffDays <= 0) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = s; }
-                  else if (diffDays === 1) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = 0; }
+                  const parts = fmt.formatToParts(now);
+                  const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+                  const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+                  const d = Number(parts.find(p => p.type === 'day')?.value || NaN);
+                  const pad = (n: number) => String(n).padStart(2, '0');
+                  const todayIso = `${y}-${pad(m)}-${pad(d)}`;
+                  const yesterdayIso = (() => {
+                    const dd = new Date(Date.parse(`${todayIso}T00:00:00Z`) - 86400000);
+                    const py = dd.getUTCFullYear(); const pm = dd.getUTCMonth() + 1; const pd = dd.getUTCDate();
+                    return `${py}-${pad(pm)}-${pad(pd)}`;
+                  })();
+                  const lastIso = (lastStreakDay ? String(lastStreakDay) : null);
+                  if (lastIso === todayIso) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = s; }
+                  else if (lastIso === yesterdayIso) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = 0; }
                   else { icon = '/stickers/dead_fire.svg'; streakColorClass = 'text-[color:var(--muted)]'; display = 0; }
-                } else {
-                  display = 0;
-                }
+                } else { display = 0; }
                 return <>
                   <img src={icon} alt="" aria-hidden className="w-9 h-9" />
                   <span className={["tabular-nums font-bold text-lg -ml-1", streakColorClass].join(' ')}>{display}</span>

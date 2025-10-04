@@ -41,6 +41,7 @@ export const CACHE_KEYS = {
   userAvatarUrl: 'user_avatar_url',
   stats: 'stats',
   isPlus: 'plus_active',
+  lastStreakDay: 'last_streak_day',
   activeCourseCode: 'active_course_code',
   subjectsAll: 'subjects_all',
   userProfile: 'user_profile',

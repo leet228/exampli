@@ -113,6 +113,28 @@ export default async function handler(req, res) {
       course_taken: true,
     };
 
+    // Определим последний день стрика (в TZ пользователя) до и включая сегодня
+    let lastStreakDay = null;
+    try {
+      const tz = userRow?.timezone || 'Europe/Moscow';
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const parts = fmt.formatToParts(now);
+      const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+      const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+      const d = Number(parts.find(p => p.type === 'day')?.value || NaN);
+      const toIso = (Y, M, D) => `${Y}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
+      const todayIso = toIso(y, m, d);
+      const { data: sd } = await supabase
+        .from('streak_days')
+        .select('day')
+        .eq('user_id', userRow.id)
+        .lte('day', todayIso)
+        .order('day', { ascending: false })
+        .limit(1);
+      if (Array.isArray(sd) && sd.length > 0) lastStreakDay = String(sd[0]?.day || '');
+    } catch {}
+
     res.status(200).json({
       user: userRow,
       stats: { streak: userRow.streak ?? 0, energy: userRow.energy ?? 25, coins: userRow.coins ?? 500 },
@@ -125,6 +147,7 @@ export default async function handler(req, res) {
       active_id: subjectAndLessons.active_id || null,
       onboarding,
       invite_token: startParam || null,
+      last_streak_day: lastStreakDay,
     });
   } catch (e) {
     console.error('[api/boot1] error', e);

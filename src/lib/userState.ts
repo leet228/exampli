@@ -192,7 +192,30 @@ export async function finishLesson({ correct }: { correct: boolean }) {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, streak: optimisticStreak });
         cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: now.toISOString(), timezone: tz });
-        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: optimisticStreak, last_active_at: now.toISOString() } } as any));
+        // Также положим last_streak_day (локально — день по TZ пользователя)
+        try {
+          const toIso = (d: Date) => {
+            const tzLocal = tz || 'Europe/Moscow';
+            try {
+              const fmt = new Intl.DateTimeFormat(tzLocal, { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
+              const parts = fmt.formatToParts(d);
+              const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+              const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+              const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+              const pad = (n: number) => String(n).padStart(2, '0');
+              return `${y}-${pad(m)}-${pad(dd)}`;
+            } catch {
+              const y = d.getUTCFullYear(); const m = d.getUTCMonth() + 1; const dd = d.getUTCDate();
+              const pad = (n: number) => String(n).padStart(2, '0');
+              return `${y}-${pad(m)}-${pad(dd)}`;
+            }
+          };
+          const dayIso = toIso(now);
+          cacheSet(CACHE_KEYS.lastStreakDay, dayIso);
+          window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: optimisticStreak, last_active_at: now.toISOString(), last_streak_day: dayIso } } as any));
+        } catch {
+          window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: optimisticStreak, last_active_at: now.toISOString() } } as any));
+        }
       }
     } catch {}
 
@@ -229,7 +252,22 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
             cacheSet(CACHE_KEYS.user, { ...cu, id: js?.user_id || cu.id || userId, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
-            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
+            if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
+            // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату
+            try {
+              const tzLocal = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+              const fmt = new Intl.DateTimeFormat(tzLocal, { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
+              const parts = fmt.formatToParts(new Date());
+              const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+              const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+              const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+              const pad = (n: number) => String(n).padStart(2, '0');
+              const todayIso = `${y}-${pad(m)}-${pad(dd)}`;
+              cacheSet(CACHE_KEYS.lastStreakDay, todayIso);
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null, last_streak_day: todayIso } } as any));
+            } catch {
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
+            }
           } catch {}
         } else {
           // Fallback: сделаем клиентский апдейт users (если знаем userId)
