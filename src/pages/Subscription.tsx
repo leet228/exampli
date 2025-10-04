@@ -10,6 +10,14 @@ export default function Subscription() {
   // Общие утилиты для кнопок с «нижней полоской»
   const accentColor = '#3c73ff';
   const shadowHeight = 6;
+  // Конвертация ₽→⭐ для отображения. Сервер использует RUB_PER_STAR; клиент — VITE_RUB_PER_STAR
+  const RUB_PER_STAR = Number((import.meta as any)?.env?.VITE_RUB_PER_STAR || '1');
+  const toStars = (rub: number): number => {
+    const r = Number(rub);
+    if (!Number.isFinite(r) || r <= 0) return 0;
+    const k = Number.isFinite(RUB_PER_STAR) && RUB_PER_STAR > 0 ? RUB_PER_STAR : 1;
+    return Math.max(1, Math.ceil(r / k));
+  };
   // Цвет фона карточек монет (сама кнопка)
   const coinButtonColor = '#121923';
   const darken = (hex: string, amount = 18) => {
@@ -43,7 +51,8 @@ export default function Subscription() {
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isPlus, setIsPlus] = useState<boolean>(false);
-  const [autoRenew, setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: true, loading: false });
+  // Автопродление отключено при оплате через Telegram Stars
+  const [_autoRenew, _setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: false, loading: false });
 
   useEffect(() => {
     const el = trackRef.current;
@@ -119,37 +128,7 @@ export default function Subscription() {
     return () => window.removeEventListener('exampli:statsChanged', onStatsPlus as EventListener);
   }, []);
 
-  // Загрузка состояния автопродления при наличии подписки
-  useEffect(() => {
-    (async () => {
-      if (!isPlus) return;
-      try {
-        const boot: any = (window as any).__exampliBoot || {};
-        const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
-        if (!userId) return;
-        const r = await fetch(`/api/payments/auto_renew?user_id=${encodeURIComponent(userId)}`, { headers: { 'Cache-Control': 'no-store' } });
-        if (!r.ok) return;
-        const js = await r.json();
-        if (js?.ok) setAutoRenew({ enabled: Boolean(js.enabled), loading: false });
-      } catch {}
-    })();
-  }, [isPlus]);
-
-  async function toggleAutoRenew() {
-    try {
-      setAutoRenew((s) => ({ ...s, loading: true }));
-      const boot: any = (window as any).__exampliBoot || {};
-      const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
-      if (!userId) { setAutoRenew((s) => ({ ...s, loading: false })); return; }
-      const next = !autoRenew.enabled;
-      const r = await fetch('/api/payments/auto_renew', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, enabled: next })
-      });
-      if (r.ok) setAutoRenew({ enabled: next, loading: false });
-      else setAutoRenew((s) => ({ ...s, loading: false }));
-    } catch { setAutoRenew((s) => ({ ...s, loading: false })); }
-  }
+  // Автопродление отключено — никаких загрузок состояния и переключателей
 
   // Признак активной подписки: читаем из кэша и обновляем по plus_until
   useEffect(() => {
@@ -179,24 +158,23 @@ export default function Subscription() {
       const r = await fetch('/api/payments/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: kind, id, user_id: userId, tg_id: tgId, return_url: `${location.origin}/subscription?paid=1` })
+        body: JSON.stringify({ type: kind, id, user_id: userId, tg_id: tgId })
       });
       if (!r.ok) throw new Error('create_failed');
       const js = await r.json();
-      const url = js?.confirmation_url;
-      const paymentId = js?.payment_id || null;
-      // Сохраним id платежа и начнём фоновую проверку статуса
-      if (paymentId) {
-        try { sessionStorage.setItem('yk:lastPaymentId', String(paymentId)); } catch {}
-        try { startPaymentWatcher(String(paymentId)); } catch {}
-      }
-      if (url) {
-        // Откроем через Telegram WebApp API, чтобы избежать iframe (X-Frame-Options)
-        try { (window as any)?.Telegram?.WebApp?.openLink?.(url, { try_instant_view: false }); return; } catch {}
-        // Резерв: новое окно
-        try { window.open(url, '_blank'); return; } catch {}
-        // Последний резерв: прямой переход
-        location.href = url;
+      const link = js?.invoice_link as string | undefined;
+      if (link) {
+        const tg = (window as any)?.Telegram?.WebApp;
+        // Предпочитаем открывать через openInvoice, fallback — openLink
+        try {
+          const ok = tg?.openInvoice?.(link, (_status: any) => {
+            // колбэк спецификации может вернуть "paid"/"cancelled"; обработаем через invoiceClosed ниже
+          });
+          if (ok === true) return;
+        } catch {}
+        try { tg?.openLink?.(link, { try_instant_view: false }); return; } catch {}
+        try { window.open(link, '_blank'); return; } catch {}
+        location.href = link;
       }
     } catch (e) {
       try { console.warn('[subscription] create payment failed', e); } catch {}
@@ -205,32 +183,20 @@ export default function Subscription() {
     }
   }
 
-  function startPaymentWatcher(paymentId: string) {
-    let attempts = 0;
-    const timer = setInterval(async () => {
-      attempts += 1;
+  // Вместо поллинга статуса используем событие Telegram WebApp invoiceClosed
+  useEffect(() => {
+    const tg = (window as any)?.Telegram?.WebApp;
+    const handler = (_ev: any) => {
+      try { hapticSelect(); } catch {}
       try {
-        const r = await fetch(`/api/payments/status?payment_id=${encodeURIComponent(paymentId)}`, { headers: { 'Cache-Control': 'no-store' } });
-        if (!r.ok) return;
-        const js = await r.json();
-        if (js?.paid || js?.status === 'succeeded') {
-          clearInterval(timer);
-          try { sessionStorage.removeItem('yk:lastPaymentId'); } catch {}
-          try { hapticSelect(); } catch {}
-          try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any)); } catch {}
-          // Подсветим монеты блоком
-          try {
-            window.dispatchEvent(new CustomEvent('exampli:highlightCoins'));
-          } catch {}
-          // Обновим баланс монет из БД (вебхук мог уже начислить)
-          try { await refreshCoinsFromServer(); } catch {}
-          // Обновим plus_until для HUD
-          try { await refreshPlusUntilFromServer(); } catch {}
-        }
+        window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
       } catch {}
-      if (attempts >= 60) clearInterval(timer); // ~5 минут при 5с интервале
-    }, 5000);
-  }
+      // Обновим баланс монет и статус подписки
+      void (async () => { try { await refreshCoinsFromServer(); } catch {} try { await refreshPlusUntilFromServer(); } catch {} })();
+    };
+    try { tg?.onEvent?.('invoiceClosed', handler); } catch {}
+    return () => { try { tg?.offEvent?.('invoiceClosed', handler); } catch {} };
+  }, []);
 
   async function refreshCoinsFromServer() {
     const boot: any = (window as any).__exampliBoot || {};
@@ -271,13 +237,7 @@ export default function Subscription() {
     }
   }
 
-  // Если пользователь вернулся вручную — продолжим проверку по сохранённому id
-  useEffect(() => {
-    try {
-      const pid = sessionStorage.getItem('yk:lastPaymentId');
-      if (pid) startPaymentWatcher(pid);
-    } catch {}
-  }, []);
+  // Убрали сохранение и поллинг yk:lastPaymentId — Stars не требует поллинга
 
 
   useEffect(() => {
@@ -327,7 +287,7 @@ export default function Subscription() {
           style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
         >
           <div className="flex gap-4 px-1" style={{ width: '100%' }}>
-            {plans.map((p, i) => (
+            {plans.map((p) => (
               <motion.div
                 key={p.id}
                 className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
@@ -360,7 +320,7 @@ export default function Subscription() {
                     onSelectHaptic={hapticSelect}
                     onClick={() => createPaymentAndRedirect('plan', p.id)}
                   >
-                    {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${p.price.toLocaleString('ru-RU')} ₽`}
+                    {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${toStars(p.price)} ⭐`}
                   </PressButton>
                 </div>
               </motion.div>
@@ -369,43 +329,17 @@ export default function Subscription() {
         </div>
       )}
 
-      {/* Тумблер автопродления — только при активной подписке */}
-      {isPlus && (
-        <div className="px-1">
-          <div className="mt-2 rounded-3xl border border-white/10 bg-white/5 p-4 flex items-center justify-between">
-            <div>
-              <div className="text-lg font-semibold">Автопродление подписки</div>
-              <div className="text-sm text-muted">Можно отключить в любой момент</div>
-            </div>
-            <button
-              type="button"
-              onClick={autoRenew.loading ? undefined : toggleAutoRenew}
-              className={[
-                'relative inline-flex h-7 w-12 items-center rounded-full transition-colors',
-                autoRenew.enabled ? 'bg-sky-500' : 'bg-white/20',
-                autoRenew.loading ? 'opacity-60 cursor-wait' : 'cursor-pointer'
-              ].join(' ')}
-            >
-              <span
-                className={[
-                  'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
-                  autoRenew.enabled ? 'translate-x-6' : 'translate-x-1'
-                ].join(' ')}
-              />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Автопродление недоступно при оплате через Telegram Stars */}
 
       {/* индикаторы — только если нет подписки */}
       {!isPlus && (
         <div className="flex items-center justify-center gap-2">
-          {plans.map((_, i) => (
+          {plans.map((_, dotIndex) => (
             <span
-              key={i}
+              key={dotIndex}
               className={[
                 'inline-block w-2 h-2 rounded-full transition-all',
-                i === idx ? 'bg-white w-6' : 'bg-white/30',
+                dotIndex === idx ? 'bg-white w-6' : 'bg-white/30',
               ].join(' ')}
             />
           ))}
@@ -472,6 +406,7 @@ export default function Subscription() {
         <div className="mt-2 grid gap-4">
           {gems.map((g) => {
             const rub = g.rub;
+            const stars = toStars(rub);
             return (
               <PressButton
                 key={g.id}
@@ -487,9 +422,7 @@ export default function Subscription() {
                     <img src={g.icon} alt="" className="h-14 w-14 select-none" draggable={false} />
                     <div className="text-xl font-semibold tabular-nums">{g.amount}</div>
                   </div>
-                  <div className="text-sky-400 font-extrabold tabular-nums">
-                    {loadingId === `gems:${g.id}` ? '...' : `${rub.toLocaleString('ru-RU')} ₽`}
-                  </div>
+                  <div className="text-sky-400 font-extrabold tabular-nums">{loadingId === `gems:${g.id}` ? '...' : `${stars} ⭐`}</div>
                 </div>
               </PressButton>
             );

@@ -1,6 +1,4 @@
-// ESM serverless function: Create YooKassa payment (demo)
-import { randomUUID } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
+// ESM serverless function: Create Telegram Stars invoice link
 
 export default async function handler(req, res) {
   try {
@@ -15,10 +13,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    const shopId = process.env.YOOKASSA_SHOP_ID;
-    const secretKey = process.env.YOOKASSA_SECRET_KEY;
-    if (!shopId || !secretKey) {
-      res.status(500).json({ error: 'Missing YooKassa env', details: { hasShopId: !!shopId, hasSecretKey: !!secretKey } });
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      res.status(500).json({ error: 'missing_env', detail: 'TELEGRAM_BOT_TOKEN' });
       return;
     }
 
@@ -30,17 +27,26 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Server-side price/metadata map (protects from client tampering)
+    // Conversion: RUB -> Stars (XTR). Configure RUB_PER_STAR env if needed (default 1).
+    const RUB_PER_STAR = Number(process.env.RUB_PER_STAR || '1');
+    const toStars = (rub) => {
+      const r = Number(rub);
+      if (!Number.isFinite(r) || r <= 0) return 0;
+      const k = Number.isFinite(RUB_PER_STAR) && RUB_PER_STAR > 0 ? RUB_PER_STAR : 1;
+      return Math.max(1, Math.ceil(r / k));
+    };
+
+    // Server-side price/metadata map
     const PRODUCTS = {
       plan: {
-        m1:  { rub: 499,  months: 1,  title: 'КУРСИК PLUS' },
-        m6:  { rub: 2699, months: 6,  title: 'КУРСИК PLUS' },
-        m12: { rub: 4999, months: 12, title: 'КУРСИК PLUS' },
+        m1:  { stars: toStars(499),  months: 1,  title: 'КУРСИК PLUS' },
+        m6:  { stars: toStars(2699), months: 6,  title: 'КУРСИК PLUS' },
+        m12: { stars: toStars(4999), months: 12, title: 'КУРСИК PLUS' },
       },
       gems: {
-        g1: { rub: 499,  coins: 1200, title: 'Монеты' },
-        g2: { rub: 999,  coins: 3000, title: 'Монеты' },
-        g3: { rub: 1999, coins: 6500, title: 'Монеты' },
+        g1: { stars: toStars(499),  coins: 1200, title: 'Монеты' },
+        g2: { stars: toStars(999),  coins: 3000, title: 'Монеты' },
+        g3: { stars: toStars(1999), coins: 6500, title: 'Монеты' },
       }
     };
 
@@ -50,114 +56,46 @@ export default async function handler(req, res) {
       return;
     }
 
-    const proto = (req.headers['x-forwarded-proto'] || 'https');
-    const host = (req.headers['x-forwarded-host'] || req.headers.host || '');
-    const origin = `${proto}://${host}`;
-    const botUsername = process.env.TELEGRAM_BOT_USERNAME;
-    const preferTelegramReturn = Boolean(botUsername) && (body?.prefer_tg_return !== false);
-    const returnUrl = (typeof body?.return_url === 'string' && body.return_url)
-      || (preferTelegramReturn ? `https://t.me/${botUsername}?startapp=paid` : `${origin}/subscription?paid=1`);
-    const preferEmbedded = String(body?.mode || body?.confirmation || '').toLowerCase() === 'embedded';
-
     const description = type === 'plan'
       ? `${product.title} — ${product.months} мес.`
-      : `${product.title}: ${product.coins}`
+      : `${product.title}: ${product.coins}`;
 
-    const idempotenceKey = randomUUID();
-    const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
-
-    const metadata = {
+    // Payload will be echoed back in successful_payment.invoice_payload
+    const payloadData = {
       type,
       product_id: productId,
       months: product.months || undefined,
       coins: product.coins || undefined,
       user_id: body?.user_id || null,
       tg_id: body?.tg_id || null,
+      v: 1
     };
+    const payload = JSON.stringify(payloadData);
 
-    // --- Build receipt (cheque) to satisfy YooKassa fiscalization requirements ---
-    // Try to resolve customer contact
-    let customer = undefined;
-    try {
-      // Prefer explicit values from body
-      const bodyPhone = (body?.customer?.phone || body?.phone || '').toString().trim();
-      const bodyEmail = (body?.customer?.email || body?.email || '').toString().trim();
-      if (bodyPhone) customer = { phone: normalizePhone(bodyPhone) };
-      else if (bodyEmail) customer = { email: bodyEmail };
-      // If still not set, try Supabase user phone
-      if (!customer && (body?.user_id || body?.tg_id)) {
-        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
-        if (supabaseUrl && supabaseKey) {
-          const supabase = createClient(supabaseUrl, supabaseKey);
-          let userRow = null;
-          if (body?.user_id) {
-            const { data } = await supabase.from('users').select('id, phone_number').eq('id', body.user_id).maybeSingle();
-            userRow = data || null;
-          } else if (body?.tg_id) {
-            const { data } = await supabase.from('users').select('id, phone_number').eq('tg_id', String(body.tg_id)).maybeSingle();
-            userRow = data || null;
-          }
-          const p = userRow?.phone_number && String(userRow.phone_number).trim();
-          if (p) customer = { phone: normalizePhone(p) };
-        }
-      }
-    } catch {}
-    if (!customer) {
-      const fallbackEmail = process.env.YOOKASSA_DEFAULT_CUSTOMER_EMAIL || 'billing@example.com';
-      customer = { email: fallbackEmail };
-    }
+    const prices = [
+      { label: description.slice(0, 32) || 'Покупка', amount: Number(product.stars) }
+    ];
 
-    const vatCode = Number(process.env.YOOKASSA_VAT_CODE || 1); // 1 = без НДС
-    const taxSystem = process.env.YOOKASSA_TAX_SYSTEM_CODE ? Number(process.env.YOOKASSA_TAX_SYSTEM_CODE) : undefined; // optional 1..6
-
-    const receipt = {
-      customer,
-      ...(taxSystem ? { tax_system_code: taxSystem } : {}),
-      items: [
-        {
-          description: String(description).slice(0, 128) || 'Услуга',
-          quantity: 1,
-          amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
-          vat_code: vatCode,
-          payment_mode: 'full_payment',
-          payment_subject: 'service',
-        },
-      ],
-    };
-
-    const isPlan = type === 'plan';
-    const payload = {
-      amount: { value: Number(product.rub).toFixed(2), currency: 'RUB' },
-      capture: true,
-      description,
-      confirmation: preferEmbedded ? { type: 'embedded' } : { type: 'redirect', return_url: returnUrl },
-      metadata,
-      receipt,
-      ...(isPlan ? { save_payment_method: true } : {}),
-    };
-
-    const ykRes = await fetch('https://api.yookassa.ru/v3/payments', {
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/createInvoiceLink`;
+    const tgRes = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotence-Key': idempotenceKey,
-        'Authorization': `Basic ${auth}`,
-      },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: (type === 'plan' ? 'Подписка КУРСИК PLUS' : 'Покупка монет'),
+        description,
+        payload,
+        currency: 'XTR',
+        prices,
+      })
     });
-
-    const text = await ykRes.text();
-    let js = null;
-    try { js = text ? JSON.parse(text) : null; } catch {}
-    if (!ykRes.ok) {
-      res.status(ykRes.status).json({ error: 'yookassa_error', detail: js || text || null });
+    const text = await tgRes.text();
+    let json = null; try { json = text ? JSON.parse(text) : null; } catch {}
+    if (!tgRes.ok || !json?.ok || typeof json?.result !== 'string') {
+      res.status(tgRes.status || 500).json({ error: 'telegram_error', detail: json || text || null });
       return;
     }
 
-    const confirmationUrl = js?.confirmation?.confirmation_url || js?.confirmation?.url || null;
-    const confirmationToken = js?.confirmation?.confirmation_token || null;
-    res.status(200).json({ ok: true, payment_id: js?.id || null, confirmation_url: confirmationUrl, confirmation_token: confirmationToken });
+    res.status(200).json({ ok: true, invoice_link: json.result, stars: Number(product.stars) || null, payload: payloadData });
   } catch (e) {
     try { console.error('[api/payments/create] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
@@ -173,15 +111,3 @@ async function safeJson(req) {
     req.on?.('error', () => resolve({}));
   });
 }
-
-function normalizePhone(phone) {
-  try {
-    let p = String(phone).replace(/\D+/g, '');
-    if (p.startsWith('8') && p.length === 11) p = '7' + p.slice(1);
-    if (p.length === 10) p = '7' + p; // assume RU
-    // Для receipt.customer.phone ЮKassa ожидает номер без плюса
-    return p;
-  } catch { return String(phone || '').replace(/\D+/g, ''); }
-}
-
-
