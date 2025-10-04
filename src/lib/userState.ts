@@ -197,7 +197,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
           const toIso = (d: Date) => {
             const tzLocal = tz || 'Europe/Moscow';
             try {
-              const fmt = new Intl.DateTimeFormat(tzLocal, { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
+              const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
               const parts = fmt.formatToParts(d);
               const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
               const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
@@ -256,7 +256,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату
             try {
               const tzLocal = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-              const fmt = new Intl.DateTimeFormat(tzLocal, { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
+              const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
               const parts = fmt.formatToParts(new Date());
               const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
               const m = Number(parts.find(p => p.type === 'month')?.value || NaN);

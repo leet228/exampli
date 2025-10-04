@@ -333,8 +333,10 @@ export default function HUD() {
                 let streakColorClass = 'text-[color:var(--muted)]';
                 let display = s;
                 if (s > 0) {
-                  const tz = (timezone || 'Europe/Moscow') as any;
-                  const fmt = (() => { try { return new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return new Intl.DateTimeFormat('Europe/Moscow', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }); } })();
+                  const tz = String(timezone || 'Europe/Moscow');
+                  let fmt: Intl.DateTimeFormat;
+                  try { fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); }
+                  catch { fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }); }
                   const now = new Date();
                   const parts = fmt.formatToParts(now);
                   const y = Number(parts.find(p => p.type === 'year')?.value || NaN);

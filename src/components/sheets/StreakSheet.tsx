@@ -152,7 +152,8 @@ export function StreakSheetContent() {
             const toParts = (d: Date | null) => {
               if (!d) return null;
               try {
-                const fmt = new Intl.DateTimeFormat((timezone || undefined) as any, { timeZone: (timezone || undefined) as any, year: 'numeric', month: 'numeric', day: 'numeric' });
+                const tz = String(timezone || 'Europe/Moscow');
+                const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' });
                 const parts = fmt.formatToParts(d);
                 const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
                 const m = Number(parts.find(p => p.type === 'month')?.value || NaN) - 1;
