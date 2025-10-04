@@ -327,13 +327,14 @@ export default function HUD() {
               aria-label="Стрик"
             >
               {(() => {
-                // Иконка и отображаемое число: используем последний день стрика (boot)
+                // Иконка: строго по last_streak_day с расчётом «сегодня/вчера/иначе» в МСК. Число всегда = streak.
                 const s = Number(streak || 0);
                 let icon = '/stickers/dead_fire.svg';
                 let streakColorClass = 'text-[color:var(--muted)]';
                 let display = s;
                 if (s > 0) {
-                  const tz = String(timezone || 'Europe/Moscow');
+                  // вычислим today/yesterday в МСК, затем сравним с lastStreakDay
+                  const tz = 'Europe/Moscow';
                   let fmt: Intl.DateTimeFormat;
                   try { fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); }
                   catch { fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }); }
@@ -345,15 +346,17 @@ export default function HUD() {
                   const pad = (n: number) => String(n).padStart(2, '0');
                   const todayIso = `${y}-${pad(m)}-${pad(d)}`;
                   const yesterdayIso = (() => {
-                    const dd = new Date(Date.parse(`${todayIso}T00:00:00Z`) - 86400000);
-                    const py = dd.getUTCFullYear(); const pm = dd.getUTCMonth() + 1; const pd = dd.getUTCDate();
-                    return `${py}-${pad(pm)}-${pad(pd)}`;
+                    const dd = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
+                    const y2 = dd.getUTCFullYear(); const m2 = dd.getUTCMonth() + 1; const d2 = dd.getUTCDate();
+                    return `${y2}-${pad(m2)}-${pad(d2)}`;
                   })();
                   const lastIso = (lastStreakDay ? String(lastStreakDay) : null);
-                  if (lastIso === todayIso) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = s; }
-                  else if (lastIso === yesterdayIso) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; display = 0; }
-                  else { icon = '/stickers/dead_fire.svg'; streakColorClass = 'text-[color:var(--muted)]'; display = 0; }
-                } else { display = 0; }
+                  if (lastIso === todayIso) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
+                  else if (lastIso === yesterdayIso) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
+                  else { icon = '/stickers/dead_fire.svg'; streakColorClass = 'text-[color:var(--muted)]'; }
+                } else {
+                  display = 0;
+                }
                 return <>
                   <img src={icon} alt="" aria-hidden className="w-9 h-9" />
                   <span className={["tabular-nums font-bold text-lg -ml-1", streakColorClass].join(' ')}>{display}</span>

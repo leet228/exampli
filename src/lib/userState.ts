@@ -192,10 +192,10 @@ export async function finishLesson({ correct }: { correct: boolean }) {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, streak: optimisticStreak });
         cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: now.toISOString(), timezone: tz });
-        // Также положим last_streak_day (локально — день по TZ пользователя)
+        // Также положим last_streak_day, строго по МСК
         try {
           const toIso = (d: Date) => {
-            const tzLocal = tz || 'Europe/Moscow';
+            const tzLocal = 'Europe/Moscow';
             try {
               const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
               const parts = fmt.formatToParts(d);
@@ -253,9 +253,9 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
             cacheSet(CACHE_KEYS.user, { ...cu, id: js?.user_id || cu.id || userId, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
-            // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату
+            // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)
             try {
-              const tzLocal = (cacheGet<any>(CACHE_KEYS.user)?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+              const tzLocal = 'Europe/Moscow';
               const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
               const parts = fmt.formatToParts(new Date());
               const y = Number(parts.find(p => p.type === 'year')?.value || NaN);

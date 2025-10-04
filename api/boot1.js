@@ -113,12 +113,12 @@ export default async function handler(req, res) {
       course_taken: true,
     };
 
-    // Определим последний день стрика (в TZ пользователя) до и включая сегодня
+    // Определим последний день стрика (СТРОГО по МСК) до и включая сегодня
     let lastStreakDay = null;
     try {
-      const tz = userRow?.timezone || 'Europe/Moscow';
+      const tz = 'Europe/Moscow';
       const now = new Date();
-      const fmt = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
       const parts = fmt.formatToParts(now);
       const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
       const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
