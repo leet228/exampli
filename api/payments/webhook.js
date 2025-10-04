@@ -17,6 +17,28 @@ export default async function handler(req, res) {
     const update = await safeJson(req);
     try { console.log('[telegram:webhook] update:', JSON.stringify(update)); } catch {}
 
+    // 0) Answer pre_checkout_query to allow Telegram to proceed with payment
+    const pcq = update?.pre_checkout_query || null;
+    if (pcq?.id) {
+      try {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (!botToken) { console.warn('No TELEGRAM_BOT_TOKEN set; cannot answerPreCheckoutQuery'); }
+        else {
+          const ansUrl = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/answerPreCheckoutQuery`;
+          const ansRes = await fetch(ansUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: true })
+          });
+          const ansText = await ansRes.text();
+          try { console.log('[telegram:webhook] answerPreCheckoutQuery:', ansText); } catch {}
+        }
+      } catch (e) { try { console.warn('answerPreCheckoutQuery failed', e); } catch {} }
+      // Acknowledge update early; successful_payment will arrive next
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     const message = update?.message || update?.edited_message || null;
     const successfulPayment = message?.successful_payment || null;
 
