@@ -28,8 +28,8 @@ export default async function handler(req, res) {
       expires_at: expiresAt,
     }, { onConflict: 'user_id' });
 
-    // also touch users.last_active_at for DAU/WAU/MAU
-    await supabase.from('users').update({ last_active_at: now.toISOString() }).eq('id', userId);
+    // ВАЖНО: не трогаем users.last_active_at, чтобы HUD корректно показывал стрик
+    // (last_active_at обновляется только при реальной активности урока в /api/streak_finish)
 
     res.status(200).json({ ok: true });
   } catch (e) {
