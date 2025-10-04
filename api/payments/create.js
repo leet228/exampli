@@ -51,24 +51,33 @@ export default async function handler(req, res) {
       return;
     }
 
+    const human = type === 'plan' ? `${product.months} мес.` : `${product.coins} монет`;
     const description = type === 'plan'
-      ? `${product.title} — ${product.months} мес.`
-      : `${product.title}: ${product.coins}`;
+      ? `${product.title} — ${human}`
+      : `${product.title}: ${human}`;
 
     // Payload will be echoed back in successful_payment.invoice_payload
+    // Minified payload string (avoid oversize). Max 128 bytes recommended.
     const payloadData = {
-      type,
-      product_id: productId,
-      months: product.months || undefined,
-      coins: product.coins || undefined,
-      user_id: body?.user_id || null,
-      tg_id: body?.tg_id || null,
+      t: type,
+      pid: productId,
+      m: product.months || undefined,
+      c: product.coins || undefined,
+      u: body?.user_id || null,
+      g: body?.tg_id || null,
       v: 1
     };
-    const payload = JSON.stringify(payloadData);
+    const rawPayload = [`t=${payloadData.t}`, `pid=${payloadData.pid}`]
+      .concat(payloadData.m ? [`m=${payloadData.m}`] : [])
+      .concat(payloadData.c ? [`c=${payloadData.c}`] : [])
+      .concat(payloadData.u ? [`u=${payloadData.u}`] : [])
+      .concat(payloadData.g ? [`g=${payloadData.g}`] : [])
+      .concat([`v=1`])
+      .join(';');
+    const payload = rawPayload.slice(0, 120);
 
     const prices = [
-      { label: description.slice(0, 32) || 'Покупка', amount: Number(product.stars) }
+      { label: `${human}`.slice(0, 32) || 'Покупка', amount: Number(product.stars) }
     ];
 
     const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/createInvoiceLink`;
@@ -76,8 +85,8 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: (type === 'plan' ? 'Подписка КУРСИК PLUS' : 'Покупка монет'),
-        description,
+        title: (type === 'plan' ? `Подписка: ${human}` : `Монеты: ${human}`),
+        description: `${description} • ${product.stars} ⭐`,
         payload,
         currency: 'XTR',
         prices,
@@ -90,7 +99,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ ok: true, invoice_link: json.result, stars: Number(product.stars) || null, payload: payloadData });
+    res.status(200).json({ ok: true, invoice_link: json.result, stars: Number(product.stars) || null });
   } catch (e) {
     try { console.error('[api/payments/create] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });

@@ -23,8 +23,31 @@ export default async function handler(req, res) {
     // Stars successful payment (currency XTR)
     if (successfulPayment && String(successfulPayment?.currency || '').toUpperCase() === 'XTR') {
       const payloadRaw = successfulPayment?.invoice_payload || '';
-      let payload = null; try { payload = payloadRaw ? JSON.parse(payloadRaw) : null; } catch {}
-      const metadata = payload || {};
+      let payload = null;
+      // Try JSON first
+      try { payload = payloadRaw ? JSON.parse(payloadRaw) : null; } catch {}
+      // Fallback: parse compact "k=v;..." payload (t,pid,m,c,u,g)
+      if (!payload && typeof payloadRaw === 'string' && payloadRaw.includes('=')) {
+        const obj = {};
+        for (const part of payloadRaw.split(';')) {
+          const [k, v] = part.split('=');
+          if (!k) continue;
+          obj[k] = v ?? '';
+        }
+        payload = obj;
+      }
+      // Normalize to common metadata shape
+      let metadata = payload || {};
+      if (metadata && (metadata.t || metadata.pid || metadata.m || metadata.c)) {
+        metadata = {
+          type: metadata.t || metadata.type || null,
+          product_id: metadata.pid || metadata.product_id || null,
+          months: metadata.m != null ? Number(metadata.m) : (metadata.months != null ? Number(metadata.months) : undefined),
+          coins: metadata.c != null ? Number(metadata.c) : (metadata.coins != null ? Number(metadata.coins) : undefined),
+          user_id: metadata.u || metadata.user_id || null,
+          tg_id: metadata.g || metadata.tg_id || null,
+        };
+      }
 
       const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
