@@ -152,26 +152,33 @@ function ChartCard({ points, range, onRangeChange }: { points: { x: string; y: n
   const max = Math.max(1, ...points.map(p => p.y))
   return (
     <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, margin: '14px 0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as any }}>
         <div style={{ fontSize: 16, fontWeight: 700 }}>Динамика</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as any }}>
           {(['day','week','month'] as const).map(k => (
             <button key={k} className={`btn${k===range?' btn--primary':''}`} onClick={() => onRangeChange(k)}>{k==='day'?'День':k==='week'?'Неделя':'Месяц'}</button>
           ))}
         </div>
       </div>
-      <div style={{ height: 180, display: 'flex', alignItems: 'end', gap: 6, paddingTop: 12 }}>
-        {points.map((p, i) => {
-          const h = Math.max(6, Math.round((p.y / max) * 160))
-          const color = i === points.length - 1 ? '#7dd3fc' : '#e5e7eb'
+      <div style={{ paddingTop: 12, overflowX: 'auto' }}>
+        {(() => {
+          const trackWidth = Math.max(280, points.length * 18)
           return (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 6 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
-              <div style={{ width: 10, height: h, borderRadius: 4, background: color }} />
-              <div style={{ fontSize: 10, opacity: 0.6, marginTop: 6 }}>{p.x}</div>
+            <div style={{ height: 180, display: 'flex', alignItems: 'end', gap: 6, minWidth: trackWidth }}>
+              {points.map((p, i) => {
+                const h = Math.max(6, Math.round((p.y / max) * 160))
+                const color = i === points.length - 1 ? '#7dd3fc' : '#e5e7eb'
+                return (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 6 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
+                    <div style={{ width: 8, height: h, borderRadius: 4, background: color }} />
+                    <div style={{ fontSize: 10, opacity: 0.6, marginTop: 6 }}>{p.x}</div>
+                  </div>
+                )
+              })}
             </div>
           )
-        })}
+        })()}
       </div>
     </div>
   )
@@ -181,7 +188,7 @@ function RecentList({ rows }: { rows: Payment[] }) {
   const last = rows
     .filter(r => r.status === 'succeeded' && !r.test)
     .sort((a,b) => Date.parse(b.captured_at || b.created_at) - Date.parse(a.captured_at || a.created_at))
-    .slice(0, 20)
+    .slice(0, 50)
   return (
     <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, marginTop: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
