@@ -215,33 +215,16 @@ function Bookkeeping({ rows }: { rows: Payment[] }) {
     .slice(0, 50)
   , [rows, year, month])
 
-  function downloadCSV() {
-    const header = ['ID платежа','Дата','Сумма (руб)','Валюта','Тип','Товар','Пользователь','Статус']
-    const lines = [header]
-    for (const p of monthRows) {
-      const date = new Date(p.captured_at || p.created_at).toISOString()
-      lines.push([
-        p.id,
-        date,
-        String(Number(p.amount_rub||0).toFixed(2)),
-        p.currency || 'RUB',
-        p.type,
-        p.product_id ?? '',
-        p.user_id ?? '',
-        p.status,
-      ])
+  async function requestExport() {
+    try {
+      const mm = String(month).padStart(2,'0')
+      const r = await fetch(`/api/revenue_export?year=${encodeURIComponent(String(year))}&month=${encodeURIComponent(String(month))}`, { cache: 'no-store' })
+      const j = await r.json().catch(()=>({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'export_failed')
+      alert(`Готово! Бот отправит файл за ${mm}.${year} вам в личные сообщения.`)
+    } catch (e: any) {
+      alert(`Ошибка экспорта: ${e?.message || e}`)
     }
-    const csv = lines.map(row => row.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const mm = String(month).padStart(2,'0')
-    a.download = `payments_${year}-${mm}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -274,7 +257,7 @@ function Bookkeeping({ rows }: { rows: Payment[] }) {
         {monthRows.length === 0 ? <div style={{ opacity:0.6 }}>Нет платежей за выбранный период</div> : null}
       </div>
       <div style={{ marginTop: 12, textAlign: 'right' }}>
-        <button className="btn btn--primary" onClick={downloadCSV}>Скачать CSV для бухгалтерии</button>
+        <button className="btn btn--primary" onClick={requestExport}>Скачать CSV для бухгалтерии</button>
       </div>
     </div>
   )
