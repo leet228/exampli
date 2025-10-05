@@ -26,21 +26,21 @@ export default function Revenue() {
   const [rows, setRows] = useState<Payment[]>([])
   const [range, setRange] = useState<'month' | 'week' | 'day'>('month')
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch('/api/admin/revenue', { cache: 'no-store' })
-        const j = await r.json()
-        if (!r.ok) throw new Error(j?.error || 'failed')
-        setRows(Array.isArray(j?.rows) ? j.rows : [])
-        setError(null)
-      } catch (e: any) {
-        setError(e?.message || 'Ошибка загрузки')
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [])
+  async function load() {
+    try {
+      const r = await fetch('/api/revenue', { cache: 'no-store' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j?.error || `${r.status}`)
+      setRows(Array.isArray(j?.rows) ? j.rows : [])
+      setError(null)
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка загрузки')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
 
   const summary: Summary = useMemo(() => {
     const now = new Date()
@@ -108,7 +108,7 @@ export default function Revenue() {
             <div style={{ color: '#ff4d4d' }}>{error}</div>
           ) : (
             <>
-              <BalanceCard amount={summary.balance} />
+              <BalanceCard amount={summary.balance} onRefresh={() => { setLoading(true); load() }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <MiniCard title="За месяц" amount={summary.grossMonth} />
                 <MiniCard title="Сегодня" amount={summary.grossToday} />
@@ -125,7 +125,7 @@ export default function Revenue() {
   )
 }
 
-function BalanceCard({ amount }: { amount: number }) {
+function BalanceCard({ amount, onRefresh }: { amount: number; onRefresh: () => void }) {
   return (
     <div style={{ background: 'linear-gradient(180deg, #1a1a1a, #0a0a0a)', border: '1px solid #242424', borderRadius: 16, padding: 16, marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -133,7 +133,7 @@ function BalanceCard({ amount }: { amount: number }) {
           <div style={{ fontSize: 12, opacity: 0.7 }}>Баланс</div>
           <div style={{ fontSize: 34, fontWeight: 900, marginTop: 4 }}>{amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 })}</div>
         </div>
-        <button className="btn" style={{ background: '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: 12, padding: '8px 12px' }}>Обновить</button>
+        <button className="btn" onClick={onRefresh} style={{ background: '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: 12, padding: '8px 12px' }}>Обновить</button>
       </div>
     </div>
   )

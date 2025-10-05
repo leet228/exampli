@@ -1,4 +1,4 @@
-// ESM serverless function: Admin revenue snapshot from paymentsdd
+// ESM serverless function: Admin revenue snapshot from payments
 import { createClient } from '@supabase/supabase-js'
 
 export default async function handler(req, res) {

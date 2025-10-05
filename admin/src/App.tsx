@@ -256,6 +256,10 @@ function App() {
               </svg>
             </div>
           </div>
+          {/* Кнопка входа по паролю — показывает форму сразу, не дожидаясь Face ID */}
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <button className="btn" onClick={() => setMode('code')}>Войти по паролю</button>
+          </div>
         </div>
       ) : (
         <div className="code-wrap">
