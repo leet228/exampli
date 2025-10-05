@@ -114,6 +114,7 @@ export default function Revenue() {
                 <MiniCard title="Сегодня" amount={summary.grossToday} />
               </div>
               <ChartCard points={bars} range={range} onRangeChange={setRange} />
+              <Bookkeeping rows={rows} />
               <RecentList rows={rows} />
             </>
           )}
@@ -150,6 +151,9 @@ function MiniCard({ title, amount }: { title: string; amount: number }) {
 
 function ChartCard({ points, range, onRangeChange }: { points: { x: string; y: number }[]; range: 'month' | 'week' | 'day'; onRangeChange: (r: 'month' | 'week' | 'day') => void }) {
   const max = Math.max(1, ...points.map(p => p.y))
+  const chartHeight = 220
+  const maxBar = chartHeight - 70 // запас под подписи
+  const step = points.length > 20 ? Math.ceil(points.length / 10) : 1 // показываем подписи через шаг
   return (
     <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, margin: '14px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as any }}>
@@ -163,22 +167,22 @@ function ChartCard({ points, range, onRangeChange }: { points: { x: string; y: n
       <div style={{ paddingTop: 12 }}>
         <div
           style={{
-            height: 180,
+            height: chartHeight,
             display: 'grid',
             gridTemplateColumns: `repeat(${points.length}, 1fr)`,
             alignItems: 'end',
-            gap: 4,
+            gap: 2,
           }}
         >
           {points.map((p, i) => {
-            const maxBar = 130; // резерв под подписи, чтобы не задевать кнопки сверху
-            const h = Math.max(4, Math.round((p.y / max) * maxBar))
+            const h = Math.max(3, Math.round((p.y / max) * maxBar))
             const color = i === points.length - 1 ? '#7dd3fc' : '#e5e7eb'
+            const label = i % step === 0 ? p.x : ''
             return (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ fontSize: 10, lineHeight: '12px', height: 12, overflow: 'hidden', opacity: 0.7 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
-                <div style={{ width: '70%', height: h, borderRadius: 4, background: color }} />
-                <div style={{ fontSize: 10, lineHeight: '12px', height: 12, overflow: 'hidden', opacity: 0.6, marginTop: 4 }}>{p.x}</div>
+                <div style={{ fontSize: 9, lineHeight: '10px', height: 10, overflow: 'hidden', opacity: 0.7 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
+                <div style={{ width: '60%', height: h, borderRadius: 3, background: color }} />
+                <div style={{ fontSize: 9, lineHeight: '10px', height: 10, overflow: 'hidden', opacity: 0.6, marginTop: 4 }}>{label}</div>
               </div>
             )
           })}
@@ -209,6 +213,63 @@ function RecentList({ rows }: { rows: Payment[] }) {
             <div style={{ fontWeight: 800 }}>{Number(p.amount_rub||0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 })}</div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function Bookkeeping({ rows }: { rows: Payment[] }) {
+  const now = new Date()
+  const years = Array.from(new Set(rows.map(r => new Date(r.captured_at || r.created_at).getFullYear()))).sort((a,b)=>b-a)
+  if (years.length === 0) years.push(now.getFullYear())
+  const [year, setYear] = useState<number>(years[0])
+  const [month, setMonth] = useState<number>(now.getMonth()+1)
+
+  const monthTotal = useMemo(() => {
+    return rows.reduce((acc, r) => {
+      if (r.status !== 'succeeded' || r.test) return acc
+      const d = new Date(r.captured_at || r.created_at)
+      const y = d.getFullYear(), m = d.getMonth()+1
+      if (y === year && m === month) acc += Number(r.amount_rub || 0)
+      return acc
+    }, 0)
+  }, [rows, year, month])
+
+  const monthRows = useMemo(() => rows
+    .filter(r => r.status === 'succeeded' && !r.test)
+    .filter(r => { const d = new Date(r.captured_at || r.created_at); return d.getFullYear()===year && (d.getMonth()+1)===month })
+    .sort((a,b)=>Date.parse(b.captured_at||b.created_at)-Date.parse(a.captured_at||a.created_at))
+    .slice(0, 50)
+  , [rows, year, month])
+
+  return (
+    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, marginTop: 8 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems: 'center', gap: 8, flexWrap:'wrap' as any }}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Бухгалтерия</div>
+        <div style={{ display:'flex', gap: 8, flexWrap:'wrap' as any }}>
+          <select value={year} onChange={e=>setYear(Number(e.target.value))}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={month} onChange={e=>setMonth(Number(e.target.value))}>
+            {Array.from({length:12},(_,i)=>i+1).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ marginTop: 10, display:'grid', gridTemplateColumns:'1fr auto', alignItems:'center' }}>
+        <div style={{ opacity:0.7 }}>Итого за месяц</div>
+        <div style={{ fontWeight: 900 }}>{monthTotal.toLocaleString('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 })}</div>
+      </div>
+      <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+        {monthRows.map(p => (
+          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>{p.type === 'plan' ? 'Подписка' : 'Монеты'}</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>{new Date(p.captured_at || p.created_at).toLocaleString('ru-RU')}</div>
+            </div>
+            <div style={{ fontWeight: 800 }}>{Number(p.amount_rub||0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 })}</div>
+          </div>
+        ))}
+        {monthRows.length === 0 ? <div style={{ opacity:0.6 }}>Нет платежей за выбранный период</div> : null}
       </div>
     </div>
   )
