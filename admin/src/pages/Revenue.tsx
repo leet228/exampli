@@ -160,25 +160,29 @@ function ChartCard({ points, range, onRangeChange }: { points: { x: string; y: n
           ))}
         </div>
       </div>
-      <div style={{ paddingTop: 12, overflowX: 'auto' }}>
-        {(() => {
-          const trackWidth = Math.max(280, points.length * 18)
-          return (
-            <div style={{ height: 180, display: 'flex', alignItems: 'end', gap: 6, minWidth: trackWidth }}>
-              {points.map((p, i) => {
-                const h = Math.max(6, Math.round((p.y / max) * 160))
-                const color = i === points.length - 1 ? '#7dd3fc' : '#e5e7eb'
-                return (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 6 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
-                    <div style={{ width: 8, height: h, borderRadius: 4, background: color }} />
-                    <div style={{ fontSize: 10, opacity: 0.6, marginTop: 6 }}>{p.x}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+      <div style={{ paddingTop: 12 }}>
+        <div
+          style={{
+            height: 180,
+            display: 'grid',
+            gridTemplateColumns: `repeat(${points.length}, 1fr)`,
+            alignItems: 'end',
+            gap: 4,
+          }}
+        >
+          {points.map((p, i) => {
+            const maxBar = 130; // резерв под подписи, чтобы не задевать кнопки сверху
+            const h = Math.max(4, Math.round((p.y / max) * maxBar))
+            const color = i === points.length - 1 ? '#7dd3fc' : '#e5e7eb'
+            return (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ fontSize: 10, lineHeight: '12px', height: 12, overflow: 'hidden', opacity: 0.7 }}>{p.y ? p.y.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) : ''}</div>
+                <div style={{ width: '70%', height: h, borderRadius: 4, background: color }} />
+                <div style={{ fontSize: 10, lineHeight: '12px', height: 12, overflow: 'hidden', opacity: 0.6, marginTop: 4 }}>{p.x}</div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
