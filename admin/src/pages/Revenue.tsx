@@ -115,7 +115,6 @@ export default function Revenue() {
               </div>
               <ChartCard points={bars} range={range} onRangeChange={setRange} />
               <Bookkeeping rows={rows} />
-              <RecentList rows={rows} />
             </>
           )}
         </div>
@@ -192,32 +191,6 @@ function ChartCard({ points, range, onRangeChange }: { points: { x: string; y: n
   )
 }
 
-function RecentList({ rows }: { rows: Payment[] }) {
-  const last = rows
-    .filter(r => r.status === 'succeeded' && !r.test)
-    .sort((a,b) => Date.parse(b.captured_at || b.created_at) - Date.parse(a.captured_at || a.created_at))
-    .slice(0, 50)
-  return (
-    <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, marginTop: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>Последние платежи</div>
-        <a href="#" style={{ fontSize: 12, opacity: 0.7 }}>Смотреть все</a>
-      </div>
-      <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
-        {last.map(p => (
-          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>{p.type === 'plan' ? 'Подписка' : 'Монеты'}</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>{new Date(p.captured_at || p.created_at).toLocaleString('ru-RU')}</div>
-            </div>
-            <div style={{ fontWeight: 800 }}>{Number(p.amount_rub||0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 })}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function Bookkeeping({ rows }: { rows: Payment[] }) {
   const now = new Date()
   const years = Array.from(new Set(rows.map(r => new Date(r.captured_at || r.created_at).getFullYear()))).sort((a,b)=>b-a)
@@ -241,6 +214,35 @@ function Bookkeeping({ rows }: { rows: Payment[] }) {
     .sort((a,b)=>Date.parse(b.captured_at||b.created_at)-Date.parse(a.captured_at||a.created_at))
     .slice(0, 50)
   , [rows, year, month])
+
+  function downloadCSV() {
+    const header = ['ID платежа','Дата','Сумма (руб)','Валюта','Тип','Товар','Пользователь','Статус']
+    const lines = [header]
+    for (const p of monthRows) {
+      const date = new Date(p.captured_at || p.created_at).toISOString()
+      lines.push([
+        p.id,
+        date,
+        String(Number(p.amount_rub||0).toFixed(2)),
+        p.currency || 'RUB',
+        p.type,
+        p.product_id ?? '',
+        p.user_id ?? '',
+        p.status,
+      ])
+    }
+    const csv = lines.map(row => row.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const mm = String(month).padStart(2,'0')
+    a.download = `payments_${year}-${mm}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div style={{ background: 'linear-gradient(180deg, #111, #0a0a0a)', border: '1px solid #1e1e1e', borderRadius: 14, padding: 16, marginTop: 8 }}>
@@ -270,6 +272,9 @@ function Bookkeeping({ rows }: { rows: Payment[] }) {
           </div>
         ))}
         {monthRows.length === 0 ? <div style={{ opacity:0.6 }}>Нет платежей за выбранный период</div> : null}
+      </div>
+      <div style={{ marginTop: 12, textAlign: 'right' }}>
+        <button className="btn btn--primary" onClick={downloadCSV}>Скачать CSV для бухгалтерии</button>
       </div>
     </div>
   )
