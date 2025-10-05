@@ -29,10 +29,23 @@ export default async function handler(req, res) {
 
     // 1) Gather last streak day per user up to yesterday
     const sinceIso = toIso(y, m, Math.max(1, d - 60)); // naive 60-day window
-    const { data: rows } = await supabase
-      .from('streak_days')
-      .select('user_id, day')
-      .lte('day', yesterdayIso);
+    let rows = null;
+    // С пробой: если есть колонка kind, берём только active; иначе без фильтра
+    try {
+      const r1 = await supabase
+        .from('streak_days')
+        .select('user_id, day, kind')
+        .eq('kind', 'active')
+        .lte('day', yesterdayIso);
+      if (!r1.error) rows = r1.data;
+      else throw r1.error;
+    } catch (_e) {
+      const r2 = await supabase
+        .from('streak_days')
+        .select('user_id, day')
+        .lte('day', yesterdayIso);
+      rows = r2.data || [];
+    }
     const lastByUser = new Map();
     for (const r of rows || []) {
       const uid = r.user_id;
