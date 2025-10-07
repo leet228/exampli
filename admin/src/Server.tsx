@@ -76,6 +76,7 @@ function VercelLogsPanel() {
   const [range, setRange] = useState<'24h' | '7d'>('24h')
   const [rows, setRows] = useState<Array<{ ts: string; level: string; message: string; source?: string | null; path?: string | null; status?: number | null }>>([])
   const [meta, setMeta] = useState<{ deployment?: { id: string; url: string } | null; loading: boolean; error: string | null }>({ deployment: null, loading: true, error: null })
+  const [expanded, setExpanded] = useState(false)
 
   async function load(rng: '24h' | '7d') {
     setMeta(m => ({ ...m, loading: true, error: null }))
@@ -109,19 +110,28 @@ function VercelLogsPanel() {
         ) : rows.length === 0 ? (
           <div style={{ opacity: 0.7 }}>Логи не найдены за выбранный период</div>
         ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {rows.map((l, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 80px 1fr', gap: 10, alignItems: 'baseline', background: '#0e0e0e', border: '1px solid #1e1e1e', borderRadius: 10, padding: 10 }}>
-                <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap' }}>{new Date(l.ts).toLocaleString('ru-RU')}</div>
-                <div style={{ fontSize: 12, color: levelColor(l.level) }}>{l.level.toUpperCase()}</div>
-                <div style={{ fontSize: 13, opacity: 0.95 }}>
-                  {l.path ? <span style={{ opacity: 0.7, marginRight: 6 }}>{l.path}</span> : null}
-                  {l.status ? <span style={{ opacity: 0.7, marginRight: 6 }}>[{l.status}]</span> : null}
-                  {l.message}
+          <>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {(expanded ? rows : rows.slice(0, 10)).map((l, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 60px 1fr', gap: 10, alignItems: 'start', background: '#0e0e0e', border: '1px solid #1e1e1e', borderRadius: 10, padding: 10, maxWidth: '100%', overflowX: 'hidden' }}>
+                  <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap' }}>{new Date(l.ts).toLocaleString('ru-RU')}</div>
+                  <div style={{ fontSize: 12, color: levelColor(l.level), whiteSpace: 'nowrap' }}>{l.level.toUpperCase()}</div>
+                  <div style={{ fontSize: 13, opacity: 0.95, minWidth: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', display: expanded ? 'block' : '-webkit-box', WebkitLineClamp: expanded ? undefined : 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: expanded ? 'visible' : 'hidden' }}>
+                    {l.path ? <span style={{ opacity: 0.7, marginRight: 6 }}>{l.path}</span> : null}
+                    {l.status ? <span style={{ opacity: 0.7, marginRight: 6 }}>[{l.status}]</span> : null}
+                    {l.message}
+                  </div>
                 </div>
+              ))}
+            </div>
+            {rows.length > 10 ? (
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+                <button onClick={() => setExpanded((v) => !v)} style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #2a2a2a', background: '#0f0f0f', fontWeight: 700 }}>
+                  {expanded ? 'Свернуть' : 'Посмотреть всё'}
+                </button>
               </div>
-            ))}
-          </div>
+            ) : null}
+          </>
         )}
       </Section>
     </div>

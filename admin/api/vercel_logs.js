@@ -238,46 +238,33 @@ function normalizeLogs(payload) {
   if (Array.isArray(payload)) {
     for (const row of payload) {
       const ts = row?.timestamp || row?.time || row?.ts || row?._time
-      const level = row?.level || row?.severity || row?.type || 'info'
-      const msg = row?.message || row?.msg || row?.text || safeString(row)
-      out.push({ ts: toIso(ts), level: String(level), source: row?.source || 'log', message: msg, path: row?.path || row?.url || null, status: row?.status || row?.code || null })
+      let level = row?.level || row?.severity || row?.type || 'info'
+      const extra = extractMessage(row?.message || row?.msg || row?.text)
+      if (extra?.level) level = extra.level
+      out.push({ ts: toIso(ts), level: String(level), source: row?.source || 'log', message: extra?.text || safeString(row), path: extra?.path || row?.path || row?.url || null, status: extra?.status || row?.status || row?.code || null })
     }
   }
   // Observability query result
   if (Array.isArray(payload?.data)) {
     for (const row of payload.data) {
       const ts = row.timestamp || row.ts || row.time || row._time
-      out.push({
-        ts: toIso(ts),
-        level: (row.level || row.severity || 'info').toString(),
-        source: row.source || 'log',
-        message: row.message || row.msg || safeString(row),
-        path: row.path || row.url || null,
-        status: row.status || row.code || null,
-      })
+      const extra = extractMessage(row.message || row.msg || row.text)
+      const lvl = (extra?.level || row.level || row.severity || 'info').toString()
+      out.push({ ts: toIso(ts), level: lvl, source: row.source || 'log', message: extra?.text || safeString(row), path: extra?.path || row.path || row.url || null, status: extra?.status || row.status || row.code || null })
     }
   }
   if (Array.isArray(payload?.events)) {
     for (const e of payload.events) {
-      out.push({
-        ts: toIso(e?.createdAt || e?.created || e?.ts || e?.timestamp),
-        level: e?.severity || e?.level || 'info',
-        source: e?.type || e?.category || 'event',
-        message: e?.message || e?.text || e?.payload?.message || safeString(e?.payload),
-        path: e?.path || e?.route || e?.payload?.path || e?.payload?.url || null,
-        status: e?.status || e?.payload?.statusCode || null,
-      })
+      const extra = extractMessage(e?.message || e?.text || e?.payload?.message)
+      const lvl = extra?.level || e?.severity || e?.level || 'info'
+      const msg = extra?.text || e?.payload?.text || safeString(e?.payload)
+      out.push({ ts: toIso(e?.createdAt || e?.created || e?.ts || e?.timestamp), level: String(lvl), source: e?.type || e?.category || 'event', message: msg, path: extra?.path || e?.path || e?.route || e?.payload?.path || e?.payload?.url || null, status: extra?.status || e?.status || e?.payload?.statusCode || null })
     }
   } else if (Array.isArray(payload?.logs)) {
     for (const l of payload.logs) {
-      out.push({
-        ts: toIso(l?.createdAt || l?.timestamp),
-        level: l?.level || 'info',
-        source: l?.type || 'log',
-        message: l?.message || l?.text || safeString(l?.payload),
-        path: l?.path || null,
-        status: l?.status || null,
-      })
+      const extra = extractMessage(l?.message || l?.text || l?.payload)
+      const lvl = extra?.level || l?.level || 'info'
+      out.push({ ts: toIso(l?.createdAt || l?.timestamp), level: String(lvl), source: l?.type || 'log', message: extra?.text || safeString(l?.payload), path: extra?.path || l?.path || null, status: extra?.status || l?.status || null })
     }
   }
   // newest first
@@ -321,6 +308,25 @@ function buildDebug(payload, attempts, lastOk) {
   const keys = payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 10) : []
   const size = payload ? JSON.stringify(payload).length : 0
   return { attempts, lastOk, payloadShape: keys, payloadSize: size }
+}
+
+function extractMessage(raw) {
+  try {
+    if (!raw) return null
+    let obj = raw
+    if (typeof raw === 'string') {
+      try { obj = JSON.parse(raw) } catch { return { text: raw } }
+    }
+    // Known Vercel shape: { type, created, payload: { text, path, statusCode, level? } }
+    const payload = obj?.payload || obj
+    const text = payload?.text || payload?.message || payload?.msg || ''
+    const status = payload?.statusCode || payload?.status || null
+    const path = payload?.path || payload?.url || null
+    const level = payload?.level || obj?.level || null
+    return { text, status, path, level }
+  } catch {
+    return null
+  }
 }
 
 
