@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') { res.setHeader('Allow', 'GET, POST, OPTIONS'); res.status(204).end(); return; }
     if (req.method !== 'GET' && req.method !== 'POST') { res.setHeader('Allow', 'GET, POST, OPTIONS'); res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
     if (!supabaseUrl || !supabaseKey) { res.status(500).json({ error: 'env_missing' }); return; }
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     // Moscow date boundaries
     const tz = 'Europe/Moscow';
     const now = new Date();
-    const fmt = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
     const parts = fmt.formatToParts(now);
     const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
     const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const toIso = (Y, M, D) => `${Y}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
     const todayIso = toIso(y, m, d);
     const yesterdayDate = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
-    const yParts = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(yesterdayDate);
+    const yParts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(yesterdayDate);
     const yesterdayIso = toIso(Number(yParts.find(p=>p.type==='year')?.value), Number(yParts.find(p=>p.type==='month')?.value), Number(yParts.find(p=>p.type==='day')?.value));
 
     // 1) Gather last streak day per user up to yesterday
