@@ -51,22 +51,49 @@ export default async function handler(req, res) {
       `https://api.vercel.com/v1/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
       // Functions logs
       `https://api.vercel.com/v2/deployments/${dep.uid}/functions/logs?since=${sinceMs}&until=${untilMs}&limit=1000`,
+      // Observability (new logs API variants)
+      `POST:https://api.vercel.com/v1/observability/query`,
+      `GET:https://api.vercel.com/v1/observability/logs?deploymentId=${dep.uid}&from=${sinceMs}&to=${untilMs}&limit=1000`,
     ]
     const headers = { Authorization: `Bearer ${token}` }
     const withTeam = (url) => (teamId ? (url.includes('?') ? `${url}&teamId=${encodeURIComponent(teamId)}` : `${url}?teamId=${encodeURIComponent(teamId)}`) : url)
 
     let payload = null
     const attempts = []
-    for (const rawUrl of candidates) {
-      const url = withTeam(rawUrl)
+    for (const raw of candidates) {
       try {
-        const r = await fetch(url, { headers })
-        attempts.push({ url: rawUrl, status: r.status })
-        if (!r.ok) continue
-        const j = await r.json().catch(() => null)
-        if (!j) continue
-        payload = j
-        break
+        let method = 'GET'
+        let url = raw
+        if (raw.startsWith('POST:')) { method = 'POST'; url = raw.slice(5) }
+        if (raw.startsWith('GET:')) { method = 'GET'; url = raw.slice(4) }
+        url = withTeam(url)
+        let r = null
+        if (method === 'POST' && url.includes('/observability/query')) {
+          // Try several query shapes for compatibility
+          const bodies = [
+            { query: `from logs select timestamp, level, message, path, status where deploymentId = '${dep.uid}' and timestamp >= ${sinceMs} and timestamp <= ${untilMs} order by timestamp desc limit 1000` },
+            { query: `from logs where deploymentId = '${dep.uid}' and timestamp >= ${sinceMs} and timestamp <= ${untilMs} limit 1000` },
+            { query: `from logs select * where deploymentId = '${dep.uid}' and timestamp >= ${sinceMs} and timestamp <= ${untilMs} limit 1000` },
+          ]
+          for (const b of bodies) {
+            r = await fetch(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+            attempts.push({ url: 'POST ' + url, status: r.status })
+            if (!r.ok) continue
+            const j = await r.json().catch(() => null)
+            if (!j) continue
+            payload = j
+            break
+          }
+          if (payload) break
+        } else {
+          r = await fetch(url, { headers })
+          attempts.push({ url: method + ' ' + url, status: r.status })
+          if (!r.ok) continue
+          const j = await r.json().catch(() => null)
+          if (!j) continue
+          payload = j
+          break
+        }
       } catch {}
     }
 
@@ -177,6 +204,20 @@ async function resolveProjectId({ token, teamId, query }) {
 function normalizeLogs(payload) {
   // Different endpoints return different shapes; try to normalize
   const out = []
+  // Observability query result
+  if (Array.isArray(payload?.data)) {
+    for (const row of payload.data) {
+      const ts = row.timestamp || row.ts || row.time || row._time
+      out.push({
+        ts: toIso(ts),
+        level: (row.level || row.severity || 'info').toString(),
+        source: row.source || 'log',
+        message: row.message || row.msg || safeString(row),
+        path: row.path || row.url || null,
+        status: row.status || row.code || null,
+      })
+    }
+  }
   if (Array.isArray(payload?.events)) {
     for (const e of payload.events) {
       out.push({
