@@ -19,7 +19,8 @@ export default async function handler(req, res) {
     const untilMs = now
 
     // 1) find latest READY deployment for the project
-    const dep = await getLatestDeployment({ token, projectId, teamId })
+    const depIdOverride = (req.query?.deploymentId || '').toString().trim()
+    const dep = depIdOverride ? { uid: depIdOverride, url: undefined, createdAt: undefined } : await getLatestDeployment({ token, projectId, teamId })
     if (!dep?.uid) {
       res.status(500).json({ error: 'deployment_not_found' })
       return
@@ -27,21 +28,29 @@ export default async function handler(req, res) {
 
     // 2) try to fetch events/logs for the deployment from several known endpoints
     const candidates = [
-      // Deployment events (newer API)
+      // Deployment events (various API versions + params variants)
+      `https://api.vercel.com/v13/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
       `https://api.vercel.com/v13/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
-      // Older API variant
+      `https://api.vercel.com/v12/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
+      `https://api.vercel.com/v12/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
+      `https://api.vercel.com/v6/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
       `https://api.vercel.com/v6/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
-      // Functions logs (some workspaces expose this)
+      `https://api.vercel.com/v2/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
+      `https://api.vercel.com/v2/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
+      `https://api.vercel.com/v1/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
+      // Functions logs
       `https://api.vercel.com/v2/deployments/${dep.uid}/functions/logs?since=${sinceMs}&until=${untilMs}&limit=1000`,
     ]
     const headers = { Authorization: `Bearer ${token}` }
     const withTeam = (url) => (teamId ? (url.includes('?') ? `${url}&teamId=${encodeURIComponent(teamId)}` : `${url}?teamId=${encodeURIComponent(teamId)}`) : url)
 
     let payload = null
+    const attempts = []
     for (const rawUrl of candidates) {
       const url = withTeam(rawUrl)
       try {
         const r = await fetch(url, { headers })
+        attempts.push({ url: rawUrl, status: r.status })
         if (!r.ok) continue
         const j = await r.json().catch(() => null)
         if (!j) continue
@@ -51,7 +60,7 @@ export default async function handler(req, res) {
     }
 
     if (!payload) {
-      res.status(501).json({ error: 'logs_endpoint_unavailable', details: 'No compatible Vercel logs endpoint responded OK' })
+      res.status(501).json({ error: 'logs_endpoint_unavailable', details: 'No compatible Vercel logs endpoint responded OK', debug: { attempted: attempts, deployment: dep?.uid || null } })
       return
     }
 
