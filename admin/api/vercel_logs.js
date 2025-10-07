@@ -6,7 +6,14 @@
 export default async function handler(req, res) {
   try {
     const token = process.env.VERCEL_TOKEN
-    const projectId = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT
+    const qProject = (req.query?.project || req.query?.projectId || '').toString().trim()
+    let projectId = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT
+    // Allow overriding project by query (name or id)
+    if (qProject) {
+      const resolved = await resolveProjectId({ token, teamId: process.env.VERCEL_TEAM_ID || undefined, query: qProject })
+      if (resolved) projectId = resolved
+      else projectId = qProject // if API fails but value is already an ID, downstream may still work
+    }
     const teamId = process.env.VERCEL_TEAM_ID || undefined
     if (!token || !projectId) {
       res.status(500).json({ error: 'vercel_env_missing', hint: 'Set VERCEL_TOKEN and VERCEL_PROJECT_ID' });
@@ -93,6 +100,32 @@ async function getLatestDeployment({ token, projectId, teamId }) {
       if (ready) return ready
     } catch {}
   }
+  return null
+}
+
+async function resolveProjectId({ token, teamId, query }) {
+  try {
+    if (!query) return null
+    // If looks like an id (uuid-like), return as is
+    if (/^[a-zA-Z0-9]{20,}$/.test(query) || /[0-9a-fA-F-]{24,}/.test(query)) return query
+    const headers = { Authorization: `Bearer ${token}` }
+    const withTeam = (url) => (teamId ? (url.includes('?') ? `${url}&teamId=${encodeURIComponent(teamId)}` : `${url}?teamId=${encodeURIComponent(teamId)}`) : url)
+    const urls = [
+      `https://api.vercel.com/v13/projects/${encodeURIComponent(query)}`,
+      `https://api.vercel.com/v10/projects/${encodeURIComponent(query)}`,
+      `https://api.vercel.com/v9/projects/${encodeURIComponent(query)}`,
+      `https://api.vercel.com/v8/projects/${encodeURIComponent(query)}`,
+    ]
+    for (const raw of urls) {
+      try {
+        const r = await fetch(withTeam(raw), { headers })
+        if (!r.ok) continue
+        const j = await r.json().catch(() => null)
+        const id = j?.id || j?.project?.id
+        if (id) return id
+      } catch {}
+    }
+  } catch {}
   return null
 }
 
