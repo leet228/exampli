@@ -79,10 +79,10 @@ export default async function handler(req, res) {
           ]
           for (const b of bodies) {
             r = await fetch(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
-            attempts.push({ url: 'POST ' + url, status: r.status })
+            attempts.push({ url: 'POST ' + url, status: r.status, ct: r.headers.get('content-type') || null })
             if (!r.ok) continue
-            const j = await r.json().catch(() => null)
-            if (!j) continue
+            const j = await parseBody(r)
+            if (j == null) continue
             payload = j
             lastOk = { url, method }
             break
@@ -90,10 +90,10 @@ export default async function handler(req, res) {
           if (payload) break
         } else {
           r = await fetch(url, { headers })
-          attempts.push({ url: method + ' ' + url, status: r.status })
+          attempts.push({ url: method + ' ' + url, status: r.status, ct: r.headers.get('content-type') || null })
           if (!r.ok) continue
-          const j = await r.json().catch(() => null)
-          if (!j) continue
+          const j = await parseBody(r)
+          if (j == null) continue
           payload = j
           lastOk = { url, method }
           break
@@ -206,9 +206,43 @@ async function resolveProjectId({ token, teamId, query }) {
   return null
 }
 
+async function parseBody(r) {
+  try {
+    // Prefer JSON
+    const ct = r.headers.get('content-type') || ''
+    if (ct.includes('application/json')) return await r.json()
+    // Try text with NDJSON
+    const text = await r.text()
+    if (!text) return null
+    // If looks like JSON
+    const trimmed = text.trim()
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try { return JSON.parse(trimmed) } catch {}
+    }
+    // Parse NDJSON -> array
+    const lines = trimmed.split(/\r?\n/).filter(Boolean)
+    const arr = []
+    for (const ln of lines) {
+      try { arr.push(JSON.parse(ln)) } catch { arr.push({ message: ln }) }
+    }
+    return arr
+  } catch {
+    return null
+  }
+}
+
 function normalizeLogs(payload) {
   // Different endpoints return different shapes; try to normalize
   const out = []
+  // Raw array (e.g., NDJSON parsed to array of objects)
+  if (Array.isArray(payload)) {
+    for (const row of payload) {
+      const ts = row?.timestamp || row?.time || row?.ts || row?._time
+      const level = row?.level || row?.severity || row?.type || 'info'
+      const msg = row?.message || row?.msg || row?.text || safeString(row)
+      out.push({ ts: toIso(ts), level: String(level), source: row?.source || 'log', message: msg, path: row?.path || row?.url || null, status: row?.status || row?.code || null })
+    }
+  }
   // Observability query result
   if (Array.isArray(payload?.data)) {
     for (const row of payload.data) {
