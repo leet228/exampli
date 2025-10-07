@@ -1,0 +1,142 @@
+// Proxy: fetch recent logs/events from Vercel for the main project
+// ENV required:
+//  - VERCEL_TOKEN: personal/team token with read access
+//  - VERCEL_PROJECT_ID or VERCEL_PROJECT: project id or name
+//  - VERCEL_TEAM_ID (optional)
+export default async function handler(req, res) {
+  try {
+    const token = process.env.VERCEL_TOKEN
+    const projectId = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT
+    const teamId = process.env.VERCEL_TEAM_ID || undefined
+    if (!token || !projectId) {
+      res.status(500).json({ error: 'vercel_env_missing', hint: 'Set VERCEL_TOKEN and VERCEL_PROJECT_ID' });
+      return
+    }
+
+    const range = (req.query?.range || '24h').toString()
+    const now = Date.now()
+    const sinceMs = range === '7d' ? now - 7 * 24 * 60 * 60 * 1000 : now - 24 * 60 * 60 * 1000
+    const untilMs = now
+
+    // 1) find latest READY deployment for the project
+    const dep = await getLatestDeployment({ token, projectId, teamId })
+    if (!dep?.uid) {
+      res.status(500).json({ error: 'deployment_not_found' })
+      return
+    }
+
+    // 2) try to fetch events/logs for the deployment from several known endpoints
+    const candidates = [
+      // legacy/known routes across API versions
+      `https://api.vercel.com/v6/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
+      `https://api.vercel.com/v13/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
+      // functions logs (if available)
+      `https://api.vercel.com/v2/deployments/${dep.uid}/functions/logs?since=${sinceMs}&until=${untilMs}&limit=1000`,
+    ]
+    const headers = { Authorization: `Bearer ${token}` }
+    const withTeam = (url) => (teamId ? (url.includes('?') ? `${url}&teamId=${encodeURIComponent(teamId)}` : `${url}?teamId=${encodeURIComponent(teamId)}`) : url)
+
+    let payload = null
+    for (const rawUrl of candidates) {
+      const url = withTeam(rawUrl)
+      try {
+        const r = await fetch(url, { headers })
+        if (!r.ok) continue
+        const j = await r.json().catch(() => null)
+        if (!j) continue
+        payload = j
+        break
+      } catch {}
+    }
+
+    if (!payload) {
+      res.status(501).json({ error: 'logs_endpoint_unavailable', details: 'No compatible Vercel logs endpoint responded OK' })
+      return
+    }
+
+    const rows = normalizeLogs(payload)
+    const wantSummary = String(req.query?.summary || '').toLowerCase() === '1' || String(req.query?.summary || '').toLowerCase() === 'true'
+    const summary = wantSummary ? computeSummary(rows) : undefined
+    res.status(200).json({ ok: true, deployment: { id: dep.uid, url: dep.url, createdAt: dep.createdAt }, range, since: new Date(sinceMs).toISOString(), until: new Date(untilMs).toISOString(), rows, summary })
+  } catch (e) {
+    res.status(500).json({ error: e?.message || 'vercel_logs_internal' })
+  }
+}
+
+async function getLatestDeployment({ token, projectId, teamId }) {
+  const headers = { Authorization: `Bearer ${token}` }
+  const qs = new URLSearchParams({ limit: '5' })
+  if (projectId) qs.set('projectId', projectId)
+  if (teamId) qs.set('teamId', teamId)
+  // Try newer and older versions for better compatibility
+  const urls = [
+    `https://api.vercel.com/v13/deployments?${qs.toString()}`,
+    `https://api.vercel.com/v6/deployments?${qs.toString()}`,
+  ]
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers })
+      if (!r.ok) continue
+      const j = await r.json()
+      const list = Array.isArray(j?.deployments) ? j.deployments : Array.isArray(j) ? j : []
+      const ready = list.find((d) => d?.readyState === 'READY' || d?.state === 'READY' || d?.readyState === 'READY') || list[0]
+      if (ready) return ready
+    } catch {}
+  }
+  return null
+}
+
+function normalizeLogs(payload) {
+  // Different endpoints return different shapes; try to normalize
+  const out = []
+  if (Array.isArray(payload?.events)) {
+    for (const e of payload.events) {
+      out.push({
+        ts: toIso(e?.createdAt || e?.ts || e?.timestamp),
+        level: e?.severity || e?.level || 'info',
+        source: e?.type || e?.category || 'event',
+        message: e?.message || e?.text || '',
+        path: e?.path || e?.route || null,
+        status: e?.status || null,
+      })
+    }
+  } else if (Array.isArray(payload?.logs)) {
+    for (const l of payload.logs) {
+      out.push({
+        ts: toIso(l?.createdAt || l?.timestamp),
+        level: l?.level || 'info',
+        source: l?.type || 'log',
+        message: l?.message || l?.text || '',
+        path: l?.path || null,
+        status: l?.status || null,
+      })
+    }
+  }
+  // newest first
+  out.sort((a, b) => (a.ts > b.ts ? -1 : 1))
+  // clamp reasonable amount
+  return out.slice(0, 500)
+}
+
+function toIso(v) {
+  const n = typeof v === 'number' ? v : Number(v || 0)
+  if (Number.isFinite(n) && n > 0 && n < 1e13) return new Date(n).toISOString()
+  return new Date().toISOString()
+}
+
+function computeSummary(rows) {
+  let total = 0
+  let errors = 0
+  for (const r of rows || []) {
+    total += 1
+    const lvl = String(r.level || '').toLowerCase()
+    const status = Number(r.status || 0)
+    const isErrorLevel = lvl.includes('error') || lvl.includes('critical')
+    const isHttpError = Number.isFinite(status) && status >= 500
+    if (isErrorLevel || isHttpError) errors += 1
+  }
+  const errorRate = total > 0 ? errors / total : 0
+  return { total, errors, errorRate }
+}
+
+

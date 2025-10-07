@@ -10,6 +10,7 @@ export default function Server() {
         <div className="admin-fade admin-fade--top" />
         <MainPing />
         <RoutesHealth />
+        <VercelLogsPanel />
         <LocalMetricsPanel />
         <div className="admin-fade admin-fade--bottom" />
       </div>
@@ -32,10 +33,21 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 
 function LocalMetricsPanel() {
   const [m, setM] = useState<LocalMetrics | null>(null)
+  const [weeklyErr, setWeeklyErr] = useState<number | null>(null)
   useEffect(() => {
     startLocalMetrics()
     const off = subscribeLocalMetrics(setM)
     return off
+  }, [])
+  // fetch weekly error rate from vercel logs summary
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/vercel_logs?range=7d&summary=1')
+        const j = await r.json()
+        if (j?.summary && typeof j.summary.errorRate === 'number') setWeeklyErr(j.summary.errorRate)
+      } catch {}
+    })()
   }, [])
   return (
     <div style={{ padding: '0 16px 16px' }}>
@@ -45,8 +57,8 @@ function LocalMetricsPanel() {
       <Section title="Latency p95 (5m)" subtitle="по fetch()">
         <div style={{ fontSize: 28, fontWeight: 800 }}>{m?.server.p95ms5m != null ? Math.round(m.server.p95ms5m) + ' ms' : '—'}</div>
       </Section>
-      <Section title="Error rate (5m)" subtitle="по fetch()">
-        <div style={{ fontSize: 28, fontWeight: 800 }}>{m ? Math.round(m.server.errorRate5m * 100) + '%' : '0%'}</div>
+      <Section title="Error rate (7d)" subtitle="из логов Vercel">
+        <div style={{ fontSize: 28, fontWeight: 800 }}>{weeklyErr != null ? Math.round(weeklyErr * 100) + '%' : '—'}</div>
       </Section>
       <Section title="Web Vitals" subtitle="из PerformanceObserver">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -55,6 +67,62 @@ function LocalMetricsPanel() {
           <KV k="CLS" v={m?.vitals.cls != null ? m.vitals.cls.toFixed(3) : '—'} />
           <KV k="TTFB" v={m?.vitals.ttfbMs != null ? Math.round(m.vitals.ttfbMs) + ' ms' : '—'} />
         </div>
+      </Section>
+    </div>
+  )
+}
+
+function VercelLogsPanel() {
+  const [range, setRange] = useState<'24h' | '7d'>('24h')
+  const [rows, setRows] = useState<Array<{ ts: string; level: string; message: string; source?: string | null; path?: string | null; status?: number | null }>>([])
+  const [meta, setMeta] = useState<{ deployment?: { id: string; url: string } | null; loading: boolean; error: string | null }>({ deployment: null, loading: true, error: null })
+
+  async function load(rng: '24h' | '7d') {
+    setMeta(m => ({ ...m, loading: true, error: null }))
+    try {
+      const r = await fetch('/api/vercel_logs?range=' + rng)
+      const j = await r.json()
+      if (!r.ok || !j?.ok) throw new Error(j?.error || 'load_failed')
+      setRows(j.rows || [])
+      setMeta({ deployment: j.deployment || null, loading: false, error: null })
+    } catch (e: any) {
+      setRows([])
+      setMeta({ deployment: null, loading: false, error: e?.message || 'Ошибка загрузки логов' })
+    }
+  }
+
+  useEffect(() => { load(range) }, [range])
+
+  const levelColor = (lvl: string) => lvl === 'error' || lvl === 'critical' ? '#ff4d4d' : (lvl === 'warn' || lvl === 'warning') ? '#f3c969' : '#9ad97a'
+
+  return (
+    <div style={{ padding: '0 16px 12px' }}>
+      <Section title="Логи Vercel" subtitle={meta.deployment?.url ? `деплой ${meta.deployment.url}` : undefined}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <button onClick={() => setRange('24h')} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #2a2a2a', background: range==='24h'?'#1a1a1a':'#0f0f0f' }}>24 часа</button>
+          <button onClick={() => setRange('7d')} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #2a2a2a', background: range==='7d'?'#1a1a1a':'#0f0f0f' }}>7 дней</button>
+        </div>
+        {meta.loading ? (
+          <div style={{ opacity: 0.7 }}>Загрузка логов…</div>
+        ) : meta.error ? (
+          <div style={{ color: '#ff4d4d' }}>{meta.error}</div>
+        ) : rows.length === 0 ? (
+          <div style={{ opacity: 0.7 }}>Логи не найдены за выбранный период</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {rows.map((l, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 80px 1fr', gap: 10, alignItems: 'baseline', background: '#0e0e0e', border: '1px solid #1e1e1e', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 12, opacity: 0.7, whiteSpace: 'nowrap' }}>{new Date(l.ts).toLocaleString('ru-RU')}</div>
+                <div style={{ fontSize: 12, color: levelColor(l.level) }}>{l.level.toUpperCase()}</div>
+                <div style={{ fontSize: 13, opacity: 0.95 }}>
+                  {l.path ? <span style={{ opacity: 0.7, marginRight: 6 }}>{l.path}</span> : null}
+                  {l.status ? <span style={{ opacity: 0.7, marginRight: 6 }}>[{l.status}]</span> : null}
+                  {l.message}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
     </div>
   )
