@@ -7,6 +7,7 @@ export default async function handler(req, res) {
   try {
     const token = process.env.VERCEL_TOKEN
     const qProject = (req.query?.project || req.query?.projectId || '').toString().trim()
+    const qDomain = (req.query?.domain || '').toString().trim()
     let projectId = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT
     // Allow overriding project by query (name or id)
     if (qProject) {
@@ -25,9 +26,12 @@ export default async function handler(req, res) {
     const sinceMs = range === '7d' ? now - 7 * 24 * 60 * 60 * 1000 : now - 24 * 60 * 60 * 1000
     const untilMs = now
 
-    // 1) find latest READY deployment for the project
+    // 1) pick deployment: prefer current by domain alias, then explicit id, then latest READY production
     const depIdOverride = (req.query?.deploymentId || '').toString().trim()
-    const dep = depIdOverride ? { uid: depIdOverride, url: undefined, createdAt: undefined } : await getLatestDeployment({ token, projectId, teamId })
+    let dep = null
+    if (qDomain) dep = await getDeploymentByDomain({ token, teamId, domain: qDomain })
+    if (!dep && depIdOverride) dep = { uid: depIdOverride, url: undefined, createdAt: undefined }
+    if (!dep) dep = await getLatestDeployment({ token, projectId, teamId })
     if (!dep?.uid) {
       res.status(500).json({ error: 'deployment_not_found' })
       return
@@ -82,7 +86,7 @@ export default async function handler(req, res) {
 
 async function getLatestDeployment({ token, projectId, teamId }) {
   const headers = { Authorization: `Bearer ${token}` }
-  const qs = new URLSearchParams({ limit: '5' })
+  const qs = new URLSearchParams({ limit: '5', target: 'production' })
   if (projectId) qs.set('projectId', projectId)
   if (teamId) qs.set('teamId', teamId)
   // Try newer and older versions for better compatibility
@@ -96,11 +100,52 @@ async function getLatestDeployment({ token, projectId, teamId }) {
       if (!r.ok) continue
       const j = await r.json()
       const list = Array.isArray(j?.deployments) ? j.deployments : Array.isArray(j) ? j : []
-      const ready = list.find((d) => d?.readyState === 'READY' || d?.state === 'READY' || d?.readyState === 'READY') || list[0]
+      const sorted = list.sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0))
+      const ready = sorted.find((d) => (d?.readyState === 'READY' || d?.state === 'READY')) || sorted[0]
       if (ready) return ready
     } catch {}
   }
   return null
+}
+
+async function getDeploymentByDomain({ token, teamId, domain }) {
+  try {
+    const headers = { Authorization: `Bearer ${token}` }
+    const withTeam = (url) => (teamId ? (url.includes('?') ? `${url}&teamId=${encodeURIComponent(teamId)}` : `${url}?teamId=${encodeURIComponent(teamId)}`) : url)
+    // 1) resolve alias -> deploymentId
+    const aliasUrls = [
+      `https://api.vercel.com/v2/aliases/${encodeURIComponent(domain)}`,
+      `https://api.vercel.com/v6/aliases/${encodeURIComponent(domain)}`,
+      `https://api.vercel.com/v4/aliases/${encodeURIComponent(domain)}`,
+    ]
+    let deploymentId = null
+    for (const raw of aliasUrls) {
+      try {
+        const r = await fetch(withTeam(raw), { headers })
+        if (!r.ok) continue
+        const j = await r.json().catch(() => null)
+        deploymentId = j?.deploymentId || j?.deployment?.id || j?.deployment || null
+        if (deploymentId) break
+      } catch {}
+    }
+    if (!deploymentId) return null
+    // 2) fetch details of that deployment
+    const depUrls = [
+      `https://api.vercel.com/v13/deployments/${deploymentId}`,
+      `https://api.vercel.com/v6/deployments/${deploymentId}`,
+    ]
+    for (const raw of depUrls) {
+      try {
+        const r = await fetch(withTeam(raw), { headers })
+        if (!r.ok) continue
+        const j = await r.json().catch(() => null)
+        if (j?.uid || j?.id) return { uid: j.uid || j.id, url: j.url, createdAt: j.createdAt }
+      } catch {}
+    }
+    return { uid: deploymentId }
+  } catch {
+    return null
+  }
 }
 
 async function resolveProjectId({ token, teamId, query }) {
