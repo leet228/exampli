@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     }
 
     const range = (req.query?.range || '24h').toString()
+    const wantDebug = String(req.query?.debug || '').toLowerCase() === '1' || String(req.query?.debug || '').toLowerCase() === 'true'
     const now = Date.now()
     const sinceMs = range === '7d' ? now - 7 * 24 * 60 * 60 * 1000 : now - 24 * 60 * 60 * 1000
     const untilMs = now
@@ -60,6 +61,7 @@ export default async function handler(req, res) {
 
     let payload = null
     const attempts = []
+    let lastOk = { url: null, method: null }
     for (const raw of candidates) {
       try {
         let method = 'GET'
@@ -82,6 +84,7 @@ export default async function handler(req, res) {
             const j = await r.json().catch(() => null)
             if (!j) continue
             payload = j
+            lastOk = { url, method }
             break
           }
           if (payload) break
@@ -92,6 +95,7 @@ export default async function handler(req, res) {
           const j = await r.json().catch(() => null)
           if (!j) continue
           payload = j
+          lastOk = { url, method }
           break
         }
       } catch {}
@@ -105,7 +109,8 @@ export default async function handler(req, res) {
     const rows = normalizeLogs(payload)
     const wantSummary = String(req.query?.summary || '').toLowerCase() === '1' || String(req.query?.summary || '').toLowerCase() === 'true'
     const summary = wantSummary ? computeSummary(rows) : undefined
-    res.status(200).json({ ok: true, deployment: { id: dep.uid, url: dep.url, createdAt: dep.createdAt }, range, since: new Date(sinceMs).toISOString(), until: new Date(untilMs).toISOString(), rows, summary })
+    const debug = wantDebug ? buildDebug(payload, attempts, lastOk) : undefined
+    res.status(200).json({ ok: true, deployment: { id: dep.uid, url: dep.url, createdAt: dep.createdAt }, range, since: new Date(sinceMs).toISOString(), until: new Date(untilMs).toISOString(), rows, summary, debug })
   } catch (e) {
     res.status(500).json({ error: e?.message || 'vercel_logs_internal' })
   }
@@ -276,6 +281,12 @@ function safeString(v) {
   } catch {
     return ''
   }
+}
+
+function buildDebug(payload, attempts, lastOk) {
+  const keys = payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 10) : []
+  const size = payload ? JSON.stringify(payload).length : 0
+  return { attempts, lastOk, payloadShape: keys, payloadSize: size }
 }
 
 
