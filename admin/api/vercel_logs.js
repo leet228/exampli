@@ -27,10 +27,11 @@ export default async function handler(req, res) {
 
     // 2) try to fetch events/logs for the deployment from several known endpoints
     const candidates = [
-      // legacy/known routes across API versions
-      `https://api.vercel.com/v6/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
-      `https://api.vercel.com/v13/deployments/${dep.uid}/events?limit=1000&since=${sinceMs}&until=${untilMs}`,
-      // functions logs (if available)
+      // Deployment events (newer API)
+      `https://api.vercel.com/v13/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
+      // Older API variant
+      `https://api.vercel.com/v6/deployments/${dep.uid}/events?limit=1000&from=${sinceMs}&to=${untilMs}`,
+      // Functions logs (some workspaces expose this)
       `https://api.vercel.com/v2/deployments/${dep.uid}/functions/logs?since=${sinceMs}&until=${untilMs}&limit=1000`,
     ]
     const headers = { Authorization: `Bearer ${token}` }
@@ -92,12 +93,12 @@ function normalizeLogs(payload) {
   if (Array.isArray(payload?.events)) {
     for (const e of payload.events) {
       out.push({
-        ts: toIso(e?.createdAt || e?.ts || e?.timestamp),
+        ts: toIso(e?.createdAt || e?.created || e?.ts || e?.timestamp),
         level: e?.severity || e?.level || 'info',
         source: e?.type || e?.category || 'event',
-        message: e?.message || e?.text || '',
-        path: e?.path || e?.route || null,
-        status: e?.status || null,
+        message: e?.message || e?.text || e?.payload?.message || safeString(e?.payload),
+        path: e?.path || e?.route || e?.payload?.path || e?.payload?.url || null,
+        status: e?.status || e?.payload?.statusCode || null,
       })
     }
   } else if (Array.isArray(payload?.logs)) {
@@ -106,7 +107,7 @@ function normalizeLogs(payload) {
         ts: toIso(l?.createdAt || l?.timestamp),
         level: l?.level || 'info',
         source: l?.type || 'log',
-        message: l?.message || l?.text || '',
+        message: l?.message || l?.text || safeString(l?.payload),
         path: l?.path || null,
         status: l?.status || null,
       })
@@ -137,6 +138,16 @@ function computeSummary(rows) {
   }
   const errorRate = total > 0 ? errors / total : 0
   return { total, errors, errorRate }
+}
+
+function safeString(v) {
+  try {
+    if (v == null) return ''
+    if (typeof v === 'string') return v
+    return JSON.stringify(v)
+  } catch {
+    return ''
+  }
 }
 
 
