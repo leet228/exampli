@@ -1,0 +1,44 @@
+// Очистим только кэш приложения
+for (const k of Object.keys(localStorage)) if (k.startsWith('exampli:')) localStorage.removeItem(k);
+
+// 1) Демо-предмет и темы
+const subject = { id: 101, code: 'oge_math', title: 'ОГЭ Математика', level: 'OGE' };
+const topics = [
+  { id: 201, subject_id: subject.id, title: 'Тема 1', order_index: 1 },
+  { id: 202, subject_id: subject.id, title: 'Тема 2', order_index: 2 },
+  { id: 203, subject_id: subject.id, title: 'Тема 3', order_index: 3 },
+];
+
+// 2) Демо-уроки для текущей темы
+const lessonsFor201 = Array.from({ length: 6 }).map((_, i) => ({ id: `demo-201-${i+1}`, topic_id: 201, order_index: i+1 }));
+
+// 3) Сохраним всё в локальный кэш приложения (формат {v, e})
+const setCache = (key, v) => localStorage.setItem('exampli:' + key, JSON.stringify({ v, e: null }));
+setCache('subjects_all', [subject]);
+setCache('topics_by_subject:' + subject.id, topics);
+setCache('lessons_topic:' + 201, lessonsFor201);
+setCache('active_course_code', subject.code);
+
+// 4) Текущая тема + активный курс (ключи, которые читает UI напрямую)
+localStorage.setItem('exampli:activeSubjectCode', subject.code);
+localStorage.setItem('exampli:currentTopicId', String(201));
+localStorage.setItem('exampli:currentTopicTitle', 'Тема 1');
+
+// 5) Подготовим «boot» так, чтобы не открывалась онбординг/блокирующая шторка
+const boot = {
+  user: { id: 'demo', phone_number: '+7 999 000-00-00', added_course: subject.id, current_topic: 201, plus_until: null },
+  stats: { streak: 1, energy: 25, coins: 500 },
+  userProfile: { background_color: '#3280c2', background_icon: 'bg_icon_cat', phone_number: '+7 999 000-00-00', first_name: 'Demo', username: 'demo' },
+  friendsCount: 0,
+  subjects: [subject],
+  lessons: lessonsFor201,
+  subjectsAll: [subject],
+  onboarding: { phone_given: true, course_taken: true },
+  current_topic_id: 201,
+  current_topic_title: 'Тема 1',
+  topicsBySubject: { [String(subject.id)]: topics },
+};
+
+// 6) Применим снапшот и оповестим приложение
+window.__exampliBoot = boot;
+window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot }));

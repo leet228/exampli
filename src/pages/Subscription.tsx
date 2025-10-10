@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useAnimation, useMotionValue } from 'framer-motion';
 import { hapticSelect, hapticTiny } from '../lib/haptics';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { supabase } from '../lib/supabase';
@@ -37,8 +37,106 @@ export default function Subscription() {
     { id: 's2', icon: '/shop/streak_2.svg', label: '2 дня',  coins: 850 },
   ];
 
-  const trackRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement|null>(null);  // обёртка
+  const trackDragRef = useRef<HTMLDivElement|null>(null); // сам трек (motion.div)
+  const [vw, setVw] = useState(0);
+  const [gap, setGap] = useState(0);     // 👈 gap в пикселях
+  const [step, setStep] = useState(0);   // 👈 шаг = vw + gap
+  const controls = useAnimation();                        // для анимации щелчка
+  const x = useMotionValue(0);                            // текущий сдвиг трека (px)
   const [idx, setIdx] = useState(0);
+  const idxRef = useRef(0);
+  const setIdxSafe = (i:number) => { if (i!==idxRef.current){ idxRef.current=i; setIdx(i);} };
+  const [isTouching, setIsTouching] = useState(false);
+
+  // насколько левее центр (положительное число = левее)
+  const ALIGN_SHIFT = 4;
+
+  // измеряем ширину и ставим трек в позицию активного слайда
+  useEffect(() => {
+    const measure = () => {
+      const vp = viewportRef.current;
+      const track = trackDragRef.current;
+
+      const w = vp?.clientWidth || 0;
+      let g = 0;
+      if (track) {
+        const cs = getComputedStyle(track);
+        g = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+      }
+
+      setVw(w);
+      setGap(g);
+      setStep(w + g); // 👈 самый важный момент
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (viewportRef.current) ro.observe(viewportRef.current);
+    if (trackDragRef.current) ro.observe(trackDragRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Когда step посчитан — переставляем трек туда, где активный индекс
+  useEffect(() => {
+    if (step <= 0) return;
+    const toX = -(idxRef.current * step) - ALIGN_SHIFT; // было + ALIGN_OFFSET
+    controls.set({ x: toX });
+    x.set(toX);
+  }, [step]);
+
+  const defaultCat = '/subs/sub_cat.svg';
+  const ahuelCat   = '/subs/cat_ahuel.svg';
+  const [catSrc, setCatSrc] = useState(defaultCat);
+
+  // вычисляем ближайший индекс по текущему x
+  const nearestByX = (curX: number) => {
+    const s = step || 1;
+    const raw = Math.round(Math.abs(curX + ALIGN_SHIFT) / s); // было (curX - ALIGN_OFFSET)
+    return Math.max(0, Math.min(plans.length - 1, raw));
+  };
+
+  // Снап в пиксель на конкретный индекс
+  const snapTo = async (target: number) => {
+    const s = step || 1;
+    const toX = -(target * s) - ALIGN_SHIFT; // было + ALIGN_OFFSET
+    await controls.start({ x: toX, transition: { type: 'spring', stiffness: 420, damping: 38 } });
+    x.set(toX);
+    setIdxSafe(target);
+    setCatSrc(defaultCat);
+  };
+
+  // По окончании жеста: ограничиваем до ±1 от старта и щёлкаем
+  const onDragEnd = async (_: any, info: { offset: { x: number }, velocity: { x: number } }) => {
+    const s = step || 1;
+    const start = idxRef.current;
+    const deltaSlides = info.offset.x / s;
+    const swipeThreshold = 0.25;
+    const velocityThreshold = 300;
+
+    let target = start;
+    if (deltaSlides >  swipeThreshold || info.velocity.x >  velocityThreshold) target = start - 1;
+    if (deltaSlides < -swipeThreshold || info.velocity.x < -velocityThreshold) target = start + 1;
+
+    target = Math.max(0, Math.min(plans.length - 1, target));
+    await snapTo(target);
+    setIsTouching(false);
+  };
+
+  // Пока тянем — показываем «анимированного» кота и не даём странице скроллиться по Y
+  const onDragStart = () => {
+    setIsTouching(true);
+    setCatSrc(ahuelCat);
+  };
+  const onDrag = () => {
+    const s = step || 1;
+    const cur = x.get();
+    const ideal = -(idxRef.current * s) - ALIGN_SHIFT; // было + ALIGN_OFFSET
+    const exact = Math.abs(cur - ideal) <= 0.5;
+    setCatSrc(exact ? defaultCat : ahuelCat);
+  };
+
+
   const [highlight, setHighlight] = useState(false);
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const [coins, setCoins] = useState<number>(0);
@@ -48,17 +146,7 @@ export default function Subscription() {
   // Автопродление отключено при оплате через Telegram Stars
   const [_autoRenew, _setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: false, loading: false });
 
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const w = el.clientWidth || 1;
-      const i = Math.round(el.scrollLeft / w);
-      setIdx(Math.max(0, Math.min(plans.length - 1, i)));
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll as any);
-  }, [plans.length]);
+
 
   // ловим сигнал для подсветки секции коинов
   useEffect(() => {
@@ -280,57 +368,96 @@ export default function Subscription() {
           </div>
         </div>
       </div>
-      {/* верхний баннер на всю ширину */}
-      <div className="relative left-1/2 right-1/2 ml-[-50vw] mr-[-50vw] w-screen" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
-        <img src="/shop/upper_pic.svg" alt="" className="w-screen h-auto select-none" draggable={false} />
+      {/* верхний баннер больше не нужен — убран */}
+      {/* новый SVG сверху карусели, слегка наезжает на неё */}
+      <div className="relative z-20" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
+        <div className="max-w-xl mx-auto px-5">
+          <motion.img
+            src={catSrc}
+            alt=""
+            className="block select-none"
+            draggable={false}
+            initial={false}
+            animate={{ y: catSrc === ahuelCat ? -6 : 0 }} // 👈 «анимированный» кот выше на 6px
+            transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+            style={{ width: 128, height: 'auto', margin: '0 auto', position: 'relative', top: 56 }} // 👈 базовая позиция как была
+          />
+        </div>
       </div>
+      {/* Спейсер: опускаем всё содержимое ниже (иконку не трогаем) */}
+      <div style={{ height: '1px' }} />
       {/* карусель тарифов — скрываем если активна подписка */}
       {!isPlus && (
         <div
-          ref={trackRef}
-          className="w-full overflow-x-auto no-scrollbar mt-[-85px]"
-          style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
+          ref={viewportRef}
+          className="relative z-10 w-full mt-8 overflow-hidden select-none"
+          style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain', overscrollBehaviorY: 'none', paddingInline: 4 }}
         >
-          <div className="flex gap-4 px-1" style={{ width: '100%' }}>
-            {plans.map((p) => (
-              <motion.div
-                key={p.id}
-                className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
-                style={{ minWidth: '100%', scrollSnapAlign: 'start' }}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-xl font-bold">{p.title} <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>PLUS</span></div>
-                    <div className="text-sm text-muted mt-0.5">
-                      {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
+          {step > 0 && (
+            <motion.div
+              key={step} // 👈 заставляет Framer пересчитать dragConstraints, когда step изменился
+              ref={trackDragRef}
+              className="flex gap-4"
+              drag="x"
+              dragConstraints={{
+                left: -((plans.length - 1) * step) - ALIGN_SHIFT, // было + ALIGN_OFFSET
+                right: 0 - ALIGN_SHIFT,                           // было + ALIGN_OFFSET
+              }}
+              dragMomentum={false}     // 👈 без инерции Framer
+              dragElastic={0.001}      // 👈 минимальная «резинка»
+              style={{ x }}
+              onDragStart={() => { setIsTouching(true); setCatSrc(ahuelCat); }}
+              onDragEnd={onDragEnd}
+              onDrag={onDrag}
+              animate={controls}
+            >
+              {plans.map((p) => (
+                <div
+                  key={p.id}
+                  data-slide
+                  className="shrink-0 rounded-3xl p-5 border border-white/10 bg-white/5"
+                  style={{ width: vw || '100%', minWidth: vw || '100%' }} // карточка = ширина вьюпорта
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xl font-bold">
+                        {p.title} <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>PLUS</span>
+                      </div>
+                      <div className="text-sm text-muted mt-0.5">
+                        {p.months === 1 ? '1 месяц' : p.months === 12 ? '12 месяцев' : `${p.months} месяцев`}
+                      </div>
                     </div>
+                    <div className="text-3xl">∞</div>
                   </div>
-                  <div className="text-3xl">∞</div>
-                </div>
 
-                <div className="mt-4 grid gap-2">
-                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
-                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
-                  <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
-                </div>
+                  <div className="mt-4 grid gap-2">
+                    <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
+                  </div>
 
-                <div className="mt-5">
-                  <PressButton
-                    className="w-full rounded-3xl px-5 py-4 font-semibold text-white"
-                    baseColor={accentColor}
-                    shadowHeight={shadowHeight}
-                    darken={darken}
-                    onSelectHaptic={hapticSelect}
-                    onClick={() => createPaymentAndRedirect('plan', p.id)}
-                  >
-                    {loadingId === `plan:${p.id}` ? 'Загрузка…' : `Купить за ${toStars(p.price)} ⭐`}
-                  </PressButton>
+                  <div className="mt-5">
+                    <PressButton
+                      className="w-full rounded-3xl px-5 py-4 font-semibold text-white"
+                      baseColor={accentColor}
+                      shadowHeight={shadowHeight}
+                      darken={darken}
+                      onSelectHaptic={hapticSelect}
+                      onClick={() => createPaymentAndRedirect('plan', p.id)}
+                    >
+                      {loadingId === `plan:${p.id}` ? 'Загрузка…' : (
+                        <span className="inline-flex items-center gap-2">
+                          <span>Купить за</span>
+                          <span className="tabular-nums">{toStars(p.price)}</span>
+                          <TelegramStarsIcon size={22} />
+                        </span>
+                      )}
+                    </PressButton>
+                  </div>
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              ))}
+            </motion.div>
+          )}
         </div>
       )}
 
@@ -339,15 +466,18 @@ export default function Subscription() {
       {/* индикаторы — только если нет подписки */}
       {!isPlus && (
         <div className="flex items-center justify-center gap-2">
-          {plans.map((_, dotIndex) => (
-            <span
-              key={dotIndex}
-              className={[
-                'inline-block w-2 h-2 rounded-full transition-all',
-                dotIndex === idx ? 'bg-white w-6' : 'bg-white/30',
-              ].join(' ')}
-            />
-          ))}
+          {plans.map((_, dotIndex) => {
+            const active = isTouching ? idxRef.current : idx; // можно «замораживать» на старте
+            return (
+              <span
+                key={dotIndex}
+                className={[
+                  'inline-block w-2 h-2 rounded-full transition-all',
+                  dotIndex === active ? 'bg-white w-6' : 'bg-white/30',
+                ].join(' ')}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -427,7 +557,14 @@ export default function Subscription() {
                     <img src={g.icon} alt="" className="h-14 w-14 select-none" draggable={false} />
                     <div className="text-xl font-semibold tabular-nums">{g.amount}</div>
                   </div>
-                  <div className="text-sky-400 font-extrabold tabular-nums">{loadingId === `gems:${g.id}` ? '...' : `${stars} ⭐`}</div>
+                  <div className="text-white font-extrabold tabular-nums">
+                    {loadingId === `gems:${g.id}` ? '...' : (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{stars}</span>
+                        <TelegramStarsIcon size={22} />
+                      </span>
+                    )}
+                  </div>
                 </div>
               </PressButton>
             );
@@ -446,6 +583,43 @@ export default function Subscription() {
     </div>
   );
 }
+function TelegramStarsIcon({ size = 20, variant = 'twemoji' }: { size?: number; variant?: 'twemoji' | 'emoji' | 'svg' }) {
+  if (variant === 'twemoji') {
+    return (
+      <img
+        src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/15.1.0/svg/2b50.svg"
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        aria-hidden
+        style={{ display: 'inline-block', verticalAlign: 'middle' }}
+      />
+    );
+  }
+  if (variant === 'emoji') {
+    return (
+      <span aria-hidden="true" style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}>⭐️</span>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id="tgStar" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#FFD54F" />
+          <stop offset="100%" stopColor="#FF8A00" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 2.5l2.8 5.7 6.3.9-4.55 4.43 1.07 6.25L12 16.9 6.38 19.78l1.07-6.25L2.9 9.1l6.3-.9L12 2.5z"
+        fill="url(#tgStar)"
+      />
+    </svg>
+  );
+}
+
 
 // Универсальная кнопка с «нижней полоской» (box-shadow), мгновенная анимация
 function PressButton({
@@ -471,10 +645,10 @@ function PressButton({
     <motion.button
       type="button"
       className={className}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => { setPressed(false); try { onSelectHaptic?.(); } catch {} }}
-      onPointerCancel={() => setPressed(false)}
-      onClick={onClick}
+      onPointerDown={(e) => { e.stopPropagation(); setPressed(true); }}
+      onPointerUp={(e) => { e.stopPropagation(); setPressed(false); try { onSelectHaptic?.(); } catch {} }}
+      onPointerCancel={(e) => { e.stopPropagation(); setPressed(false); }}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
       transition={{ duration: 0 }}
       style={{ background: baseColor, border: '1px solid rgba(0,0,0,0.08)' }}
