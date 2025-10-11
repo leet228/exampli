@@ -143,6 +143,7 @@ export default function Subscription() {
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isPlus, setIsPlus] = useState<boolean>(false);
+  const [plusUntil, setPlusUntil] = useState<string | null>(null);
   // Автопродление отключено при оплате через Telegram Stars
   const [_autoRenew, _setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: false, loading: false });
 
@@ -229,6 +230,29 @@ export default function Subscription() {
     window.addEventListener('exampli:statsChanged', onStatsPlus as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onStatsPlus as EventListener);
   }, []);
+
+  // Следим за датой окончания подписки и инициализируем из boot/кэша
+  useEffect(() => {
+    try {
+      const boot = (window as any)?.__exampliBoot;
+      const pu0 = boot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      if (pu0) setPlusUntil(String(pu0));
+    } catch {}
+    const onPlusUntil = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      if (e.detail?.plus_until) setPlusUntil(String(e.detail.plus_until));
+    };
+    window.addEventListener('exampli:statsChanged', onPlusUntil as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onPlusUntil as EventListener);
+  }, []);
+
+  const formatPlusDate = (iso: string | null) => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+    } catch { return String(iso); }
+  };
 
   async function createPaymentAndRedirect(kind: 'plan' | 'gems', id: string) {
     if (loadingId) return;
@@ -370,22 +394,51 @@ export default function Subscription() {
       </div>
       {/* верхний баннер больше не нужен — убран */}
       {/* новый SVG сверху карусели, слегка наезжает на неё */}
-      <div className="relative z-20" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
-        <div className="max-w-xl mx-auto px-5">
-          <motion.img
-            src={catSrc}
-            alt=""
-            className="block select-none"
-            draggable={false}
-            initial={false}
-            animate={{ y: catSrc === ahuelCat ? -6 : 0 }} // 👈 «анимированный» кот выше на 6px
-            transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-            style={{ width: 128, height: 'auto', margin: '0 auto', position: 'relative', top: 56 }} // 👈 базовая позиция как была
-          />
+      {!isPlus && (
+        <div className="relative z-20" style={{ marginTop: 'calc(-1 * (var(--hud-h) + 28px))' }}>
+          <div className="max-w-xl mx-auto px-5">
+            <motion.img
+              src={catSrc}
+              alt=""
+              className="block select-none"
+              draggable={false}
+              initial={false}
+              animate={{ y: catSrc === ahuelCat ? -1 : 0 }} // 👈 «анимированный» кот выше на 6px
+              transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+              style={{ width: 128, height: 128, objectFit: 'contain', margin: '0 auto', position: 'relative', top: 62 }} // 👈 фиксированная высота + чуть ниже
+            />
+          </div>
         </div>
-      </div>
+      )}
       {/* Спейсер: опускаем всё содержимое ниже (иконку не трогаем) */}
-      <div style={{ height: '1px' }} />
+      {!isPlus && <div style={{ height: '1px' }} />}
+      {/* Если подписка активна — вместо карусели показываем изображение и дату истечения */}
+      {isPlus && (
+        <div className="relative z-20" style={{ marginTop: 'calc(-1 * var(--hud-h) + 12px)' }}>
+          <div className="max-w-xl mx-auto px-5">
+            <div className="flex items-center justify-center">
+              <img
+                src="/subs/already_sub_cat.svg"
+                alt=""
+                className="select-none"
+                draggable={false}
+                style={{ width: 224, height: 224, objectFit: 'contain', position: 'relative', top: 12, left: 12 }}
+                onError={(e) => { try { (e.currentTarget as HTMLImageElement).src = '/subs/sub_cat.svg'; } catch {} }}
+              />
+            </div>
+            <div className="mt-4 text-center">
+              <div className="inline-block rounded-2xl p-[6px]" style={{ background: 'linear-gradient(90deg,#38bdf8,#6366f1)' }}>
+                <div className="rounded-2xl px-2 py-1 whitespace-nowrap" style={{ background: 'var(--bg)', maxWidth: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="font-extrabold" style={{ color: '#fff', fontSize: 'min(3.6vw, 16px)' }}>
+                    Подписка истекает {formatPlusDate(plusUntil)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* карусель тарифов — скрываем если активна подписка */}
       {!isPlus && (
         <div
@@ -583,40 +636,19 @@ export default function Subscription() {
     </div>
   );
 }
-function TelegramStarsIcon({ size = 20, variant = 'twemoji' }: { size?: number; variant?: 'twemoji' | 'emoji' | 'svg' }) {
-  if (variant === 'twemoji') {
-    return (
-      <img
-        src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/15.1.0/svg/2b50.svg"
-        alt=""
-        width={size}
-        height={size}
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        aria-hidden
-        style={{ display: 'inline-block', verticalAlign: 'middle' }}
-      />
-    );
-  }
-  if (variant === 'emoji') {
-    return (
-      <span aria-hidden="true" style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}>⭐️</span>
-    );
-  }
+function TelegramStarsIcon({ size = 20, variant: _variant = 'twemoji' }: { size?: number; variant?: 'twemoji' | 'emoji' | 'svg' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <defs>
-        <linearGradient id="tgStar" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#FFD54F" />
-          <stop offset="100%" stopColor="#FF8A00" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M12 2.5l2.8 5.7 6.3.9-4.55 4.43 1.07 6.25L12 16.9 6.38 19.78l1.07-6.25L2.9 9.1l6.3-.9L12 2.5z"
-        fill="url(#tgStar)"
-      />
-    </svg>
+    <img
+      src="/subs/tg_star.svg"
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      aria-hidden
+      style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    />
   );
 }
 
@@ -640,15 +672,25 @@ function PressButton({
   onClick?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
+  const downPointRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const MOVE_THRESHOLD_PX = 8;
   const shadow = pressed ? `0px 0px 0px ${darken(baseColor, 18)}` : `0px ${shadowHeight}px 0px ${darken(baseColor, 18)}`;
   return (
     <motion.button
       type="button"
       className={className}
-      onPointerDown={(e) => { e.stopPropagation(); setPressed(true); }}
-      onPointerUp={(e) => { e.stopPropagation(); setPressed(false); try { onSelectHaptic?.(); } catch {} }}
-      onPointerCancel={(e) => { e.stopPropagation(); setPressed(false); }}
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      onPointerDown={(e) => { setPressed(true); downPointRef.current = { x: (e as any).clientX, y: (e as any).clientY }; movedRef.current = false; }}
+      onPointerMove={(e) => {
+        const p = downPointRef.current;
+        if (!p) return;
+        const dx = Math.abs((e as any).clientX - p.x);
+        const dy = Math.abs((e as any).clientY - p.y);
+        if (dx > MOVE_THRESHOLD_PX || dy > MOVE_THRESHOLD_PX) movedRef.current = true;
+      }}
+      onPointerUp={() => { setPressed(false); }}
+      onPointerCancel={() => { setPressed(false); movedRef.current = false; downPointRef.current = null; }}
+      onClick={(e) => { if (movedRef.current) { e.preventDefault(); return; } try { onSelectHaptic?.(); } catch {} onClick?.(); }}
       animate={{ y: pressed ? shadowHeight : 0, boxShadow: shadow }}
       transition={{ duration: 0 }}
       style={{ background: baseColor, border: '1px solid rgba(0,0,0,0.08)' }}

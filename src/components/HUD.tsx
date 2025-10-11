@@ -398,7 +398,7 @@ export default function HUD() {
               aria-label="Энергия"
             >
               {isPlus ? (
-                <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-14 h-14" />
+                <img src="/stickers/battery/plus_energy_www.svg" alt="" aria-hidden className="w-[56px] h-[44px] object-contain" />
               ) : (
                 <>
                   <img

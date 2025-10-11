@@ -374,16 +374,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             {/* верхняя панель: прогресс (сузили) + батарейка справа; скрыть во время загрузки */}
             {!loading && !showFinish && (
               <div className="px-5 pt-2 pb-2 border-b border-white/10 relative" ref={headerRef}>
-                <div className="flex items-center gap-2">
-                  {mode === 'repeat' && repeatQueue.length > 0 && (
-                    <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-8 h-8" />
-                  )}
-                  <div className="progress flex-1 max-w-[70%]" ref={progressRef}>
-                    <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
+                {/* Левая/правая части шапки */}
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 flex items-center justify-start">
+                    {mode === 'repeat' && repeatQueue.length > 0 && (
+                      <img src="/lessons/repeat.svg" alt="" aria-hidden className="w-8 h-8" />
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {isPlus ? (
-                      <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-12 h-12" />
+                      <img src="/stickers/battery/plus.svg" alt="" aria-hidden className="w-14 h-14" />
                     ) : (
                       <>
                         <img src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`} alt="" aria-hidden className="w-6 h-6" />
@@ -393,6 +393,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         ].join(' ')}>{energy}</span>
                       </>
                     )}
+                  </div>
+                </div>
+                {/* Центрированный прогресс поверх шапки */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-full">
+                  <div className="progress w-[70%] max-w-[420px] -ml-6" ref={progressRef}>
+                    <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                 </div>
                 {/* streak flash */}

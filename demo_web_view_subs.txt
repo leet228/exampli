@@ -32,12 +32,17 @@ setCache('lessons_topic:' + 301, lessonsFor301);
 // Активным сделаем курс «ЕГЭ Русский»
 setCache('active_course_code', subjectRus.code);
 
+// 4.1) Активная подписка в демо: плюс до будущей даты
+const plusUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+setCache('plus_active', true);
+setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', plus_until: plusUntil });
+
 // 4) Текущая тема + активный курс (ключи, которые читает UI напрямую)
 localStorage.setItem('exampli:activeSubjectCode', subjectRus.code);
 localStorage.setItem('exampli:currentTopicId', String(301));
 localStorage.setItem('exampli:currentTopicTitle', 'Тема 1');
 
-// 4.1) Предзагрузим задания для второго урока курса «ЕГЭ Русский», тема 301
+// 4.2) Предзагрузим задания для второго урока курса «ЕГЭ Русский», тема 301
 const rusSecondLessonId = 'demo-301-2';
 const rusSecondLessonTasks = [
   {
@@ -63,7 +68,7 @@ localStorage.setItem('exampli:lesson_tasks:' + rusSecondLessonId, JSON.stringify
 
 // 5) Подготовим «boot» так, чтобы не открывалась онбординг/блокирующая шторка
 const boot = {
-  user: { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', phone_number: '+7 999 000-00-00', added_course: subjectRus.id, current_topic: 301, plus_until: null },
+  user: { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', phone_number: '+7 999 000-00-00', added_course: subjectRus.id, current_topic: 301, plus_until: plusUntil },
   stats: { streak: 1, energy: 25, coins: 500 },
   userProfile: { background_color: '#3280c2', background_icon: 'bg_icon_cat', phone_number: '+7 999 000-00-00', first_name: 'Demo', username: 'demo' },
   friendsCount: 0,
@@ -79,26 +84,8 @@ const boot = {
 // 6) Применим снапшот и оповестим приложение
 window.__exampliBoot = boot;
 window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot }));
+// Сообщим приложению, что подписка активна
+window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntil } }));
 
 // 7) Обновим локальный кэш пользователя с id/tg_id
-setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433' });
-
-// 8) Попробуем подтянуть дату окончания подписки с сервера по tg_id
-try {
-  fetch('/api/boot1', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tg_user: { id: 945676433 } })
-  })
-    .then(r => r.ok ? r.json() : null)
-    .then(js => {
-      const pu = js?.user?.plus_until || null;
-      if (pu) {
-        // Обновим boot + кэш и уведомим приложение
-        try { setCache('user', { id: js.user.id, tg_id: js.user.tg_id, plus_until: pu }); } catch {}
-        try { window.__exampliBoot = { ...window.__exampliBoot, user: { ...(window.__exampliBoot?.user || {}), plus_until: pu } }; } catch {}
-        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: pu } }));
-      }
-    })
-    .catch(() => {});
-} catch {}
+setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', plus_until: plusUntil });
