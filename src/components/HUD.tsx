@@ -1,6 +1,9 @@
 // src/components/HUD.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { hapticTiny } from '../lib/haptics';
 import { useNavigate } from 'react-router-dom';
+import FullScreenSheet from './sheets/FullScreenSheet';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import TopSheet from './sheets/TopSheet';
@@ -466,10 +469,15 @@ export default function HUD() {
           ? (anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).getBoundingClientRect().left + ((anchorRef.current!.querySelector('button[aria-label="Энергия"]') as HTMLElement).offsetWidth / 2)
           : undefined}
       >
-        <EnergySheetBody value={energy} isOpen={open === 'energy'} onOpenSubscription={async () => { setOpen(null); location.assign('/subscription'); }} />
+        <EnergySheetBody
+          value={energy}
+          isOpen={open === 'energy'}
+          onOpenSubscription={async () => { setOpen(null); navigate('/subscription'); }}
+          openGate={() => { setOpen(null); navigate('/subscription-gate'); }}
+        />
       </TopSheet>
 
-      {/* Кошелёк удалён — используем страницу подписки */}
+      {/* Кошелёк удалён — используем страницу подписки ввв*/}
 
       {/* Выбор курса: после онбординга — блокирующий полноэкранный; иначе — обычная шторка */}
       {((window as any).__exampliAfterOnboarding === true) ? (
@@ -501,10 +509,20 @@ export default function HUD() {
 
 function StreakSheetBody() { return <StreakSheetContent />; }
 
-function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number; onOpenSubscription: () => void; isOpen?: boolean }) {
+function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { value: number; onOpenSubscription: () => void; isOpen?: boolean; openGate?: () => void }) {
   const [energy, setEnergy] = useState(value);
   const [fullAt, setFullAt] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState<number>(Date.now());
+  const [showSubsOverlay, setShowSubsOverlay] = useState(false);
+  useEffect(() => {
+    try {
+      const need = sessionStorage.getItem('exampli:openEnergy');
+      if (need === '1' && isOpen !== true) {
+        // текущий EnergySheet будет открыт извне; просто очищаем флаг
+        sessionStorage.removeItem('exampli:openEnergy');
+      }
+    } catch {}
+  }, [isOpen]);
 
   useEffect(() => {
     let timer: any;
@@ -588,13 +606,125 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen }: { value: number;
         />
       </div>
 
-      <div className="grid gap-3 mt-6">
-        <button type="button" className="card text-left" onClick={onOpenSubscription}>
-          <div className="font-semibold">Безлимит (демо)</div>
-          <div className="text-sm text-muted">Нажми, чтобы открыть «Абонемент»</div>
-        </button>
-        <button type="button" className="btn w-full" onClick={onOpenSubscription}>+ Пополнить / Оформить</button>
+      <div className="mt-12">
+        <PlusInfinityButton onClick={() => { try { hapticTiny(); } catch {}; (openGate || (() => location.assign('/subscription-gate')))(); }} />
       </div>
+      <div className="mt-3 mb-3">
+        <TopUpEnergyButton onClick={onOpenSubscription} />
+      </div>
+
+      {/* Открываем отдельную страницу-гейт, чтобы гарантированно перекрыть всё */}
+      {showSubsOverlay && (location.href = '/subscription-gate') as unknown as null}
     </>
   );
 }
+
+function PlusInfinityButton({ onClick }: { onClick: () => void }) {
+  const baseColor = '#0e1829'; // чуть темнее
+  const pressHeight = 3; // ниже высота кнопки
+  const shadowColor = lightenHex(baseColor, 0.35); // светлее основного (по просьбе)
+
+  return (
+    <motion.button
+      whileTap={{ y: pressHeight, boxShadow: `0 0 0 0 ${shadowColor}` }}
+      transition={{ duration: 0 }}
+      onClick={onClick}
+      className="relative w-full rounded-2xl px-5 py-3 text-white select-none overflow-hidden"
+      style={{ background: baseColor, boxShadow: `0 ${pressHeight}px 0 0 ${shadowColor}` }}
+      type="button"
+      aria-label="PLUS Unbegrenzt"
+    >
+      {/* Верхняя лента с градиентом и надписью PLUS */}
+      <div
+        className="absolute left-0 right-0 top-0 h-8 rounded-t-2xl px-4 flex items-center font-extrabold tracking-wider text-white text-[20px]"
+        style={{ background: 'linear-gradient(90deg,#a855f7 0%,#3b82f6 50%,#10b981 100%)' }}
+      >
+        PLUS
+      </div>
+
+      <div className="flex items-center gap-4 mt-8">
+        <img src="/stickers/battery/infin_energy.svg" alt="∞" className="w-[68px] h-[56px] rounded-xl" />
+        <div className="flex-1 text-left">
+          <div className="text-lg font-extrabold">Безлимит</div>
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+function TopUpEnergyButton({ onClick }: { onClick: () => void }) {
+  const baseColor = '#0e1829';
+  const pressHeight = 3;
+  const shadowColor = lightenHex(baseColor, 0.35);
+  return (
+    <motion.button
+      whileTap={{ y: pressHeight, boxShadow: `0 0 0 0 ${shadowColor}` }}
+      transition={{ duration: 0 }}
+      onClick={onClick}
+      type="button"
+      className="relative w-full rounded-2xl px-5 py-3 text-white select-none overflow-hidden flex items-center justify-between"
+      style={{ background: baseColor, boxShadow: `0 ${pressHeight}px 0 0 ${shadowColor}` }}
+      aria-label="Пополнить энергию"
+    >
+      <div className="flex items-center gap-3">
+        <img src="/stickers/battery/25.svg" alt="25" className="w-[72px] h-[72px]" />
+        <div className="font-semibold">Пополнить</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <img src="/stickers/coin_cat.svg" alt="" className="h-5 w-5" />
+        <div className="font-extrabold tabular-nums text-yellow-300">500</div>
+      </div>
+    </motion.button>
+  );
+}
+
+function darkenHex(hex: string, amount: number): string {
+  try {
+    const c = hex.replace('#', '');
+    const num = parseInt(c.length === 3 ? c.split('').map((x) => x + x).join('') : c, 16);
+    let r = (num >> 16) & 0xff;
+    let g = (num >> 8) & 0xff;
+    let b = num & 0xff;
+    r = Math.max(0, Math.min(255, Math.floor(r * (1 - amount))));
+    g = Math.max(0, Math.min(255, Math.floor(g * (1 - amount))));
+    b = Math.max(0, Math.min(255, Math.floor(b * (1 - amount))));
+    const toHex = (v: number) => v.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  } catch { return hex; }
+}
+
+function lightenHex(hex: string, amount: number): string {
+  try {
+    const c = hex.replace('#', '');
+    const num = parseInt(c.length === 3 ? c.split('').map((x) => x + x).join('') : c, 16);
+    let r = (num >> 16) & 0xff;
+    let g = (num >> 8) & 0xff;
+    let b = num & 0xff;
+    r = Math.max(0, Math.min(255, Math.floor(r + (255 - r) * amount)));
+    g = Math.max(0, Math.min(255, Math.floor(g + (255 - g) * amount)));
+    b = Math.max(0, Math.min(255, Math.floor(b + (255 - b) * amount)));
+    const toHex = (v: number) => v.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  } catch { return hex; }
+}
+
+function EnergySubscribeCta({ onClick }: { onClick: () => void }) {
+  const base = '#3b5bff';
+  const dark = darkenHex(base, 0.25);
+  const press = 6;
+  return (
+    <motion.button
+      type="button"
+      whileTap={{ y: press, boxShadow: `0 0 0 0 ${dark}` }}
+      transition={{ duration: 0 }}
+      onClick={onClick}
+      className="w-full rounded-full text-white font-extrabold tracking-wider py-3 text-center"
+      style={{ background: base, boxShadow: `0 ${press}px 0 0 ${dark}` }}
+    >
+      КУПИТЬ ПОДПИСКУ
+    </motion.button>
+  );
+}
+
+// Legacy overlay (не используется, оставлен на случай возврата)
+function EnergySubscribeOverlay(_props: { onClose: () => void; onBuy: () => void }) { return null; }

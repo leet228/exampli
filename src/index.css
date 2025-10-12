@@ -595,8 +595,16 @@ body.profile-overscroll::before {
     /* чтобы всегда был над декором, но ниже шторок */
 }
 
+/* В AI без подписки — делаем бар белым */
+.bottomnav-white {
+    background: #f7f7f7 !important;
+}
+.bottomnav-white .hud-bar * { color: #000 !important; }
+.bottomnav-white .bottomnav::before,
+.bottomnav-white::before { background: rgba(0,0,0,.08) !important; }
 
-/* когда активен ввод — прячем системный бар телеграма (симулируем) */
+
+/* когда активен ввод — прячем системный бар телеграма (симулируем) */Ц
 
 .chat-input-active .safe-bottom {
     padding-bottom: calc(max(env(safe-area-inset-bottom), 92px) - 92px);

@@ -83,6 +83,26 @@ window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot }));
 // 7) Обновим локальный кэш пользователя с id/tg_id
 setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433' });
 
+// 7.1) Всегда держим энергию = 25 (без включения PLUS)
+try {
+  // выставим базовые статы и признак PLUS локально
+  setCache('stats', { streak: 1, energy: 25, coins: 500 });
+  // если кто-то попытается изменить энергию — вернём 25 и оповестим UI
+  window.addEventListener('exampli:statsChanged', (e) => {
+    try {
+      const val = e && e.detail ? e.detail.energy : undefined;
+      if (typeof val === 'number' && val !== 25) {
+        try {
+          const raw = localStorage.getItem('exampli:stats');
+          const prev = raw ? (JSON.parse(raw).v || {}) : {};
+          localStorage.setItem('exampli:stats', JSON.stringify({ v: { ...prev, energy: 25 }, e: null }));
+        } catch {}
+        setTimeout(() => { try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: 25 } })); } catch {} }, 0);
+      }
+    } catch {}
+  });
+} catch {}
+
 // 8) Попробуем подтянуть дату окончания подписки с сервера по tg_id
 try {
   fetch('/api/boot1', {

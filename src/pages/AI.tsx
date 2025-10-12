@@ -1,4 +1,6 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { cacheGet, CACHE_KEYS } from '../lib/cache';
 import { motion } from 'framer-motion';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import remarkGfm from 'remark-gfm';
@@ -21,6 +23,24 @@ const STORAGE_KEY = 'ai_chat_cache_v1';
 const PRESS_SHADOW_HEIGHT = 6;
 
 export default function AI() {
+  const navigate = useNavigate();
+  const isPlus = React.useMemo(() => {
+    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+  }, []);
+
+  // При отсутствии подписки блокируем скролл всей страницы
+  React.useEffect(() => {
+    if (!isPlus) {
+      const prevOverflow = document.body.style.overflow;
+      const prevOverscroll = document.documentElement.style.overscrollBehavior as string;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overscrollBehavior = 'none';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.documentElement.style.overscrollBehavior = prevOverscroll || '';
+      };
+    }
+  }, [isPlus]);
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -248,6 +268,23 @@ export default function AI() {
     }
   }
 
+  if (!isPlus) {
+    return (
+      <div className="fixed inset-0 z-[40] pointer-events-none">
+        {/* Картинка на весь экран */}
+        <img
+          src="/subs/sub_pic.svg"
+          alt="Подписка"
+          className="absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-none select-none"
+        />
+        {/* Кнопка поверх, ещё выше HUD */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-44 z-[61] w-[min(92%,680px)] px-4 pointer-events-auto">
+          <SubscribeCtaButton onClick={() => { try { hapticTiny(); } catch {}; navigate('/subscription'); }} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="safe-bottom main-scroll">
       <div className="w-full px-3 pt-0 pb-4 h-full flex flex-col ai-greet-pad relative">
@@ -376,6 +413,28 @@ export default function AI() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SubscribeCtaButton({ onClick }: { onClick: () => void }) {
+  const base = '#3b5bff';
+  const dark = darken(base, 18);
+  const press = 6;
+  const [pressed, setPressed] = React.useState(false);
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={() => { setPressed(false); onClick(); }}
+      animate={{ y: pressed ? press : 0, boxShadow: pressed ? `0px 0px 0px ${dark}` : `0px ${press}px 0px ${dark}` }}
+      transition={{ duration: 0 }}
+      className="w-full rounded-full text-white font-extrabold tracking-wider py-3 text-center"
+      style={{ background: base }}
+    >
+      КУПИТЬ ПОДПИСКУ
+    </motion.button>
   );
 }
 

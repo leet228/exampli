@@ -8,6 +8,7 @@ import Profile from './Profile';
 import Quests from './Quests';
 import Battle from './Battle';
 import AI from './AI';
+import SubscriptionGate from './SubscriptionGate';
 
 const router = createBrowserRouter([
   {
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
       { path: '/quests',      element: <Quests /> },
       { path: '/battle',      element: <Battle /> },
       { path: '/ai',          element: <AI /> },
+      { path: '/subscription-gate', element: <SubscriptionGate /> },
       { path: '/subscription',element: <Subscription /> },
       { path: '/profile',     element: <Profile /> },
     ],

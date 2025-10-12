@@ -35,8 +35,11 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
 
 export default function BottomNav() {
   const { pathname } = useLocation();
+  const isAI = pathname === '/ai';
+  const isPlus = (() => { try { return Boolean((window as any)?.localStorage ? JSON.parse(localStorage.getItem('exampli:' + 'plus_active') || 'null')?.v : false); } catch { return false; } })();
+  const whiteOnAiNoPlus = isAI && !isPlus;
   return (
-    <nav className="bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0">
+    <nav className={`bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0 ${whiteOnAiNoPlus ? 'bottomnav-white' : ''}`}>
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
         <div className="hud-bar mx-3.5 flex items-center justify-center gap-2 py-2 pb-5">
