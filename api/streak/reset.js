@@ -1,4 +1,4 @@
-// ESM serverless function: Daily streak reset by Moscow time (12:00 MSK)
+// ESM serverless function: Daily streak reset by Moscow time (00:00 MSK)
 // Logic: if user's last streak_days.day < yesterday(MSK), set users.streak = 0
 
 import { createClient } from '@supabase/supabase-js';

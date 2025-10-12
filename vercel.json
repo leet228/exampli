@@ -1,6 +1,6 @@
 {
     "crons": [
-        { "path": "/api/streak/reset", "schedule": "0 9 * * *" }
+        { "path": "/api/streak/reset", "schedule": "0 21 * * *" }
     ],
     "headers": [{
         "source": "/(.*).svg",
