@@ -17,8 +17,8 @@ export default function SubscriptionGate() {
     };
   }, []);
   return (
-    <div className="fixed inset-0 z-[9999]">
-      <img src="/subs/sub_pic.svg" alt="Подписка" className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" />
+    <div className="fixed inset-0 z-[9999]" style={{ background: '#01347a' }}>
+      <img src="/subs/sub_pic.svg" alt="Подписка" className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" style={{ transform: 'translateY(40px)' }} />
       <div className="absolute left-1/2 -translate-x-1/2 bottom-40 w-[min(92%,680px)] px-4">
         <PressCta onClick={() => { try { hapticSelect(); } catch {}; navigate('/subscription'); }}>КУПИТЬ ПОДПИСКУ</PressCta>
       </div>

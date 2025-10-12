@@ -106,6 +106,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                 >
                   <LessonRoundButton
                     size={70}
+                    width={74}
                     icon={'★'}
                     baseColor={nodeBase}
                     innerIconBg={nodeInner}

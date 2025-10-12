@@ -270,12 +270,13 @@ export default function AI() {
 
   if (!isPlus) {
     return (
-      <div className="fixed inset-0 z-[40] pointer-events-none">
+      <div className="fixed inset-0 z-[40] pointer-events-none" style={{ background: '#01347a' }}>
         {/* Картинка на весь экран */}
         <img
           src="/subs/sub_pic.svg"
           alt="Подписка"
           className="absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-none select-none"
+          style={{ transform: 'translateY(40px)' }}
         />
         {/* Кнопка поверх, ещё выше HUD */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-44 z-[61] w-[min(92%,680px)] px-4 pointer-events-auto">

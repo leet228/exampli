@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       return;
     }
 
-  const [friendsList, invites, subjectsAll, topicsOnly, lessonsByTopic] = await Promise.all([
+  const [friendsListRaw, invites, subjectsAll, topicsOnly, lessonsByTopic] = await Promise.all([
       supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
@@ -45,13 +45,45 @@ export default async function handler(req, res) {
     fetchLessonsByTopic(supabase, activeId),
     ]);
 
-    res.status(200).json({
-      friends: friendsList,
-      invites,
-      subjectsAll,
-      topicsBySubject: topicsOnly.topicsBySubject,
-      lessonsByTopic,
-    });
+    // Try server RPC that already returns streaks/avatars; fallback to manual enrichment
+    let friendsList = Array.isArray(friendsListRaw) ? friendsListRaw : [];
+    let usedRpc = false;
+    try {
+      const rpc = await supabase.rpc('rpc_friend_streaks', { caller: userId });
+      if (!rpc.error && Array.isArray(rpc.data)) {
+        friendsList = (rpc.data || []).map((row) => ({
+          user_id: String(row.user_id || row.friend_id || row.a_id || row.b_id || ''),
+          first_name: row.first_name ?? null,
+          username: row.username ?? null,
+          background_color: row.background_color ?? null,
+          background_icon: row.background_icon ?? null,
+          avatar_url: row.avatar_url ?? null,
+          streak: Number(row.streak ?? 0),
+          coins: Number(row.coins ?? 0),
+        }));
+        usedRpc = true;
+      }
+    } catch {}
+
+    if (!usedRpc) {
+      try {
+        const ids = Array.from(new Set(friendsList.map(r => r.user_id || r.friend_id || r.a_id || r.b_id).filter(Boolean)));
+        if (ids.length) {
+          const { data: usersRows } = await supabase
+            .from('users')
+            .select('id, streak, coins, avatar_url')
+            .in('id', ids);
+          const byId = new Map((usersRows || []).map(u => [String(u.id), u]));
+          friendsList = friendsList.map((p) => {
+            const uid = String(p.user_id || p.friend_id || p.a_id || p.b_id || '');
+            const u = byId.get(uid) || {};
+            return { ...p, user_id: uid, streak: Number(u?.streak ?? 0), coins: Number(u?.coins ?? 0), avatar_url: p?.avatar_url ?? u?.avatar_url ?? null };
+          });
+        }
+      } catch {}
+    }
+
+    res.status(200).json({ friends: friendsList, invites, subjectsAll, topicsBySubject: topicsOnly.topicsBySubject, lessonsByTopic });
   } catch (e) {
     console.error('[api/boot2] error', e);
     res.status(500).json({ error: 'Internal error' });

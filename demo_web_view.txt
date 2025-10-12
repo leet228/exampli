@@ -64,9 +64,9 @@ localStorage.setItem('exampli:lesson_tasks:' + rusSecondLessonId, JSON.stringify
 // 5) Подготовим «boot» так, чтобы не открывалась онбординг/блокирующая шторка
 const boot = {
   user: { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', phone_number: '+7 999 000-00-00', added_course: subjectRus.id, current_topic: 301, plus_until: null },
-  stats: { streak: 1, energy: 25, coins: 500 },
+  stats: { streak: 1, energy: 10, coins: 500 },
   userProfile: { background_color: '#3280c2', background_icon: 'bg_icon_cat', phone_number: '+7 999 000-00-00', first_name: 'Demo', username: 'demo' },
-  friendsCount: 0,
+  friendsCount: 1,
   subjects: [subjectRus],
   lessons: lessonsFor301,
   subjectsAll: [subject, subjectRus],
@@ -80,24 +80,39 @@ const boot = {
 window.__exampliBoot = boot;
 window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot }));
 
+// 6.1) Друг «СЕРГЕЙ» в демо-списке друзей
+const friendSergey = {
+  user_id: 'demo-friend-1',
+  first_name: 'СЕРГЕЙ',
+  username: null,
+  background_color: 'linear-gradient(135deg, #f8906b 0%, #ca555e 100%)',
+  background_icon: 'bg_icon_cat',
+  avatar_url: null,
+  phone_number: '+79203192309',
+};
+window.__exampliBootFriends = [friendSergey];
+setCache('friends_list', [friendSergey]);
+setCache('friends_count', 1);
+try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: 1 } })); } catch {}
+
 // 7) Обновим локальный кэш пользователя с id/tg_id
 setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433' });
 
-// 7.1) Всегда держим энергию = 25 (без включения PLUS)
+// 7.1) Всегда держим энергию = 10 (без включения PLUS)
 try {
   // выставим базовые статы и признак PLUS локально
-  setCache('stats', { streak: 1, energy: 25, coins: 500 });
+  setCache('stats', { streak: 1, energy: 10, coins: 500 });
   // если кто-то попытается изменить энергию — вернём 25 и оповестим UI
   window.addEventListener('exampli:statsChanged', (e) => {
     try {
       const val = e && e.detail ? e.detail.energy : undefined;
-      if (typeof val === 'number' && val !== 25) {
+      if (typeof val === 'number' && val !== 10) {
         try {
           const raw = localStorage.getItem('exampli:stats');
           const prev = raw ? (JSON.parse(raw).v || {}) : {};
-          localStorage.setItem('exampli:stats', JSON.stringify({ v: { ...prev, energy: 25 }, e: null }));
+          localStorage.setItem('exampli:stats', JSON.stringify({ v: { ...prev, energy: 10 }, e: null }));
         } catch {}
-        setTimeout(() => { try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: 25 } })); } catch {} }, 0);
+        setTimeout(() => { try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: 10 } })); } catch {} }, 0);
       }
     } catch {}
   });

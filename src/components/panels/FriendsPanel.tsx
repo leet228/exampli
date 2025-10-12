@@ -19,7 +19,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }, []);
   const [loadingInv, setLoadingInv] = useState<boolean>(false);
   const [invites, setInvites] = useState<Array<{ other_id: string; first_name: string | null; username: string | null; avatar_url: string | null }>>([]);
-  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>>(() => {
+  const [friends, setFriends] = useState<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null; plus_until?: string | null }>>(() => {
     try {
       const fromBoot = (window as any)?.__exampliBootFriends as any[] | undefined;
       if (Array.isArray(fromBoot) && fromBoot.length) return (fromBoot as any).map((r: any) => ({ ...r, avatar_url: (r as any)?.avatar_url ?? null }));
@@ -84,16 +84,16 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }, [open, invitesOpen]);
   useEffect(() => { if (open) void loadFriends(); }, [open]);
 
-  async function enrichWithAvatars(rows: Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url?: string | null }>): Promise<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }>> {
+  async function enrichWithAvatars(rows: Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url?: string | null }>): Promise<Array<{ user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null; plus_until?: string | null }>> {
     try {
-      const missing = rows.filter(r => !r.avatar_url).map(r => r.user_id);
+      const missing = rows.map(r => r.user_id);
       if (missing.length) {
         const { data } = await supabase
           .from('users')
-          .select('id, avatar_url')
+          .select('id, avatar_url, plus_until')
           .in('id', missing as string[]);
-        const map = new Map<string, string | null>((data || []).map((u: any) => [String(u.id), (u?.avatar_url as string | null) ?? null]));
-        return rows.map(r => ({ ...r, avatar_url: map.get(r.user_id) ?? r.avatar_url ?? null }));
+        const map = new Map<string, { avatar_url: string | null; plus_until: string | null }>((data || []).map((u: any) => [String(u.id), { avatar_url: (u?.avatar_url as string | null) ?? null, plus_until: (u?.plus_until as string | null) ?? null }]));
+        return rows.map(r => ({ ...r, avatar_url: (map.get(r.user_id)?.avatar_url ?? r.avatar_url ?? null) as string | null, plus_until: map.get(r.user_id)?.plus_until ?? null }));
       }
     } catch {}
     return rows.map(r => ({ ...r, avatar_url: r.avatar_url ?? null }));
@@ -213,6 +213,25 @@ export default function FriendsPanel({ open, onClose }: Props) {
     if (!myId) return;
     setLoadingFriends(true);
     try {
+      // DEMO short-circuit: если есть предзагруженные друзья в boot — используем их без сетевых запросов
+      try {
+        const demoSeed = (window as any).__exampliBootFriends as any[] | undefined;
+        if (Array.isArray(demoSeed) && demoSeed.length) {
+          const rows = await enrichWithAvatars(
+            (demoSeed as any[]).map((p: any) => ({
+              user_id: p.user_id,
+              first_name: p.first_name ?? null,
+              username: p.username ?? null,
+              background_color: p.background_color ?? null,
+              background_icon: p.background_icon ?? null,
+              avatar_url: p.avatar_url ?? null,
+            }))
+          );
+          setFriends(rows);
+          try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: rows.length } })); } catch {}
+          return;
+        }
+      } catch {}
       // 1) Пытаемся получить через RPC, чтобы RLS не мешал
       const rpc = await supabase.rpc('rpc_friend_list', { caller: myId } as any);
       if (!rpc.error && Array.isArray(rpc.data)) {
@@ -455,6 +474,31 @@ export default function FriendsPanel({ open, onClose }: Props) {
                       ) : (
                         <div className="w-full h-full grid place-items-center text-lg font-bold text-white/95">{initials}</div>
                       )}
+                      {(() => {
+                        // проверяем плюс напрямую по users.plus_until, подтягивается в enrichWithAvatars
+                        try {
+                          const hasPlus = Boolean(f?.plus_until ? (new Date(String(f.plus_until)).getTime() > Date.now()) : false);
+                          if (hasPlus) {
+                            return (
+                              <div
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                  zIndex: -1,
+                                  left: '-18px',
+                                  top: '-18px',
+                                  width: 'calc(100% + 36px)',
+                                  height: 'calc(100% + 36px)',
+                                  borderRadius: '9999px',
+                                  background: 'conic-gradient(#22e3b1, #3c73ff, #d45bff, #22e3b1)',
+                                  WebkitMaskImage: 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 55%, rgba(0,0,0,0) 80%)',
+                                  maskImage: 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 55%, rgba(0,0,0,0) 80%)',
+                                }}
+                              />
+                            );
+                          }
+                        } catch {}
+                        return null;
+                      })()}
                     </div>
                   </div>
 

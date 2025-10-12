@@ -535,6 +535,7 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
     if (!r2.ok) return;
     const data = await r2.json();
     try { cacheSet(CACHE_KEYS.friendsList, data.friends || []); } catch {}
+    try { cacheSet(CACHE_KEYS.friendsCount, Array.isArray(data.friends) ? data.friends.length : 0); } catch {}
     try { cacheSet(CACHE_KEYS.invitesIncomingList, data.invites || []); cacheSet(CACHE_KEYS.invitesIncomingCount, (data.invites || []).length); } catch {}
     try { cacheSet(CACHE_KEYS.subjectsAll, data.subjectsAll || []); } catch {}
     try {

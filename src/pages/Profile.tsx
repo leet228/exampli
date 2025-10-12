@@ -8,6 +8,9 @@ import { hapticSelect } from '../lib/haptics';
 
 export default function Profile() {
   const [u, setU] = useState<any>(null);
+  const [isPlus, setIsPlus] = useState<boolean>(() => {
+    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+  });
   const [course, setCourse] = useState<string>('Курс');
   const [courseCode, setCourseCode] = useState<string | null>(null);
   const [bg, setBg] = useState<string>('#3280c2');
@@ -63,6 +66,25 @@ export default function Profile() {
       return 0;
     } catch { return 0; }
   });
+  // Топ друзей по стрику (для слотов 5 шт.)
+  const [friendTop, setFriendTop] = useState<Array<{ user_id: string; streak: number; avatar_url: string | null; first_name?: string | null }>>([]);
+  const [friendOpen, setFriendOpen] = useState<boolean>(false);
+  const [friendView, setFriendView] = useState<{
+    user_id: string;
+    first_name: string | null;
+    username: string | null;
+    background_color: string | null;
+    background_icon: string | null;
+    avatar_url: string | null;
+  } | null>(null);
+  const [friendStats, setFriendStats] = useState<{
+    streak: number;
+    coins: number;
+    friendsCount: number;
+    courseCode: string | null;
+    courseTitle: string | null;
+    avatar_url?: string | null;
+  } | null>(null);
   const [qrOpen, setQrOpen] = useState<boolean>(false);
   const [qrImgUrl, setQrImgUrl] = useState<string>('');
   const [qrLoading, setQrLoading] = useState<boolean>(false);
@@ -187,6 +209,138 @@ export default function Profile() {
     })();
   }, []);
 
+  // Загружаем друзей и их стрики, сортируем по убыванию, берём топ‑5
+  useEffect(() => { void refreshFriendStreakSlots(); }, [friendsCount]);
+  useEffect(() => {
+    const onFriendsChanged = () => { void refreshFriendStreakSlots(); };
+    try { window.addEventListener('exampli:friendsChanged', onFriendsChanged as any); } catch {}
+    return () => { try { window.removeEventListener('exampli:friendsChanged', onFriendsChanged as any); } catch {} };
+  }, []);
+
+  // Также подписываемся на добавление/удаление друга через панель (обновление кэша friends_list)
+  useEffect(() => {
+    const rebalance = () => { try { setFriendsCount((cacheGet<number>(CACHE_KEYS.friendsCount) as any) || 0); } catch { void refreshFriendStreakSlots(); } };
+    try { window.addEventListener('exampli:friendsChanged', rebalance as any); } catch {}
+    return () => { try { window.removeEventListener('exampli:friendsChanged', rebalance as any); } catch {} };
+  }, []);
+
+  async function refreshFriendStreakSlots() {
+    try {
+      // Источник списка друзей — boot или кэш
+      const bootArr = (window as any)?.__exampliBootFriends as any[] | undefined;
+      const cached = cacheGet<any[]>(CACHE_KEYS.friendsList) || [];
+      const rows = (Array.isArray(bootArr) && bootArr.length ? bootArr : cached) as any[];
+      if (!Array.isArray(rows) || rows.length === 0) { setFriendTop([]); return; }
+      const ids = Array.from(new Set(rows.map(r => String(r.user_id)).filter(Boolean)));
+      // Попробуем получить streak и avatar_url из users
+      let streakMap = new Map<string, { streak: number; avatar_url: string | null }>();
+      if (ids.length) {
+        try {
+          const { data } = await supabase
+            .from('users')
+            .select('id, streak, avatar_url')
+            .in('id', ids as any);
+          (data || []).forEach((u: any) => {
+            streakMap.set(String(u.id), { streak: Number(u?.streak ?? 0), avatar_url: (u?.avatar_url ?? null) as string | null });
+          });
+        } catch {}
+      }
+      const merged = rows.map((r: any) => {
+        const id = String(r.user_id);
+        const fromUsers = streakMap.get(id);
+        return {
+          user_id: id,
+          first_name: r?.first_name ?? null,
+          streak: fromUsers?.streak ?? 0,
+          avatar_url: (fromUsers?.avatar_url ?? r?.avatar_url ?? null) as string | null,
+        };
+      });
+      merged.sort((a, b) => (b.streak || 0) - (a.streak || 0));
+      setFriendTop(merged.slice(0, 5));
+    } catch { setFriendTop([]); }
+  }
+
+  async function openFriendProfileById(userId: string) {
+    try {
+      // базовые данные из boot/cached friends_list
+      const seed = ((window as any)?.__exampliBootFriends as any[]) || (cacheGet<any[]>(CACHE_KEYS.friendsList) || []);
+      const base = (seed || []).find((r: any) => String(r.user_id) === String(userId)) || {};
+      const view = {
+        user_id: String(userId),
+        first_name: base?.first_name ?? null,
+        username: base?.username ?? null,
+        background_color: base?.background_color ?? null,
+        background_icon: base?.background_icon ?? 'bg_icon_cat',
+        avatar_url: base?.avatar_url ?? null,
+      } as any;
+      setFriendView(view);
+      setFriendStats(null);
+      setFriendOpen(true);
+      // Подтягиваем серверные данные (стрик/коины/курс/аватар)
+      const [{ data: urow }, countR] = await Promise.all([
+        supabase.from('users').select('streak, coins, added_course, avatar_url').eq('id', userId).single(),
+        supabase.rpc('rpc_friend_count', { caller: userId } as any),
+      ]);
+      let courseCode: string | null = null;
+      let courseTitle: string | null = null;
+      const added = (urow as any)?.added_course as number | null | undefined;
+      if (added) {
+        try {
+          const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();
+          courseCode = (subj as any)?.code ?? null;
+          courseTitle = (subj as any)?.title ?? null;
+        } catch {}
+      }
+      setFriendStats({
+        streak: Number((urow as any)?.streak ?? 0),
+        coins: Number((urow as any)?.coins ?? 0),
+        friendsCount: countR && !countR.error ? Number(countR.data || 0) : 0,
+        courseCode,
+        courseTitle,
+        avatar_url: (urow as any)?.avatar_url ?? view.avatar_url ?? null,
+      });
+    } catch {}
+  }
+
+  function closeFriendProfileOverlay() {
+    setFriendOpen(false);
+    setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
+  }
+
+  // Слушаем изменения подписки и обновляем локальный флаг PLUS
+  useEffect(() => {
+    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    const onPlus = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<{ plus_until?: string } & any>;
+        const pu = e?.detail?.plus_until;
+        if (pu !== undefined) {
+          const active = pu ? (new Date(pu).getTime() > Date.now()) : false;
+          setIsPlus(active);
+          try { cacheSet(CACHE_KEYS.isPlus, active); } catch {}
+        }
+      } catch {}
+    };
+    window.addEventListener('exampli:statsChanged', onPlus as any);
+    return () => { window.removeEventListener('exampli:statsChanged', onPlus as any); };
+  }, []);
+
+  // Слушаем обновления статистики (стрик/коины/энергия) и обновляем профиль мгновенно
+  useEffect(() => {
+    const onStatsChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ streak?: number; coins?: number; energy?: number }>;
+      setU((prev: any) => {
+        const next = { ...(prev || {}) } as any;
+        if (typeof e.detail?.streak === 'number') next.streak = Number(e.detail.streak);
+        if (typeof e.detail?.coins === 'number') next.coins = Number(e.detail.coins);
+        if (typeof e.detail?.energy === 'number') next.energy = Number(e.detail.energy);
+        return next;
+      });
+    };
+    try { window.addEventListener('exampli:statsChanged', onStatsChanged as any); } catch {}
+    return () => { try { window.removeEventListener('exampli:statsChanged', onStatsChanged as any); } catch {}; };
+  }, []);
+
   // загрузка количества друзей
   // обновляем friendsCount только по событиям/boot; сетевой пересчёт не делаем
 
@@ -225,7 +379,7 @@ export default function Profile() {
   const atUsername = username ? `@${username}` : '';
 
   return (
-    <div className="flex flex-col items-center text-center gap-5">
+    <div className="flex flex-col items-center text-center gap-5" style={{ position: 'relative', zIndex: 1 }}>
       {/* Хиро-блок: на всю ширину экрана, без скруглений, фон = background_color + мягкое свечение от аватарки */}
       <div
         className="relative"
@@ -273,6 +427,79 @@ export default function Profile() {
               />
             ))}
           </div>
+  {/* Friend Profile Overlay (reuse simplified version) */}
+  <AnimatePresence>
+    {friendOpen && friendView && (
+      <motion.div
+        className="fixed inset-0 z-[55]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+        onClick={closeFriendProfileOverlay}
+      >
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.96, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            className="relative overflow-hidden rounded-2xl border border-white/10"
+            style={{ width: 'min(560px, 96vw)', maxWidth: 620, background: 'var(--bg)' }}
+            onClick={(e) => { e.stopPropagation(); }}
+          >
+            {/* header background like profile */}
+            <div className="relative w-full" style={{ height: 280, background: friendView.background_color || '#1d2837' }}>
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+                  {(friendStats?.avatar_url || friendView.avatar_url) ? (
+                    <img src={(friendStats?.avatar_url || friendView.avatar_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/95">{(friendView.first_name || friendView.username || '?').slice(0,1).toUpperCase()}</div>
+                  )}
+                </div>
+              </div>
+              <div className="absolute left-1/2 bottom-2 -translate-x-1/2 text-center">
+                <div className="font-semibold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}>
+                  {friendView.first_name || 'Без имени'}{friendView.username ? ` (@${friendView.username})` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4" style={{ background: 'var(--bg)' }}>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
+                  {friendStats?.courseCode ? (
+                    <img src={`/subjects/${friendStats.courseCode}.svg`} alt="Курс" className="w-16 h-16 object-contain" />
+                  ) : (
+                    <div className="w-16 h-16 grid place-items-center text-2xl">🧩</div>
+                  )}
+                  <div className="text-sm text-white/80 mt-1 truncate max-w-[160px]">{friendStats?.courseTitle || 'Курс'}</div>
+                </div>
+                <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
+                  <div className="text-2xl font-extrabold tabular-nums leading-tight">{friendStats?.friendsCount ?? 0}</div>
+                  <div className="text-sm text-white/80 leading-tight mt-1">друзья</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="px-1 py-1 flex items-center gap-3">
+                  <img src="/stickers/fire.svg" alt="Стрик" className="w-10 h-10" />
+                  <div className="text-2xl font-extrabold tabular-nums">{friendStats?.streak ?? 0}</div>
+                  <div className="text-base">{(friendStats?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
+                </div>
+                <div className="px-1 py-1 flex items-center gap-3 justify-end">
+                  <img src="/stickers/coin_cat.svg" alt="coins" className="w-9 h-9" />
+                  <div className="text-2xl font-extrabold tabular-nums">{friendStats?.coins ?? 0}</div>
+                  <div className="text-base">coin</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
           <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
           {/* Кнопка Изменить в правом верхнем углу (скрыта в режиме редактирования) */}
           {!editing && (
@@ -304,10 +531,15 @@ export default function Profile() {
               <div
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
                 style={{
-                  width: 300,
-                  height: 300,
+                  width: isPlus ? 220 : 300,
+                  height: isPlus ? 220 : 300,
                   borderRadius: '50%',
-                  background: 'radial-gradient(closest-side, rgba(255,255,255,0.32), rgba(255,255,255,0) 80%)',
+                  background: isPlus
+                    ? 'conic-gradient(#22e3b1, #3c73ff, #d45bff, #22e3b1)'
+                    : 'radial-gradient(closest-side, rgba(255,255,255,0.32), rgba(255,255,255,0) 80%)',
+                  // мягкое затухание краёв для PLUS через маску
+                  WebkitMaskImage: isPlus ? 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 45%, rgba(0,0,0,0) 70%)' : undefined,
+                  maskImage: isPlus ? 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 45%, rgba(0,0,0,0) 70%)' : undefined,
                   zIndex: 0,
                 }}
               />
@@ -404,6 +636,70 @@ export default function Profile() {
                 <div className="text-2xl font-extrabold tabular-nums">{u?.coins ?? 0}</div>
                 <div className="text-base">coin</div>
               </div>
+            </div>
+          </div>
+
+          {/* Стрики друзей */}
+          <div className="w-full max-w-xl px-3 mt-4">
+            <div className="text-xs tracking-wide uppercase text-muted mb-2">Стрики друзей</div>
+            <div className="flex items-start gap-5">
+              {Array.from({ length: 5 }).map((_, i) => {
+                const f = friendTop[i];
+                return (
+                  <div key={i} className="flex flex-col items-center" style={{ minWidth: 56 }}>
+                    <button
+                      type="button"
+                      aria-label={f ? `Друг ${f.first_name || ''}` : 'Добавить друга в стрики'}
+                      onClick={() => { try { hapticSelect(); } catch {}; if (f) openFriendProfileById(f.user_id); else setAddFriendsOpen(true); }}
+                      className="grid place-items-center rounded-full border-2 border-dashed"
+                      style={{ width: 56, height: 56, borderColor: 'rgba(255,255,255,0.35)' }}
+                    >
+                      {f ? (
+                        <div className="relative" style={{ width: 48, height: 48 }}>
+                          <div className="rounded-full overflow-hidden w-full h-full">
+                            {f.avatar_url ? (
+                              <img src={f.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-full h-full grid place-items-center bg-white/10 text-white/90 font-bold">
+                                {(f.first_name || '?').slice(0,1).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          {/* бейдж со стриком ниже круга (выходит за аватар) */}
+                          <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: -10 }} aria-hidden>
+                            <div
+                              className="rounded-full border-2 grid place-items-center shadow"
+                              style={{
+                                width: (() => {
+                                  const len = String(Math.max(0, Number(f.streak || 0))).length;
+                                  return len <= 1 ? 20 : (len === 2 ? 25 : 35);
+                                })(),
+                                height: 20,
+                                background: 'linear-gradient(180deg, #f8b04a 0%, #f28c1b 100%)',
+                                borderColor: '#ffffff',
+                                color: '#ffffff',
+                                fontSize: (String(Math.max(0, Number(f.streak || 0))).length >= 3 ? 11 : 12),
+                                fontWeight: 900,
+                                lineHeight: '12px',
+                                textShadow: '0 1px 0 rgba(0,0,0,0.25)'
+                              }}
+                            >
+                              {Math.max(0, Number(f.streak || 0))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-white/85 text-2xl leading-none">+</span>
+                      )}
+                    </button>
+                    {f && (
+                      <div className="mt-1 text-[12px] text-white/80 max-w-[72px] truncate">
+                        {f.first_name || ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
@@ -597,6 +893,15 @@ export default function Profile() {
           </motion.div>
         )}
       </AnimatePresence>
+      {isPlus && !editing && (
+        <img
+          src="/stickers/mucus.svg"
+          alt=""
+          aria-hidden
+          className="fixed left-0 right-0 w-full select-none pointer-events-none"
+          style={{ zIndex: 0, bottom: 'calc(var(--hud-h, 64px) + 434px)' }}
+        />
+      )}
     </div>
   );
 }

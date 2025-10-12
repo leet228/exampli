@@ -4,6 +4,7 @@ import { hapticSelect } from '../../lib/haptics';
 
 type Props = {
   size?: number; // диаметр в px
+  width?: number; // ширина в px (если не указана — равна size)
   icon?: React.ReactNode;
   onClick?: (e?: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => void;
   baseColor?: string; // основной зелёный цвет круга
@@ -49,6 +50,7 @@ function darken(hex: string, percent: number): string {
 
 export default function LessonRoundButton({
   size = 76,
+  width,
   icon = '★',
   onClick,
   baseColor = '#4ade3b',
@@ -63,10 +65,11 @@ export default function LessonRoundButton({
   const contentColor = '#053b00';
 
   const sizePx = `${size}px`;
+  const widthPx = `${width ?? size}px`;
   const innerSize = Math.round(size * 0.52);
 
   const style: React.CSSProperties = {
-    width: sizePx,
+    width: widthPx,
     height: sizePx,
     borderRadius: '9999px',
     background: baseColor,

@@ -69,9 +69,9 @@ localStorage.setItem('exampli:lesson_tasks:' + rusSecondLessonId, JSON.stringify
 // 5) Подготовим «boot» так, чтобы не открывалась онбординг/блокирующая шторка
 const boot = {
   user: { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', phone_number: '+7 999 000-00-00', added_course: subjectRus.id, current_topic: 301, plus_until: plusUntil },
-  stats: { streak: 1, energy: 25, coins: 500 },
+  stats: { streak: 5, energy: 25, coins: 500 },
   userProfile: { background_color: '#3280c2', background_icon: 'bg_icon_cat', phone_number: '+7 999 000-00-00', first_name: 'Demo', username: 'demo' },
-  friendsCount: 0,
+  friendsCount: 1,
   subjects: [subjectRus],
   lessons: lessonsFor301,
   subjectsAll: [subject, subjectRus],
@@ -89,3 +89,18 @@ window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_un
 
 // 7) Обновим локальный кэш пользователя с id/tg_id
 setCache('user', { id: '6612b390-7e6c-422e-9a64-513de3f301a4', tg_id: '945676433', plus_until: plusUntil });
+
+// 7.1) Друг «СЕРГЕЙ»
+const friendSergey = {
+  user_id: 'demo-friend-1',
+  first_name: 'СЕРГЕЙ',
+  username: null,
+  background_color: 'linear-gradient(135deg, #f8906b 0%, #ca555e 100%)',
+  background_icon: 'bg_icon_cat',
+  avatar_url: null,
+  phone_number: '+79203192309',
+};
+window.__exampliBootFriends = [friendSergey];
+setCache('friends_list', [friendSergey]);
+setCache('friends_count', 1);
+try { window.dispatchEvent(new CustomEvent('exampli:friendsChanged', { detail: { count: 1 } })); } catch {}

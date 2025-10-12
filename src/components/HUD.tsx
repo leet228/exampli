@@ -5,6 +5,7 @@ import { hapticTiny } from '../lib/haptics';
 import { useNavigate } from 'react-router-dom';
 import FullScreenSheet from './sheets/FullScreenSheet';
 import { supabase } from '../lib/supabase';
+import { rewardEnergy } from '../lib/userState';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import TopSheet from './sheets/TopSheet';
 import AddCourseSheet from './panels/AddCourseSheet';
@@ -20,6 +21,8 @@ type Subject = { id: number; code: string; title: string; level: string };
 export default function HUD() {
   const anchorRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  // Пульс иконки энергии после пополнения
+  const [energyPulseKey, setEnergyPulseKey] = useState<number>(0);
 
   const [courseTitle, setCourseTitle] = useState('Курс');
   const [courseCode, setCourseCode] = useState<string | null>(null);
@@ -39,6 +42,13 @@ export default function HUD() {
 
   // какая верхняя шторка открыта
   const [open, setOpen] = useState<'course' | 'streak' | 'energy' | null>(null);
+
+  // Слушаем глобальный "пульс" энергии и дергаем анимацию иконки
+  useEffect(() => {
+    const onPulse = () => setEnergyPulseKey(k => k + 1);
+    window.addEventListener('exampli:energyPulse', onPulse);
+    return () => window.removeEventListener('exampli:energyPulse', onPulse);
+  }, []);
 
   // нижняя шторка «Добавить курс»
   const [addOpen, setAddOpen] = useState(false);
@@ -404,11 +414,15 @@ export default function HUD() {
                 <img src="/stickers/battery/plus_energy_www.svg" alt="" aria-hidden className="w-[56px] h-[44px] object-contain" />
               ) : (
                 <>
-                  <img
+                  <motion.img
                     src={`/stickers/battery/${Math.max(0, Math.min(25, energy))}.svg`}
                     alt=""
                     aria-hidden
                     className="w-9 h-9"
+                    key={energyPulseKey}
+                    initial={{ scale: 1 }}
+                    animate={energyPulseKey ? { scale: [1, 2.4, 1] } : { scale: 1 }}
+                    transition={{ duration: 1, times: [0, 0.5, 1], ease: 'easeInOut' }}
                   />
                   <span
                     className={[
@@ -474,6 +488,8 @@ export default function HUD() {
           isOpen={open === 'energy'}
           onOpenSubscription={async () => { setOpen(null); navigate('/subscription'); }}
           openGate={() => { setOpen(null); navigate('/subscription-gate'); }}
+          onCloseSheet={() => setOpen(null)}
+          isPlus={isPlus}
         />
       </TopSheet>
 
@@ -509,8 +525,10 @@ export default function HUD() {
 
 function StreakSheetBody() { return <StreakSheetContent />; }
 
-function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { value: number; onOpenSubscription: () => void; isOpen?: boolean; openGate?: () => void }) {
+function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate, onCloseSheet, isPlus = false }: { value: number; onOpenSubscription: () => void; isOpen?: boolean; openGate?: () => void; onCloseSheet: () => void; isPlus?: boolean }) {
   const [energy, setEnergy] = useState(value);
+  const [coins, setCoins] = useState<number>(0);
+  const [toppingUp, setToppingUp] = useState<boolean>(false);
   const [fullAt, setFullAt] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState<number>(Date.now());
   const [showSubsOverlay, setShowSubsOverlay] = useState(false);
@@ -531,6 +549,7 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { valu
       const cs = cacheGet<any>(CACHE_KEYS.stats);
       if (cs?.energy != null) setEnergy(Number(cs.energy));
       if (cs?.energy_full_at != null) setFullAt(String(cs.energy_full_at));
+      if (cs?.coins != null) setCoins(Number(cs.coins));
     } catch {}
     (async () => {
       const res = await syncEnergy(0);
@@ -546,7 +565,17 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { valu
     }, 60000);
     const onSynced = (e: any) => { if (e?.detail?.full_at !== undefined) setFullAt(e.detail.full_at); };
     window.addEventListener('exampli:energySynced', onSynced as EventListener);
-    return () => { clearInterval(timer); window.removeEventListener('exampli:energySynced', onSynced as EventListener); };
+    const onStatsChanged = (evt: Event) => {
+      const e = evt as CustomEvent<{ energy?: number; coins?: number }>;
+      if (typeof e.detail?.energy === 'number') setEnergy(Number(e.detail.energy));
+      if (typeof e.detail?.coins === 'number') setCoins(Number(e.detail.coins));
+    };
+    window.addEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('exampli:energySynced', onSynced as EventListener);
+      window.removeEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+    };
   }, []);
 
   // Каждый раз при открытии шторки — форсим свежую синхронизацию
@@ -561,8 +590,48 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { valu
 
   useEffect(() => { setEnergy(value); }, [value]);
 
-  const percent = Math.max(0, Math.min(100, Math.round((energy / 25) * 100)));
+  const percent = isPlus ? 100 : Math.max(0, Math.min(100, Math.round((energy / 25) * 100)));
   const iconName = energy >= 25 ? 'full' : 'none';
+  const canTopUp = coins >= 500 && energy < 25;
+
+  async function handleTopUp() {
+    if (toppingUp || !canTopUp) return;
+    setToppingUp(true);
+    try {
+      const newEnergy = 25;
+      const newCoins = Math.max(0, Number(coins) - 500);
+      // 1) Оптимистично обновим локальный кэш и уведомим UI
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        cacheSet(CACHE_KEYS.stats, { ...cs, energy: newEnergy, coins: newCoins, energy_full_at: null });
+      } catch {}
+      try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: newEnergy, coins: newCoins } } as any)); } catch {}
+      try { window.dispatchEvent(new CustomEvent('exampli:energySynced', { detail: { energy: newEnergy, next_at: null, full_at: null } } as any)); } catch {}
+
+      // 2) Сервер: обновим users (энергия и коины) и сбросим серверную очередь через RPC
+      try {
+        const tgIdRaw: any = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
+        const tgId = tgIdRaw != null ? String(tgIdRaw) : null;
+        const userId = (() => { try { return String(cacheGet<any>(CACHE_KEYS.user)?.id || ''); } catch { return ''; } })();
+        if (tgId) {
+          try { await supabase.from('users').update({ energy: newEnergy, coins: newCoins }).eq('tg_id', tgId); } catch {}
+          // Попросим сервер «синкануть» энергию, чтобы очистить очередь трат (если есть)
+          try { await supabase.rpc('sync_energy', { p_tg_id: tgId, p_delta: 0 }); } catch {}
+        } else if (userId) {
+          try { await supabase.from('users').update({ energy: newEnergy, coins: newCoins }).eq('id', userId); } catch {}
+        }
+      } catch {}
+      // 3) Закрываем шторку и почти сразу (через 100мс) триггерим пульс на иконке энергии
+      try {
+        onCloseSheet();
+        setTimeout(() => {
+          try { window.dispatchEvent(new CustomEvent('exampli:energyPulse')); } catch {}
+        }, 5);
+      } catch {}
+    } finally {
+      setToppingUp(false);
+    }
+  }
 
   const fullLeft = (() => {
     if (!fullAt) return '';
@@ -592,26 +661,53 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate }: { valu
         <div className="relative h-7 rounded-full bg-white/10 overflow-hidden" style={{ width: 'calc(100% - 20px)' }}>
           <div
             className="absolute left-0 top-0 h-full"
-            style={{ width: `${percent}%`, background: '#3c73ff', borderTopLeftRadius: 9999, borderBottomLeftRadius: 9999 }}
+            style={{
+              width: `${percent}%`,
+              background: isPlus
+                ? 'linear-gradient(90deg, #22e3b1 0%, #3c73ff 50%, #d45bff 100%)'
+                : '#3c73ff',
+              borderTopLeftRadius: 9999,
+              borderBottomLeftRadius: 9999,
+            }}
           />
-          <div className="absolute inset-0 flex items-center justify-center font-extrabold">{energy}/25</div>
+          {!isPlus && (
+            <div className="absolute inset-0 flex items-center justify-center font-extrabold">{energy}/25</div>
+          )}
         </div>
-        {/* Иконка поверх, крупнее полосы, чтобы визуально "обрезать" край */}
-        <img
-          src={`/stickers/battery/${iconName}.svg`}
-          alt=""
-          aria-hidden
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-20 h-20 pointer-events-none"
-          style={{ zIndex: 2 }}
-        />
+        {/* Иконка поверх: обычная батарейка или бесконечность при PLUS */}
+        {isPlus ? (
+          <img
+            src="/stickers/battery/infin_progress_bar.svg"
+            alt="∞"
+            aria-hidden
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-20 h-20 pointer-events-none"
+            style={{ zIndex: 2 }}
+          />
+        ) : (
+          <img
+            src={`/stickers/battery/${iconName}.svg`}
+            alt=""
+            aria-hidden
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-20 h-20 pointer-events-none"
+            style={{ zIndex: 2 }}
+          />
+        )}
       </div>
 
-      <div className="mt-12">
-        <PlusInfinityButton onClick={() => { try { hapticTiny(); } catch {}; (openGate || (() => location.assign('/subscription-gate')))(); }} />
-      </div>
-      <div className="mt-3 mb-3">
-        <TopUpEnergyButton onClick={onOpenSubscription} />
-      </div>
+      {isPlus ? (
+        <div className="mt-6 mb-2">
+          <img src="/stickers/cat_energy.svg" alt="PLUS Energy" className="block w-full h-auto" />
+        </div>
+      ) : (
+        <>
+          <div className="mt-12">
+            <PlusInfinityButton onClick={() => { try { hapticTiny(); } catch {}; (openGate || (() => location.assign('/subscription-gate')))(); }} />
+          </div>
+          <div className="mt-5 mb-3">
+            <TopUpEnergyButton onClick={handleTopUp} disabled={!canTopUp || toppingUp} />
+          </div>
+        </>
+      )}
 
       {/* Открываем отдельную страницу-гейт, чтобы гарантированно перекрыть всё */}
       {showSubsOverlay && (location.href = '/subscription-gate') as unknown as null}
@@ -652,27 +748,33 @@ function PlusInfinityButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function TopUpEnergyButton({ onClick }: { onClick: () => void }) {
+function TopUpEnergyButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   const baseColor = '#0e1829';
   const pressHeight = 3;
   const shadowColor = lightenHex(baseColor, 0.35);
   return (
     <motion.button
-      whileTap={{ y: pressHeight, boxShadow: `0 0 0 0 ${shadowColor}` }}
+      whileTap={disabled ? undefined : { y: pressHeight, boxShadow: `0 0 0 0 ${shadowColor}` }}
       transition={{ duration: 0 }}
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       type="button"
-      className="relative w-full rounded-2xl px-5 py-3 text-white select-none overflow-hidden flex items-center justify-between"
-      style={{ background: baseColor, boxShadow: `0 ${pressHeight}px 0 0 ${shadowColor}` }}
+      className={`relative w-full rounded-2xl px-5 py-3 select-none overflow-hidden flex items-center justify-between ${disabled ? 'cursor-not-allowed' : 'text-white'}`}
+      style={{
+        background: disabled ? darkenHex(baseColor, 0.45) : baseColor,
+        boxShadow: disabled ? 'none' : `0 ${pressHeight}px 0 0 ${shadowColor}`,
+        color: disabled ? 'rgba(255,255,255,0.55)' : undefined,
+        filter: disabled ? 'grayscale(0.35)' : undefined,
+      }}
       aria-label="Пополнить энергию"
+      disabled={disabled}
     >
       <div className="flex items-center gap-3">
         <img src="/stickers/battery/25.svg" alt="25" className="w-[72px] h-[72px]" />
         <div className="font-semibold">Пополнить</div>
       </div>
       <div className="flex items-center gap-2">
-        <img src="/stickers/coin_cat.svg" alt="" className="h-5 w-5" />
-        <div className="font-extrabold tabular-nums text-yellow-300">500</div>
+        <img src="/stickers/coin_cat.svg" alt="" className="h-8 w-8" />
+        <div className={`font-extrabold tabular-nums text-xl ${disabled ? 'text-white/60' : 'text-yellow-300'}`}>500</div>
       </div>
     </motion.button>
   );
