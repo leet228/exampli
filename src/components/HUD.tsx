@@ -33,12 +33,7 @@ export default function HUD() {
   const [lastStreakDay, setLastStreakDay] = useState<string | null>(null);
   const [energy, setEnergy] = useState(25);
   // Признак активной подписки (PLUS)
-  const [isPlus, setIsPlus] = useState<boolean>(() => {
-    try {
-      const pu0 = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until;
-      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
-    } catch { return false; }
-  });
+  const [isPlus, setIsPlus] = useState<boolean>(false);
 
   // коины (счётчик); при клике — переход на подписку с подсветкой
   const [coins, setCoins] = useState(0);
@@ -277,6 +272,19 @@ export default function HUD() {
     };
     window.addEventListener('exampli:statsChanged', onPlus as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+  }, []);
+
+  // Initialize PLUS status from boot data once available to avoid stale local cache
+  useEffect(() => {
+    const onBoot = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<any>;
+        const pu0 = e?.detail?.user?.plus_until as string | undefined;
+        if (pu0 !== undefined) setIsPlus(Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now()));
+      } catch {}
+    };
+    window.addEventListener('exampli:bootData', onBoot as EventListener);
+    return () => window.removeEventListener('exampli:bootData', onBoot as EventListener);
   }, []);
 
   // последовательно: закрыть TopSheet → на следующий кадр открыть AddCourseSheet
