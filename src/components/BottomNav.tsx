@@ -1,4 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { cacheGet, CACHE_KEYS } from '../lib/cache';
 import { hapticTiny } from '../lib/haptics';
 
 type ItemProps = { to: string; iconSrc: string; currentPath: string };
@@ -36,7 +38,22 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
 export default function BottomNav() {
   const { pathname } = useLocation();
   const isAI = pathname === '/ai';
-  const isPlus = (() => { try { return Boolean((window as any)?.localStorage ? JSON.parse(localStorage.getItem('exampli:' + 'plus_active') || 'null')?.v : false); } catch { return false; } })();
+  const [isPlus, setIsPlus] = useState<boolean>(() => {
+    try {
+      const pu0 = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until;
+      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
+    } catch { return false; }
+  });
+  useEffect(() => {
+    const onPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      if (e.detail?.plus_until !== undefined) {
+        try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+  }, []);
   const whiteOnAiNoPlus = isAI && !isPlus;
   return (
     <nav className={`bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0 ${whiteOnAiNoPlus ? 'bottomnav-white' : ''}`}>

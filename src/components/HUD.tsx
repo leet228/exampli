@@ -34,7 +34,10 @@ export default function HUD() {
   const [energy, setEnergy] = useState(25);
   // Признак активной подписки (PLUS)
   const [isPlus, setIsPlus] = useState<boolean>(() => {
-    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+    try {
+      const pu0 = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until;
+      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
+    } catch { return false; }
   });
 
   // коины (счётчик); при клике — переход на подписку с подсветкой
@@ -266,16 +269,10 @@ export default function HUD() {
 
   // Следим за признаком подписки через кэш и события
   useEffect(() => {
-    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
     const onPlus = (evt: Event) => {
       const e = evt as CustomEvent<{ plus_until?: string } & any>;
-      const pu = e.detail?.plus_until;
-      if (pu) {
-        try {
-          const active = new Date(pu).getTime() > Date.now();
-          setIsPlus(active);
-          cacheSet(CACHE_KEYS.isPlus, active);
-        } catch {}
+      if (e.detail?.plus_until !== undefined) {
+        try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
       }
     };
     window.addEventListener('exampli:statsChanged', onPlus as EventListener);
@@ -608,17 +605,25 @@ function EnergySheetBody({ value, onOpenSubscription, isOpen, openGate, onCloseS
       try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: newEnergy, coins: newCoins } } as any)); } catch {}
       try { window.dispatchEvent(new CustomEvent('exampli:energySynced', { detail: { energy: newEnergy, next_at: null, full_at: null } } as any)); } catch {}
 
-      // 2) Сервер: обновим users (энергия и коины) и сбросим серверную очередь через RPC
+      // 2) Сервер: атомарно сбрасываем очередь трат, ставим energy=25 и списываем 500
       try {
         const tgIdRaw: any = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
         const tgId = tgIdRaw != null ? String(tgIdRaw) : null;
         const userId = (() => { try { return String(cacheGet<any>(CACHE_KEYS.user)?.id || ''); } catch { return ''; } })();
-        if (tgId) {
-          try { await supabase.from('users').update({ energy: newEnergy, coins: newCoins }).eq('tg_id', tgId); } catch {}
-          // Попросим сервер «синкануть» энергию, чтобы очистить очередь трат (если есть)
-          try { await supabase.rpc('sync_energy', { p_tg_id: tgId, p_delta: 0 }); } catch {}
-        } else if (userId) {
-          try { await supabase.from('users').update({ energy: newEnergy, coins: newCoins }).eq('id', userId); } catch {}
+        const r = await fetch('/api/energy_topup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tg_id: tgId, user_id: userId || null })
+        });
+        if (r.ok) {
+          try {
+            const js = await r.json();
+            const energySrv = Number(js?.energy ?? newEnergy);
+            const coinsSrv = Number(js?.coins ?? newCoins);
+            const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+            cacheSet(CACHE_KEYS.stats, { ...cs, energy: energySrv, coins: coinsSrv, energy_full_at: null });
+            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: energySrv, coins: coinsSrv } } as any));
+            window.dispatchEvent(new CustomEvent('exampli:energySynced', { detail: { energy: energySrv, next_at: null, full_at: null } } as any));
+          } catch {}
         }
       } catch {}
       // 3) Закрываем шторку и почти сразу (через 100мс) триггерим пульс на иконке энергии

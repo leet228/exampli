@@ -137,7 +137,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       user: userRow,
-      stats: { streak: userRow.streak ?? 0, energy: userRow.energy ?? 25, coins: userRow.coins ?? 500 },
+      stats: { streak: userRow.streak ?? 0, energy: userRow.energy ?? 25, coins: userRow.coins ?? 500, plus_until: userRow.plus_until ?? null },
       userProfile,
       friendsCount: friendsCnt ?? 0,
       avatar_url: userRow.avatar_url ?? null,

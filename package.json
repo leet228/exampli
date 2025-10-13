@@ -8,6 +8,7 @@
     },
     "scripts": {
         "dev": "vite",
+    "dev:api": "node dev-api-server.mjs",
         "typecheck": "tsc --noEmit",
         "build:api": "tsc -p tsconfig.json",
         "build": "pnpm run build:api && vite build",

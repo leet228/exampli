@@ -277,7 +277,7 @@ export default function Onboarding({ open, onDone }: Props) {
   const phoneStep = (
     <div className="flex flex-col items-center text-center gap-6 w-full min-h-[60vh] justify-center">
       <div className="space-y-3 px-6 w-full max-w-md">
-        <div className="text-3xl font-bold text-white leading-tight">Поделитесь номером</div>
+        <div className="text-2xl font-bold text-white leading-tight">Укажите номер телефона</div>
         <div className="text-[color:var(--muted)] text-base">
           Это поможет нам связаться по важным обновлениям и восстановить доступ.
         </div>
@@ -342,9 +342,7 @@ export default function Onboarding({ open, onDone }: Props) {
             ref={inputRef}
           />
         </div>
-        <div className="mt-2 text-xs text-[color:var(--muted)] text-left">
-          Вводите номер без начального знака «+». Префикс выбирается слева.
-        </div>
+        
       </div>
 
       <div className="w-full px-6 max-w-md">
@@ -354,10 +352,10 @@ export default function Onboarding({ open, onDone }: Props) {
           className={`w-full rounded-2xl py-4 font-semibold transition ${canSubmitPhone ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}`}
           onClick={submitPhoneManually}
         >
-          Дальше
+          Продолжить
         </button>
         <div className="mt-2 text-[11px] text-[color:var(--muted)] text-center">
-          Нажимая «Дальше», вы соглашаетесь с
+          Нажимая «Продолжить», вы соглашаетесь с нашей
           {' '}
           <button type="button" className="underline underline-offset-2 text-white/85" onClick={() => setPolicyOpen(true)}>Политикой обработки персональных данных</button>.
         </div>

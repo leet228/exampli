@@ -24,8 +24,23 @@ const PRESS_SHADOW_HEIGHT = 6;
 
 export default function AI() {
   const navigate = useNavigate();
-  const isPlus = React.useMemo(() => {
-    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+  const [isPlus, setIsPlus] = React.useState<boolean>(() => {
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
+    } catch { return false; }
+  });
+
+  // React to subscription status updates (e.g., after purchase)
+  React.useEffect(() => {
+    const onPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+      if (e.detail?.plus_until !== undefined) {
+        try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
   }, []);
 
   // При отсутствии подписки блокируем скролл всей страницы
@@ -276,10 +291,10 @@ export default function AI() {
           src="/subs/sub_pic.svg"
           alt="Подписка"
           className="absolute inset-0 m-auto max-w-full max-h-full object-contain pointer-events-none select-none"
-          style={{ transform: 'translateY(40px)' }}
+          style={{ transform: 'translateY(100px)' }}
         />
         {/* Кнопка поверх, ещё выше HUD */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-44 z-[61] w-[min(92%,680px)] px-4 pointer-events-auto">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-36 z-[61] w-[min(92%,680px)] px-4 pointer-events-auto">
           <SubscribeCtaButton onClick={() => { try { hapticTiny(); } catch {}; navigate('/subscription'); }} />
         </div>
       </div>

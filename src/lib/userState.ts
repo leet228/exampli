@@ -16,14 +16,14 @@ function getTgId(): string | null {
 
 // Локальная проверка активности подписки (PLUS)
 function isPlusActiveLocal(): boolean {
-  try {
-    const flag = cacheGet<boolean>(CACHE_KEYS.isPlus);
-    if (typeof flag === 'boolean') return Boolean(flag);
-  } catch {}
+  // Always derive from plus_until when available; never trust stale boolean cache
   try {
     const pu = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
-    if (pu) return new Date(String(pu)).getTime() > Date.now();
+    if (pu !== undefined) {
+      return pu ? (new Date(String(pu)).getTime() > Date.now()) : false;
+    }
   } catch {}
+  // Fallback: if no info — treat as no subscription
   return false;
 }
 

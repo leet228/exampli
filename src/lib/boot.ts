@@ -96,8 +96,11 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // Отметим признак активной подписки локально (по plus_until > now)
   try {
     const plusUntil = (step1?.user?.plus_until as string) || null;
-    const active = plusUntil ? (new Date(plusUntil).getTime() > Date.now()) : false;
-    cacheSet(CACHE_KEYS.isPlus, active);
+    // Do not set boolean cache; rely on plus_until for truth to avoid stale flags
+    try {
+      const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+      cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntil });
+    } catch {}
   } catch {}
   report(33);
 

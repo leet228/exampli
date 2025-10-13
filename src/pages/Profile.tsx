@@ -9,7 +9,10 @@ import { hapticSelect } from '../lib/haptics';
 export default function Profile() {
   const [u, setU] = useState<any>(null);
   const [isPlus, setIsPlus] = useState<boolean>(() => {
-    try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; }
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
+    } catch { return false; }
   });
   const [course, setCourse] = useState<string>('Курс');
   const [courseCode, setCourseCode] = useState<string | null>(null);
@@ -309,15 +312,16 @@ export default function Profile() {
 
   // Слушаем изменения подписки и обновляем локальный флаг PLUS
   useEffect(() => {
-    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      if (pu0 !== undefined) setIsPlus(Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now()));
+    } catch {}
     const onPlus = (evt: Event) => {
       try {
         const e = evt as CustomEvent<{ plus_until?: string } & any>;
-        const pu = e?.detail?.plus_until;
-        if (pu !== undefined) {
-          const active = pu ? (new Date(pu).getTime() > Date.now()) : false;
+        if (e?.detail?.plus_until !== undefined) {
+          const active = Boolean(e.detail.plus_until && new Date(String(e.detail.plus_until)).getTime() > Date.now());
           setIsPlus(active);
-          try { cacheSet(CACHE_KEYS.isPlus, active); } catch {}
         }
       } catch {}
     };
@@ -427,6 +431,21 @@ export default function Profile() {
               />
             ))}
           </div>
+          {/* PLUS bottom gradient glow inside hero background */}
+          {isPlus && !editing && (
+            <div
+              className="absolute left-0 right-0 bottom-0 pointer-events-none"
+              style={{
+                height: 78,
+                background: 'linear-gradient(90deg, #6ce35b 0%, #31d7c6 36%, #3d9dff 68%, #c25cff 100%)',
+                opacity: 1,
+                WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,1) 0, rgba(0,0,0,1) 28px, rgba(0,0,0,0) 85%)',
+                maskImage: 'linear-gradient(to top, rgba(0,0,0,1) 0, rgba(0,0,0,1) 28px, rgba(0,0,0,0) 85%)',
+                zIndex: 0,
+              }}
+              aria-hidden
+            />
+          )}
   {/* Friend Profile Overlay (reuse simplified version) */}
   <AnimatePresence>
     {friendOpen && friendView && (
@@ -531,8 +550,8 @@ export default function Profile() {
               <div
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
                 style={{
-                  width: isPlus ? 220 : 300,
-                  height: isPlus ? 220 : 300,
+                  width: isPlus ? 200 : 300,
+                  height: isPlus ? 200 : 300,
                   borderRadius: '50%',
                   background: isPlus
                     ? 'conic-gradient(#22e3b1, #3c73ff, #d45bff, #22e3b1)'
@@ -540,6 +559,7 @@ export default function Profile() {
                   // мягкое затухание краёв для PLUS через маску
                   WebkitMaskImage: isPlus ? 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 45%, rgba(0,0,0,0) 70%)' : undefined,
                   maskImage: isPlus ? 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 45%, rgba(0,0,0,0) 70%)' : undefined,
+                  opacity: isPlus ? 0.85 : undefined,
                   zIndex: 0,
                 }}
               />
@@ -626,23 +646,21 @@ export default function Profile() {
           <div className="w-full max-w-xl px-3 mt-3">
             <div className="text-xs tracking-wide uppercase text-muted mb-2">Обзор</div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="px-1 py-1 flex items-center gap-3">
+              <div className="px-1 py-1 flex items-center gap-2">
                 <img src="/stickers/fire.svg" alt="Стрик" className="w-12 h-12" />
                 <div className="text-2xl font-extrabold tabular-nums">{u?.streak ?? 0}</div>
-                <div className="text-base">{(u?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
               </div>
-              <div className="px-1 py-1 flex items-center gap-3 justify-end">
+              <div className="px-1 py-1 flex items-center gap-2 justify-end">
                 <img src="/stickers/coin_cat.svg" alt="coins" className="w-10 h-10" />
                 <div className="text-2xl font-extrabold tabular-nums">{u?.coins ?? 0}</div>
-                <div className="text-base">coin</div>
               </div>
             </div>
           </div>
 
           {/* Стрики друзей */}
-          <div className="w-full max-w-xl px-3 mt-4">
+          <div className="w-full max-w-4xl px-0 mt-4">
             <div className="text-xs tracking-wide uppercase text-muted mb-2">Стрики друзей</div>
-            <div className="flex items-start gap-5">
+            <div className="flex items-start justify-evenly">
               {Array.from({ length: 5 }).map((_, i) => {
                 const f = friendTop[i];
                 return (
@@ -899,7 +917,7 @@ export default function Profile() {
           alt=""
           aria-hidden
           className="fixed left-0 right-0 w-full select-none pointer-events-none"
-          style={{ zIndex: 0, bottom: 'calc(var(--hud-h, 64px) + 434px)' }}
+          style={{ zIndex: 0, bottom: 'calc(var(--hud-h, 64px) + 382px)' }}
         />
       )}
     </div>

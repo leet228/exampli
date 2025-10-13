@@ -5,5 +5,14 @@ import svgr from '@svgr/rollup';
 // https://vite.dev/config/
 
 export default defineConfig({
-  plugins: [react(), svgr()]
+  plugins: [react(), svgr()],
+  server: {
+    allowedHosts: ['bool-acid-michel-landing.trycloudflare.com'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5173',
+        changeOrigin: true
+      }
+    }
+  }
 })

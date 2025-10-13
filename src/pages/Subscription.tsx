@@ -193,18 +193,16 @@ export default function Subscription() {
     } catch {}
   }, []);
 
-  // Признак активной подписки: читаем из кэша и обновляем по plus_until
+  // Признак активной подписки: вычисляем ТОЛЬКО от plus_until
   useEffect(() => {
-    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      if (pu0 !== undefined) setIsPlus(Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now()));
+    } catch {}
     const onStatsPlus = (evt: Event) => {
       const e = evt as CustomEvent<{ plus_until?: string } & any>;
-      const pu = e.detail?.plus_until;
-      if (pu) {
-        try {
-          const active = new Date(pu).getTime() > Date.now();
-          setIsPlus(active);
-          cacheSet(CACHE_KEYS.isPlus, active);
-        } catch {}
+      if (e.detail?.plus_until !== undefined) {
+        try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
       }
     };
     window.addEventListener('exampli:statsChanged', onStatsPlus as EventListener);
@@ -213,23 +211,7 @@ export default function Subscription() {
 
   // Автопродление отключено — никаких загрузок состояния и переключателей
 
-  // Признак активной подписки: читаем из кэша и обновляем по plus_until
-  useEffect(() => {
-    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
-    const onStatsPlus = (evt: Event) => {
-      const e = evt as CustomEvent<{ plus_until?: string } & any>;
-      const pu = e.detail?.plus_until;
-      if (pu) {
-        try {
-          const active = new Date(pu).getTime() > Date.now();
-          setIsPlus(active);
-          cacheSet(CACHE_KEYS.isPlus, active);
-        } catch {}
-      }
-    };
-    window.addEventListener('exampli:statsChanged', onStatsPlus as EventListener);
-    return () => window.removeEventListener('exampli:statsChanged', onStatsPlus as EventListener);
-  }, []);
+  // Дублирующую логику isPlus убираем; состояние определяется в хука выше
 
   // Следим за датой окончания подписки и инициализируем из boot/кэша
   useEffect(() => {
