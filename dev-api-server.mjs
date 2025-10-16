@@ -90,7 +90,7 @@ const server = createServer((req, res) => {
   handleRequest(req, res);
 });
 
-const PORT = Number(process.env.API_PORT || 5173);
+const PORT = Number(process.env.API_PORT || 5174);
 server.listen(PORT, () => {
   console.log(`[dev-api] listening on http://localhost:${PORT}`);
 });

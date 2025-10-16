@@ -78,6 +78,7 @@ export default function AI() {
   const isFirstMountRef = React.useRef<boolean>(true);
   const [previewOffset, setPreviewOffset] = React.useState<number>(0);
   // высота «нижней полоски» для поля ввода совпадает с кнопками
+  const [inputTall, setInputTall] = React.useState<boolean>(false);
 
   const hasAnyUser = React.useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
 
@@ -128,6 +129,9 @@ export default function AI() {
     const next = Math.min(el.scrollHeight, Math.max(maxH, line + pad));
     el.style.height = `${next}px`;
     el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
+    // признак многострочности — «заостряем» углы у контейнера
+    const singleLineH = line + pad;
+    setInputTall(el.scrollHeight > singleLineH + 2);
   }, [input]);
 
   // Прячу нижний HUD, когда поле ввода в фокусе
@@ -188,63 +192,12 @@ export default function AI() {
         }),
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         const detail = await safeText(response as any);
         throw new Error(detail || `Request failed with ${response.status}`);
       }
-
-      // SSE поток из /api/chat -> постепенно накапливаем ответ
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let acc = '';
-      // добавляем «пустое» ассистентское сообщение, которое будем дополнять
-      setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
-      let lastTick = 0;
-      let pending = '';
-      let lastFlush = 0;
-      const flush = () => {
-        if (!pending) return;
-        const chunkToAppend = pending;
-        pending = '';
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last && last.role === 'assistant' && typeof last.content === 'string') {
-            copy[copy.length - 1] = { role: 'assistant', content: last.content + chunkToAppend };
-          }
-          return copy;
-        });
-        const now = Date.now();
-        if (now - lastTick > 150) { try { hapticTypingTick(); } catch {} lastTick = now; }
-        lastFlush = now;
-      };
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        // протокол OpenAI SSE: строки data: {...}\n\n, выберем content дельты
-        chunk.split('\n')
-          .map((line) => line.trim())
-          .filter((line) => line.startsWith('data:'))
-          .forEach((line) => {
-            const payload = line.slice(5).trim();
-            if (payload === '[DONE]') return;
-            try {
-              const json = JSON.parse(payload);
-              const delta = json?.choices?.[0]?.delta?.content;
-              if (typeof delta === 'string' && delta.length) {
-                acc += delta;
-                pending += delta;
-                if (Date.now() - lastFlush > 80) {
-                  flush();
-                }
-              }
-            } catch {}
-          });
-      }
-      // финальный флеш накопившегося буфера
-      flush();
-      // Хаптик на завершение ответа
+      const { content } = await response.json();
+      setMessages((prev) => [...prev, { role: 'assistant', content: String(content || '') }]);
       try { hapticSelect(); } catch {}
     } catch (e: any) {
       setError(e?.message ? String(e.message) : 'Не удалось получить ответ.');
@@ -392,11 +345,11 @@ export default function AI() {
             {/* поле ввода — скруглённое, растёт до 8 строк */}
             <div
               ref={inputShellRef}
-              className="flex-1 min-w-0 rounded-full border border-transparent px-4 py-2"
+              className="flex-1 min-w-0 border border-transparent px-4 py-2"
               style={{
                 background: inputBaseColor,
                 boxShadow: `0px ${PRESS_SHADOW_HEIGHT}px 0px ${inputDarkColor}`,
-                borderRadius: 9999,
+                borderRadius: inputTall ? 14 : 9999,
               }}
             >
               <textarea

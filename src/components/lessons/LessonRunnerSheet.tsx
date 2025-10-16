@@ -315,9 +315,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   useEffect(() => {
     if (showFinish && !finishSavedRef.current) {
       finishSavedRef.current = true;
+      // Передадим признак идеального урока через глобал (не ломая сигнатуры)
+      try { (window as any).__exampliLessonPerfect = !hadAnyMistakes; } catch {}
       (async () => { try { await finishLesson({ correct: true }); } catch {} })();
     }
-  }, [showFinish]);
+  }, [showFinish, hadAnyMistakes]);
 
   function onContinue(){
     try { hapticTiny(); } catch {}

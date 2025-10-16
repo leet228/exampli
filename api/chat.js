@@ -38,7 +38,9 @@ export default async function handler(req, res) {
             // Разметка и форматирование
             'Пиши в Markdown. Формулы — в LaTeX: \\( ... \\) для inline и $$ ... $$ для блочных. ' +
             'Код — в тройных кавычках с указанием языка (например, ```ts). Таблицы — GFM. Диаграммы — в блоке ```mermaid.',
-            'Если ответ содержит формулы/код/диаграммы — сразу форматируй соответствующими блоками. Не используй HTML-разметку.'
+            'Если ответ содержит формулы/код/диаграммы — сразу форматируй соответствующими блоками. Не используй HTML-разметку.',
+            'СТРОГО: не генерируй изображения/картинки/фото/ASCII‑арт/SVG/mermaid/graphviz и не давай ссылки/код для генерации — только текстовые ответы. ',
+            'Если тебя просят создать/нарисовать изображение, откажись и предложи текстовое описание или план.'
         ].join(' ');
 
         // Prepare messages for OpenAI (multimodal). If Supabase env is set, we can upload data URLs; otherwise keep data URLs inline.
@@ -49,7 +51,7 @@ export default async function handler(req, res) {
             ...openAiPrepared
         ], 35000);
 
-        // Streaming ответ
+        // Нестриминговый ответ (полный текст сразу)
         const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -60,33 +62,18 @@ export default async function handler(req, res) {
                 model,
                 messages: prepared,
                 temperature: 1,
-                stream: true,
+                stream: false,
             })
         });
 
-        if (!dsResponse.ok || !dsResponse.body) {
+        if (!dsResponse.ok) {
             const errorText = await safeText(dsResponse);
             res.status(dsResponse.status).json({ error: 'OpenAI error', detail: errorText });
             return;
         }
-
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
-            Connection: 'keep-alive',
-            'X-Accel-Buffering': 'no'
-        });
-
-        const reader = dsResponse.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            // Проксируем SSE как есть (data: ...\n\n)
-            res.write(chunk);
-        }
-        res.end();
+        const json = await dsResponse.json();
+        const content = json?.choices?.[0]?.message?.content || '';
+        res.status(200).json({ content });
     } catch (error) {
         console.error('[api/chat] Unhandled error:', error);
         res.status(500).json({ error: 'Internal error', detail: String(error && error.message || error) });

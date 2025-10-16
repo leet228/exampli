@@ -7,10 +7,13 @@ import svgr from '@svgr/rollup';
 export default defineConfig({
   plugins: [react(), svgr()],
   server: {
-    allowedHosts: ['bool-acid-michel-landing.trycloudflare.com'],
+    port: 5174,
+    strictPort: true,
+    host: true,
+    allowedHosts: ['unlight-pseudocandidly-rachelle.ngrok-free.dev'],
     proxy: {
       '/api': {
-        target: 'http://localhost:5173',
+        target: 'http://localhost:5174',
         changeOrigin: true
       }
     }

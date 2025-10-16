@@ -4,7 +4,31 @@ import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
-import { hapticSelect } from '../lib/haptics';
+import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../lib/haptics';
+
+function AchBadge({ img, value, stroke, fill, onClick, width = 96, numBoost = 0, bottomOffset = 0 }: { img: string; value: number; stroke: string; fill: string; onClick?: () => void; width?: number; numBoost?: number; bottomOffset?: number }) {
+  const safe = Math.max(0, Number(value || 0));
+  const str = String(safe);
+  const size = str.length >= 3 ? 28 : (str.length === 2 ? 30 : 34);
+  return (
+    <div className="relative select-none" onClick={onClick} role={onClick ? 'button' : undefined} style={{ width }}>
+      <img src={img} alt="" className="block object-contain" style={{ width, height: width }} />
+      <div
+        className="absolute left-1/2 -translate-x-1/2 font-extrabold tabular-nums"
+        style={{
+          bottom: -18 + bottomOffset,
+          fontSize: size + numBoost,
+          color: fill,
+          WebkitTextStrokeWidth: '4px',
+          WebkitTextStrokeColor: stroke,
+          textShadow: '0 1px 0 rgba(0,0,0,0.08)'
+        }}
+      >
+        {str}
+      </div>
+    </div>
+  );
+}
 
 export default function Profile() {
   const [u, setU] = useState<any>(null);
@@ -96,6 +120,9 @@ export default function Profile() {
   const [savePressed, setSavePressed] = useState<boolean>(false);
   const saveShadowHeight = 6;
   const accentColor = '#3c73ff';
+  const [streakAchOpen, setStreakAchOpen] = useState<boolean>(false);
+  const [perfectAchOpen, setPerfectAchOpen] = useState<boolean>(false);
+  const [duelAchOpen, setDuelAchOpen] = useState<boolean>(false);
   const darken = (hex: string, amount = 18) => {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -381,6 +408,366 @@ export default function Profile() {
   const initials = (u?.first_name || 'U').slice(0,1).toUpperCase();
   const maskedPhone = phone ? phone : '';
   const atUsername = username ? `@${username}` : '';
+
+  // helpers for share/date
+  function formatDate(d: Date) {
+    const dd = `${d.getDate()}`.padStart(2, '0');
+    const mm = `${d.getMonth() + 1}`.padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}.${mm}.${yyyy}`;
+  }
+
+  function getCreatedAt(): Date | null {
+    try {
+      const u0 = (cacheGet as any)(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || null;
+      if (u0?.created_at) return new Date(String(u0.created_at));
+    } catch {}
+    return null;
+  }
+
+  async function shareStreak() {
+    try {
+      const blob = await renderStreakAchievmentImage();
+      const file = new File([blob], 'streak.png', { type: 'image/png' });
+      const tg = (window as any)?.Telegram?.WebApp;
+      // 1) Telegram share to story, if available
+      try {
+        if (tg?.shareToStory) {
+          const url = URL.createObjectURL(blob);
+          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+          return;
+        }
+      } catch {}
+      // 2) Web Share with files
+      try {
+        const nav: any = navigator as any;
+        if (nav?.share && nav?.canShare?.({ files: [file] })) {
+          await nav.share({ files: [file], title: 'Моё достижение' });
+          return;
+        }
+      } catch {}
+      // 3) Fallback: offer download of the image
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'streak.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
+    } catch {}
+  }
+
+  async function sharePerfect() {
+    try {
+      const blob = await renderPerfectAchievementImage();
+      const file = new File([blob], 'perfect.png', { type: 'image/png' });
+      const tg = (window as any)?.Telegram?.WebApp;
+      try {
+        if (tg?.shareToStory) {
+          const url = URL.createObjectURL(blob);
+          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+          return;
+        }
+      } catch {}
+      try {
+        const nav: any = navigator as any;
+        if (nav?.share && nav?.canShare?.({ files: [file] })) {
+          await nav.share({ files: [file], title: 'Моё достижение' });
+          return;
+        }
+      } catch {}
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'perfect.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
+    } catch {}
+  }
+
+  async function shareDuel() {
+    try {
+      const blob = await renderDuelAchievementImage();
+      const file = new File([blob], 'duel.png', { type: 'image/png' });
+      const tg = (window as any)?.Telegram?.WebApp;
+      try {
+        if (tg?.shareToStory) {
+          const url = URL.createObjectURL(blob);
+          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+          return;
+        }
+      } catch {}
+      try {
+        const nav: any = navigator as any;
+        if (nav?.share && nav?.canShare?.({ files: [file] })) {
+          await nav.share({ files: [file], title: 'Моё достижение' });
+          return;
+        }
+      } catch {}
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'duel.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
+    } catch {}
+  }
+
+  // Render the opened streak achievement card to PNG blob (no external libs)
+  async function renderStreakAchievmentImage(): Promise<Blob> {
+    const width = 1080; // HD portrait width
+    const height = 1520; // enough for badge + date + text
+    const dpr = Math.min(2, (window.devicePixelRatio || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    // background
+    ctx.fillStyle = '#3a1f1b';
+    ctx.fillRect(0, 0, width, height);
+
+    // center badge image
+    const badgeSize = 680; // px
+    const badgeX = (width - badgeSize) / 2;
+    const badgeY = 150;
+    const img = await loadImage('/profile/streak_ach.svg');
+    ctx.drawImage(img, badgeX, badgeY, badgeSize, badgeSize);
+
+    // number on badge
+    const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
+    const digits = String(n).length;
+    const fontSize = digits >= 3 ? 220 : (digits === 2 ? 240 : 270);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const numX = width / 2;
+    const numY = badgeY + badgeSize - 40; // lower like UI
+    // stroke
+    ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = '#612300';
+    ctx.miterLimit = 2;
+    ctx.strokeText(String(n), numX, numY);
+    // fill
+    ctx.fillStyle = '#9d4106';
+    ctx.fillText(String(n), numX, numY);
+
+    // date pill
+    const dateStr = formatDate(getCreatedAt() || new Date());
+    const pillPadX = 28;
+    const pillPadY = 14;
+    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    const dateW = ctx.measureText(dateStr).width;
+    const pillW = dateW + pillPadX * 2;
+    const pillH = 38 + pillPadY * 2;
+    const pillX = (width - pillW) / 2;
+    const pillY = badgeY + badgeSize + 28;
+    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
+    ctx.fillStyle = '#ffd08a';
+    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
+
+    // title text multiline
+    const title = `Ты достиг стрика на ${n} ${pluralDays(n)}!`;
+    ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.fillStyle = '#ffb74d';
+    const lines = breakLine(ctx, title, width - 160);
+    let ty = pillY + pillH + 40;
+    for (const line of lines) {
+      ctx.fillText(line, width / 2, ty);
+      ty += 76;
+    }
+
+    return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
+  }
+
+  function pluralDays(n: number): string {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'день';
+    if ([2,3,4].includes(mod10) && ![12,13,14].includes(mod100)) return 'дня';
+    return 'дней';
+  }
+
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string) {
+    const rr = Math.min(r, h/2, w/2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function breakLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let cur = '';
+    for (const w of words) {
+      const test = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(test).width <= maxWidth) cur = test; else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  // Perfect achievement image
+  async function renderPerfectAchievementImage(): Promise<Blob> {
+    const width = 1080;
+    const height = 1520;
+    const dpr = Math.min(2, (window.devicePixelRatio || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    // background (deep green)
+    ctx.fillStyle = '#0d2c0f';
+    ctx.fillRect(0, 0, width, height);
+
+    // badge
+    const badgeSize = 680;
+    const badgeX = (width - badgeSize) / 2;
+    const badgeY = 150;
+    const img = await loadImage('/profile/perfect_ach.svg');
+    ctx.drawImage(img, badgeX, badgeY, badgeSize, badgeSize);
+
+    // number = perfect count
+    const n = Math.max(0, Number(u?.perfect_count ?? 0));
+    const digits = String(n).length;
+    const fontSize = digits >= 3 ? 220 : (digits === 2 ? 240 : 270);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const numX = width / 2;
+    const numY = badgeY + badgeSize - 40;
+    ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = '#066629';
+    ctx.strokeText(String(n), numX, numY);
+    ctx.fillStyle = '#1fb75b';
+    ctx.fillText(String(n), numX, numY);
+
+    // date pill (first visit)
+    const dateStr = formatDate(getCreatedAt() || new Date());
+    const pillPadX = 28;
+    const pillPadY = 14;
+    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    const dateW = ctx.measureText(dateStr).width;
+    const pillW = dateW + pillPadX * 2;
+    const pillH = 38 + pillPadY * 2;
+    const pillX = (width - pillW) / 2;
+    const pillY = badgeY + badgeSize + 28;
+    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
+    ctx.fillStyle = '#b3f5c7';
+    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
+
+    // title
+    const title = `Ты прошёл без ошибок ${n} ${pluralLessons(n)}!`;
+    ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.fillStyle = '#6cf087';
+    const lines = breakLine(ctx, title, width - 160);
+    let ty = pillY + pillH + 40;
+    for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
+
+    return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
+  }
+
+  function pluralLessons(n: number): string {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'урок';
+    if ([2,3,4].includes(mod10) && ![12,13,14].includes(mod100)) return 'урока';
+    return 'уроков';
+  }
+
+  // Duel achievement image
+  async function renderDuelAchievementImage(): Promise<Blob> {
+    const width = 1080;
+    const height = 1520;
+    const dpr = Math.min(2, (window.devicePixelRatio || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    // background warm orange/brown
+    ctx.fillStyle = '#2e1f00';
+    ctx.fillRect(0, 0, width, height);
+
+    const badgeSize = 680;
+    const badgeX = (width - badgeSize) / 2;
+    const badgeY = 150;
+    const img = await loadImage('/profile/duel_ach.svg');
+    ctx.drawImage(img, badgeX, badgeY, badgeSize, badgeSize);
+
+    const n = Math.max(0, Number(u?.duel_wins ?? 0));
+    const digits = String(n).length;
+    const fontSize = digits >= 3 ? 220 : (digits === 2 ? 240 : 270);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const numX = width / 2;
+    const numY = badgeY + badgeSize - 40;
+    ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = '#ff9803';
+    ctx.strokeText(String(n), numX, numY);
+    ctx.fillStyle = '#b35102';
+    ctx.fillText(String(n), numX, numY);
+
+    const dateStr = formatDate(getCreatedAt() || new Date());
+    const pillPadX = 28, pillPadY = 14;
+    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    const dateW = ctx.measureText(dateStr).width;
+    const pillW = dateW + pillPadX * 2;
+    const pillH = 38 + pillPadY * 2;
+    const pillX = (width - pillW) / 2;
+    const pillY = badgeY + badgeSize + 28;
+    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
+    ctx.fillStyle = '#ffd08a';
+    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
+
+    const title = `Ты одержал победу ${n} ${pluralTimes(n)} в дуэли`;
+    ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.fillStyle = '#ffc159';
+    const lines = breakLine(ctx, title, width - 160);
+    let ty = pillY + pillH + 40;
+    for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
+
+    return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
+  }
+
+  function pluralTimes(n: number): string {
+    const mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'раз';
+    return 'раз';
+  }
 
   return (
     <div className="flex flex-col items-center text-center gap-5" style={{ position: 'relative', zIndex: 1 }}>
@@ -720,6 +1107,34 @@ export default function Profile() {
               })}
             </div>
           </div>
+
+          {/* Достижения */}
+          <div className="w-full max-w-4xl px-0 mt-5">
+            <div className="text-xs tracking-wide uppercase text-muted mb-2">Достижения</div>
+            <div className="flex items-end justify-evenly gap-2">
+              <AchBadge
+                img="/profile/streak_ach.svg"
+                value={Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0))}
+                stroke="#612300"
+                fill="#9d4106"
+                onClick={() => { try { hapticSlideReveal(); } catch {} setStreakAchOpen(true); }}
+              />
+              <AchBadge
+                img="/profile/perfect_ach.svg"
+                value={Math.max(0, Number(u?.perfect_lessons ?? 0))}
+                stroke="#066629"
+                fill="#1fb75b"
+                onClick={() => { try { hapticSlideReveal(); } catch {} setPerfectAchOpen(true); }}
+              />
+              <AchBadge
+                img="/profile/duel_ach.svg"
+                value={Math.max(0, Number(u?.duel_wins ?? 0))}
+                stroke="#ff9803"
+                fill="#b35102"
+                onClick={() => { try { hapticSlideReveal(); } catch {} setDuelAchOpen(true); }}
+              />
+            </div>
+          </div>
         </>
       ) : (
         <>
@@ -911,15 +1326,145 @@ export default function Profile() {
           </motion.div>
         )}
       </AnimatePresence>
-      {isPlus && !editing && (
-        <img
-          src="/stickers/mucus.svg"
-          alt=""
-          aria-hidden
-          className="fixed left-0 right-0 w-full select-none pointer-events-none"
-          style={{ zIndex: 0, bottom: 'calc(var(--hud-h, 64px) + 382px)' }}
-        />
-      )}
+      {/* Streak Achievement Overlay */}
+      <AnimatePresence>
+        {streakAchOpen && (
+          <motion.div
+            className="fixed inset-0 z-[60]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={() => { try { hapticSlideClose(); } catch {} setStreakAchOpen(false); }}
+          >
+            <TgBackForStreak open={streakAchOpen} onBack={() => { try { hapticSlideClose(); } catch {} setStreakAchOpen(false); }} />
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                className="relative overflow-hidden rounded-2xl"
+                style={{ width: 'min(560px, 96vw)', maxWidth: 620, background: '#3a1f1b' }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                {/* Top-right share only */}
+                <div className="absolute right-0 top-0 p-3">
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareStreak(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  </button>
+                </div>
+                <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#ffb74d' }}>
+                  <div className="flex items-center justify-center mb-4">
+                    <AchBadge img="/profile/streak_ach.svg" value={Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0))} stroke="#612300" fill="#9d4106" width={220} numBoost={26} bottomOffset={-8} />
+                  </div>
+                  <div className="inline-block text-sm px-3 py-1 rounded-md" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffd08a' }}>{formatDate(getCreatedAt() || new Date())}</div>
+                  <div className="mt-4 text-2xl font-extrabold text-center" style={{ color: '#ffb74d', textShadow: '0 1px 0 rgba(0,0,0,0.25)' }}>
+                    Ты достиг стрика на {Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0))} {(() => {
+                      const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
+                      if (n % 10 === 1 && n % 100 !== 11) return 'день';
+                      if ([2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100)) return 'дня';
+                      return 'дней';
+                    })()}!
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Perfect Achievement Overlay */}
+      <AnimatePresence>
+        {perfectAchOpen && (
+          <motion.div
+            className="fixed inset-0 z-[60]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={() => { try { hapticSlideClose(); } catch {} setPerfectAchOpen(false); }}
+          >
+            <TgBackForStreak open={perfectAchOpen} onBack={() => { try { hapticSlideClose(); } catch {} setPerfectAchOpen(false); }} />
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                className="relative overflow-hidden rounded-2xl"
+                style={{ width: 'min(560px, 96vw)', maxWidth: 620, background: '#0d2c0f' }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                {/* share button */}
+                <div className="absolute right-0 top-0 p-3">
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void sharePerfect(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  </button>
+                </div>
+                <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#6cf087' }}>
+                  <div className="flex items-center justify-center mb-4">
+                    <AchBadge img="/profile/perfect_ach.svg" value={Math.max(0, Number(u?.perfect_lessons ?? 0))} stroke="#066629" fill="#1fb75b" width={220} numBoost={26} bottomOffset={-8} />
+                  </div>
+                  <div className="inline-block text-sm px-3 py-1 rounded-md" style={{ background: 'rgba(255,255,255,0.08)', color: '#b3f5c7' }}>{formatDate(getCreatedAt() || new Date())}</div>
+                  <div className="mt-4 text-2xl font-extrabold text-center" style={{ color: '#6cf087', textShadow: '0 1px 0 rgba(0,0,0,0.25)' }}>
+                    {(() => {
+                      const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
+                      return `Ты прошёл без ошибок ${n} ${pluralLessons(n)}!`;
+                    })()}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Duel Achievement Overlay */}
+      <AnimatePresence>
+        {duelAchOpen && (
+          <motion.div
+            className="fixed inset-0 z-[60]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={() => { try { hapticSlideClose(); } catch {} setDuelAchOpen(false); }}
+          >
+            <TgBackForStreak open={duelAchOpen} onBack={() => { try { hapticSlideClose(); } catch {} setDuelAchOpen(false); }} />
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                className="relative overflow-hidden rounded-2xl"
+                style={{ width: 'min(560px, 96vw)', maxWidth: 620, background: '#2e1f00' }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                <div className="absolute right-0 top-0 p-3">
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareDuel(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  </button>
+                </div>
+                <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#ffc159' }}>
+                  <div className="flex items-center justify-center mb-4">
+                    <AchBadge img="/profile/duel_ach.svg" value={Math.max(0, Number(u?.duel_wins ?? 0))} stroke="#ff9803" fill="#b35102" width={220} numBoost={26} bottomOffset={-8} />
+                  </div>
+                  <div className="inline-block text-sm px-3 py-1 rounded-md" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffd08a' }}>{formatDate(getCreatedAt() || new Date())}</div>
+                  <div className="mt-4 text-2xl font-extrabold text-center" style={{ color: '#ffc159', textShadow: '0 1px 0 rgba(0,0,0,0.25)' }}>
+                    {(() => {
+                      const n = Math.max(0, Number(u?.duel_wins ?? 0));
+                      return `Ты одержал победу ${n} ${pluralTimes(n)} в дуэли`;
+                    })()}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* mucus removed */}
     </div>
   );
 }
@@ -936,5 +1481,24 @@ function CancelOnTelegramBack({ active, onCancel }: { active: boolean; onCancel:
       return () => { try { tg.offEvent?.('backButtonClicked', handler); tg.BackButton?.hide?.(); } catch {} };
     } catch { return; }
   }, [active, onCancel]);
+  return null;
+}
+
+// Управляем BackButton Telegram для экрана достижения стрика
+function TgBackForStreak({ open, onBack }: { open: boolean; onBack: () => void }) {
+  useEffect(() => {
+    try {
+      const tg = (window as any)?.Telegram?.WebApp;
+      if (!tg) return;
+      if (open) {
+        tg.BackButton?.show?.();
+        const handler = () => { try { onBack(); } catch {} };
+        tg.onEvent?.('backButtonClicked', handler);
+        return () => { try { tg.offEvent?.('backButtonClicked', handler); tg.BackButton?.hide?.(); } catch {} };
+      } else {
+        tg.BackButton?.hide?.();
+      }
+    } catch {}
+  }, [open, onBack]);
   return null;
 }

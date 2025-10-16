@@ -7,6 +7,9 @@ export type UserStats = {
   energy: number; // 0..25
   coins: number;  // >= 0
   last_active_at: string | null;
+  max_streak?: number | null;
+  perfect_lessons?: number | null;
+  duel_wins?: number | null;
 };
 
 function getTgId(): string | null {
@@ -192,6 +195,34 @@ export async function finishLesson({ correct }: { correct: boolean }) {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, streak: optimisticStreak });
         cacheSet(CACHE_KEYS.user, { ...cu, last_active_at: now.toISOString(), timezone: tz });
+        // max_streak локально: обновим, если побили рекорд
+        try {
+          const prevUser = cacheGet<any>(CACHE_KEYS.user) || {};
+          const prevMax = Number(prevUser?.max_streak ?? 0);
+          const newMax = Math.max(prevMax, optimisticStreak);
+          if (newMax !== prevMax) {
+            cacheSet(CACHE_KEYS.user, { ...prevUser, max_streak: newMax });
+            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
+            // Пишем в БД сразу, если знаем пользователя
+            try {
+              const uid = prevUser?.id || (window as any)?.__exampliBoot?.user?.id || null;
+              if (uid) await supabase.from('users').update({ max_streak: newMax }).eq('id', uid);
+            } catch {}
+          }
+        } catch {}
+        // Если урок был идеальный — инкрементируем perfect_lessons
+        try {
+          const wasPerfect = Boolean((window as any)?.__exampliLessonPerfect);
+          if (wasPerfect) {
+            const cu2 = cacheGet<any>(CACHE_KEYS.user) || {};
+            const cur = Number(cu2?.perfect_lessons ?? 0);
+            const next = cur + 1;
+            cacheSet(CACHE_KEYS.user, { ...cu2, perfect_lessons: next });
+            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { perfect_lessons: next } } as any));
+            // Синхронизируем на сервер, если знаем user.id
+            try { const uid = cu2?.id || (window as any)?.__exampliBoot?.user?.id; if (uid) await supabase.from('users').update({ perfect_lessons: next }).eq('id', uid); } catch {}
+          }
+        } catch {}
         // Также положим last_streak_day, строго по МСК
         try {
           const toIso = (d: Date) => {
@@ -251,7 +282,14 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
             cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-            cacheSet(CACHE_KEYS.user, { ...cu, id: js?.user_id || cu.id || userId, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null });
+            const prevMax = Number(cu?.max_streak ?? 0);
+            const newMax = Math.max(prevMax, serverStreak);
+            const uid = js?.user_id || cu.id || userId;
+            cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax });
+            if (newMax !== prevMax) {
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
+              try { if (uid) await supabase.from('users').update({ max_streak: newMax }).eq('id', uid); } catch {}
+            }
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)
             try {
@@ -289,7 +327,13 @@ export async function finishLesson({ correct }: { correct: boolean }) {
                 const finalLast = (data as any)?.last_active_at ?? now.toISOString();
                 cacheSet(CACHE_KEYS.stats, { ...cs, streak: finalStreak });
                 const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-                cacheSet(CACHE_KEYS.user, { ...cu, id: userId, last_active_at: finalLast, timezone: tz });
+                const prevMax = Number(cu?.max_streak ?? 0);
+                const newMax = Math.max(prevMax, finalStreak);
+                cacheSet(CACHE_KEYS.user, { ...cu, id: userId, last_active_at: finalLast, timezone: tz, max_streak: newMax });
+                if (newMax !== prevMax) {
+                  window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
+                  try { await supabase.from('users').update({ max_streak: newMax }).eq('id', userId); } catch {}
+                }
                 window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: finalStreak, last_active_at: finalLast } } as any));
               }
             } catch {}
@@ -301,6 +345,11 @@ export async function finishLesson({ correct }: { correct: boolean }) {
 
   // Если был неправильный ответ (энергия--) — синхронизируем энергию, если знаем пользователя
   if (!correct && u?.id) {
+    // тут можно инкрементировать perfect_lessons при идеальном уроке (без ошибок)
+    // У нас finishLesson вызывается только когда урок закончен и correct=true.
+    // При показе оверлея есть флаг hadAnyMistakes, но сюда он не попадает.
+    // Предположим, что correct=true означает идеальный урок, поэтому увеличим perfect_lessons.
+    // Этот блок выше уже обрабатывает correct=true, поэтому вынесем инкремент туда.
     if (isPlusActiveLocal()) { /* при активной подписке энергию не тратим */ return; }
     try {
       const { data } = await supabase

@@ -1,10 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FullScreenSheet from '../sheets/FullScreenSheet';
 import { hapticSlideReveal, hapticSlideClose, hapticSelect } from '../../lib/haptics';
 import { supabase } from '../../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
+
+function AchBadge({ img, value, stroke, fill, width = 96, bottomOffset = 0 }: { img: string; value: number; stroke: string; fill: string; width?: number; bottomOffset?: number }) {
+  const safe = Math.max(0, Number(value || 0));
+  const str = String(safe);
+  const size = str.length >= 3 ? 28 : (str.length === 2 ? 30 : 34);
+  return (
+    <div className="relative select-none" style={{ width }}>
+      <img src={img} alt="" className="block object-contain" style={{ width, height: width }} />
+      <div
+        className="absolute left-1/2 -translate-x-1/2 font-extrabold tabular-nums"
+        style={{
+          bottom: -18 + bottomOffset,
+          fontSize: size,
+          color: fill,
+          WebkitTextStrokeWidth: '4px',
+          WebkitTextStrokeColor: stroke,
+          textShadow: '0 1px 0 rgba(0,0,0,0.08)'
+        }}
+      >
+        {str}
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   open: boolean;
@@ -45,6 +70,9 @@ export default function FriendsPanel({ open, onClose }: Props) {
     courseCode: string | null;
     courseTitle: string | null;
     avatar_url?: string | null;
+    max_streak?: number | null;
+    perfect_lessons?: number | null;
+    duel_wins?: number | null;
   } | null>(null);
 
   // Компоновка «облака иконок» как в профиле
@@ -291,7 +319,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
       const [{ data: urow }, countR] = await Promise.all([
         supabase
           .from('users')
-          .select('streak, coins, added_course, avatar_url')
+          .select('streak, coins, added_course, avatar_url, max_streak, perfect_lessons, duel_wins')
           .eq('id', f.user_id)
           .single(),
         supabase.rpc('rpc_friend_count', { caller: f.user_id } as any),
@@ -313,6 +341,9 @@ export default function FriendsPanel({ open, onClose }: Props) {
         courseCode,
         courseTitle,
         avatar_url: (urow as any)?.avatar_url ?? f.avatar_url ?? null,
+        max_streak: (urow as any)?.max_streak ?? null,
+        perfect_lessons: (urow as any)?.perfect_lessons ?? null,
+        duel_wins: (urow as any)?.duel_wins ?? null,
       });
     } catch {}
   }
@@ -321,6 +352,23 @@ export default function FriendsPanel({ open, onClose }: Props) {
     setFriendOpen(false);
     setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
   }
+
+  // Когда открыт профиль друга — отключаем прокрутку фона (страницы/панели)
+  useEffect(() => {
+    if (!friendOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.documentElement.style.overscrollBehavior as string;
+    try {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overscrollBehavior = 'none';
+    } catch {}
+    return () => {
+      try {
+        document.body.style.overflow = prevOverflow;
+        document.documentElement.style.overscrollBehavior = prevOverscroll || '';
+      } catch {}
+    };
+  }, [friendOpen]);
 
   function onFriendClick(f: { user_id: string; first_name: string | null; username: string | null; background_color: string | null; background_icon: string | null; avatar_url: string | null }) {
     try { hapticSelect(); } catch {}
@@ -517,17 +565,19 @@ export default function FriendsPanel({ open, onClose }: Props) {
     </FullScreenSheet>
 
     {/* Friend Profile Overlay (inside panel) */}
-    <AnimatePresence>
-      {friendOpen && friendView && (
+    {createPortal(
+      (
+        <AnimatePresence>
+        {friendOpen && friendView && (
         <motion.div
-          className="absolute inset-0 z-[55]"
+          className="fixed inset-0 z-[1000]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)' }}
           onClick={closeFriendProfile}
         >
-          <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="w-full h-full flex items-center justify-center p-4" style={{ overflow: 'hidden', touchAction: 'none' }}>
             <motion.div
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -589,12 +639,23 @@ export default function FriendsPanel({ open, onClose }: Props) {
                     <div className="text-base">coin</div>
                   </div>
                 </div>
+
+              {/* Достижения друга */}
+              <div className="mt-4">
+                <div className="text-xs tracking-wide uppercase text-muted mb-2">Достижения</div>
+                <div className="flex items-end justify-evenly gap-2">
+                  <AchBadge img="/profile/streak_ach.svg" value={Math.max(0, Number((friendStats?.max_streak ?? friendStats?.streak ?? 0)))} stroke="#612300" fill="#9d4106" />
+                  <AchBadge img="/profile/perfect_ach.svg" value={Math.max(0, Number(friendStats?.perfect_lessons ?? 0))} stroke="#066629" fill="#1fb75b" />
+                  <AchBadge img="/profile/duel_ach.svg" value={Math.max(0, Number(friendStats?.duel_wins ?? 0))} stroke="#ff9803" fill="#b35102" />
+                </div>
+              </div>
               </div>
             </motion.div>
           </div>
         </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+        </AnimatePresence>
+      ), document.body)}
     </>
   );
 }
