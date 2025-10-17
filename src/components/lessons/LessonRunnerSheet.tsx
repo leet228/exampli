@@ -317,7 +317,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       finishSavedRef.current = true;
       // Передадим признак идеального урока через глобал (не ломая сигнатуры)
       try { (window as any).__exampliLessonPerfect = !hadAnyMistakes; } catch {}
-      (async () => { try { await finishLesson({ correct: true }); } catch {} })();
+      (async () => {
+        try { await finishLesson({ correct: true }); } catch {}
+        finally { try { (window as any).__exampliLessonPerfect = undefined; } catch {} }
+      })();
     }
   }, [showFinish, hadAnyMistakes]);
 
@@ -460,7 +463,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   answersCorrect={answersCorrect}
                   hadAnyMistakes={hadAnyMistakes}
                   elapsedMs={finishMs}
-                  onDone={() => { (async () => { try { await finishLesson({ correct: true }); } catch {} })(); setShowFinish(false); onClose(); }}
+                  onDone={() => { setShowFinish(false); onClose(); }}
                   onReady={() => setFinishReady(true)}
                   canProceed={finishReady}
                 />

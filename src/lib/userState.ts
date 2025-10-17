@@ -159,6 +159,9 @@ export async function finishLesson({ correct }: { correct: boolean }) {
   let u: any = null;
   try { u = await getStats(); } catch {}
   if (correct) {
+    // Персисты, которые выполним неблокирующе после серверного подтверждения
+    let maxStreakToPersist: number | null = null;
+    let perfectLessonsToPersist: number | null = null;
     // 1) Оптимистично обновим локальный кэш и UI (мгновенно)
     try {
       const now = new Date();
@@ -191,6 +194,10 @@ export async function finishLesson({ correct }: { correct: boolean }) {
         else if (diffDays === 1 || diffDays === 2) { optimisticStreak = currentStreak + 1; shouldInc = true; }
         else { optimisticStreak = 1; shouldInc = true; }
       }
+      // Будущие серверные записи, которые сохраним неблокирующе после подтверждения
+      let maxStreakToPersist: number | null = null;
+      let perfectLessonsToPersist: number | null = null;
+
       if (shouldInc) {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         cacheSet(CACHE_KEYS.stats, { ...cs, streak: optimisticStreak });
@@ -203,11 +210,8 @@ export async function finishLesson({ correct }: { correct: boolean }) {
           if (newMax !== prevMax) {
             cacheSet(CACHE_KEYS.user, { ...prevUser, max_streak: newMax });
             window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
-            // Пишем в БД сразу, если знаем пользователя
-            try {
-              const uid = prevUser?.id || (window as any)?.__exampliBoot?.user?.id || null;
-              if (uid) await supabase.from('users').update({ max_streak: newMax }).eq('id', uid);
-            } catch {}
+            // Отложим запись в БД, чтобы не блокировать финализацию стрика
+            maxStreakToPersist = newMax;
           }
         } catch {}
         // Если урок был идеальный — инкрементируем perfect_lessons
@@ -219,8 +223,8 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             const next = cur + 1;
             cacheSet(CACHE_KEYS.user, { ...cu2, perfect_lessons: next });
             window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { perfect_lessons: next } } as any));
-            // Синхронизируем на сервер, если знаем user.id
-            try { const uid = cu2?.id || (window as any)?.__exampliBoot?.user?.id; if (uid) await supabase.from('users').update({ perfect_lessons: next }).eq('id', uid); } catch {}
+            // Отложим запись в БД, чтобы не блокировать финализацию стрика
+            perfectLessonsToPersist = next;
           }
         } catch {}
         // Также положим last_streak_day, строго по МСК
@@ -288,7 +292,8 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax });
             if (newMax !== prevMax) {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
-              try { if (uid) await supabase.from('users').update({ max_streak: newMax }).eq('id', uid); } catch {}
+              // неблокирующая запись max_streak
+              try { if (uid) { setTimeout(() => { supabase.from('users').update({ max_streak: newMax }).eq('id', uid); }, 0); } } catch {}
             }
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)
@@ -306,6 +311,16 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             } catch {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
             }
+            // Неблокирующе протолкнём ранее накопленные персисты (если были)
+            try {
+              const uid2 = (cacheGet<any>(CACHE_KEYS.user)?.id) || uid;
+              if (uid2 && maxStreakToPersist != null && maxStreakToPersist >= newMax) {
+                setTimeout(() => { supabase.from('users').update({ max_streak: maxStreakToPersist as number }).eq('id', uid2 as any); }, 0);
+              }
+              if (uid2 && perfectLessonsToPersist != null) {
+                setTimeout(() => { supabase.from('users').update({ perfect_lessons: perfectLessonsToPersist as number }).eq('id', uid2 as any); }, 0);
+              }
+            } catch {}
           } catch {}
         } else {
           // Fallback: сделаем клиентский апдейт users (если знаем userId)
@@ -332,9 +347,18 @@ export async function finishLesson({ correct }: { correct: boolean }) {
                 cacheSet(CACHE_KEYS.user, { ...cu, id: userId, last_active_at: finalLast, timezone: tz, max_streak: newMax });
                 if (newMax !== prevMax) {
                   window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
-                  try { await supabase.from('users').update({ max_streak: newMax }).eq('id', userId); } catch {}
+                  try { setTimeout(() => { supabase.from('users').update({ max_streak: newMax }).eq('id', userId as any); }, 0); } catch {}
                 }
                 window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: finalStreak, last_active_at: finalLast } } as any));
+                // Неблокирующие персисты, если были
+                try {
+                  if (maxStreakToPersist != null && maxStreakToPersist >= newMax) {
+                    setTimeout(() => { supabase.from('users').update({ max_streak: maxStreakToPersist as number }).eq('id', userId as any); }, 0);
+                  }
+                  if (perfectLessonsToPersist != null) {
+                    setTimeout(() => { supabase.from('users').update({ perfect_lessons: perfectLessonsToPersist as number }).eq('id', userId as any); }, 0);
+                  }
+                } catch {}
               }
             } catch {}
           }
