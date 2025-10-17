@@ -564,6 +564,19 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
         } catch {}
       });
     } catch {}
+    // Новое: сохраняем все streak_days и статы друзей
+    try { if (Array.isArray(data.streakDaysAll)) cacheSet(CACHE_KEYS.streakDaysAll, data.streakDaysAll); } catch {}
+    try {
+      const statsMap = data.friendsStats || {};
+      // сольём с friendsList: добавим недостающие поля в friend объекты
+      const list = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+      const merged = list.map((f: any) => {
+        const s = statsMap?.[String(f.user_id)] || {};
+        return { ...f, ...(['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins'].reduce((acc: any, k) => { if (s[k] !== undefined) acc[k] = s[k]; return acc; }, {})) };
+      });
+      cacheSet(CACHE_KEYS.friendsList, merged);
+      try { (window as any).__exampliBootFriends = merged; } catch {}
+    } catch {}
   } catch {}
 }
 

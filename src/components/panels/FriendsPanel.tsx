@@ -316,13 +316,16 @@ export default function FriendsPanel({ open, onClose }: Props) {
     setFriendStats(null);
     setFriendOpen(true);
     try {
-      const [{ data: urow }, countR] = await Promise.all([
-        supabase
+      // cache-first: сливаем с кэшем friends_list
+      const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+      const cached = cachedList.find(r => String(r.user_id) === String(f.user_id)) || null;
+      const [countR, urow] = await Promise.all([
+        supabase.rpc('rpc_friend_count', { caller: f.user_id } as any),
+        cached ? Promise.resolve({ data: cached }) : supabase
           .from('users')
           .select('streak, coins, added_course, avatar_url, max_streak, perfect_lessons, duel_wins')
           .eq('id', f.user_id)
           .single(),
-        supabase.rpc('rpc_friend_count', { caller: f.user_id } as any),
       ]);
       let courseCode: string | null = null;
       let courseTitle: string | null = null;
@@ -349,6 +352,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
   }
 
   function closeFriendProfile() {
+    try { hapticSlideClose(); } catch {}
     setFriendOpen(false);
     setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
   }
@@ -631,18 +635,15 @@ export default function FriendsPanel({ open, onClose }: Props) {
                   <div className="px-1 py-1 flex items-center gap-3">
                     <img src="/stickers/fire.svg" alt="Стрик" className="w-10 h-10" />
                     <div className="text-2xl font-extrabold tabular-nums">{friendStats?.streak ?? 0}</div>
-                    <div className="text-base">{(friendStats?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
                   </div>
                   <div className="px-1 py-1 flex items-center gap-3 justify-end">
                     <img src="/stickers/coin_cat.svg" alt="coins" className="w-9 h-9" />
                     <div className="text-2xl font-extrabold tabular-nums">{friendStats?.coins ?? 0}</div>
-                    <div className="text-base">coin</div>
                   </div>
                 </div>
 
               {/* Достижения друга */}
               <div className="mt-4">
-                <div className="text-xs tracking-wide uppercase text-muted mb-2">Достижения</div>
                 <div className="flex items-end justify-evenly gap-2">
                   <AchBadge img="/profile/streak_ach.svg" value={Math.max(0, Number((friendStats?.max_streak ?? friendStats?.streak ?? 0)))} stroke="#612300" fill="#9d4106" />
                   <AchBadge img="/profile/perfect_ach.svg" value={Math.max(0, Number(friendStats?.perfect_lessons ?? 0))} stroke="#066629" fill="#1fb75b" />

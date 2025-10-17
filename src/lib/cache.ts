@@ -50,6 +50,8 @@ export const CACHE_KEYS = {
   friendsPendingSent: 'friends_pending_sent',
   invitesIncomingCount: 'invites_incoming_count',
   invitesIncomingList: 'invites_incoming_list',
+  // all streak days for current user (array of { day: 'YYYY-MM-DD', kind: 'active'|'freeze' })
+  streakDaysAll: 'streak_days_all',
   subjectByCode: (code: string) => `subject_code:${code}`,
   lessonsByCode: (code: string) => `lessons_code:${code}`,
   // lessons cache keyed by topic (новый формат: уроки принадлежат теме)

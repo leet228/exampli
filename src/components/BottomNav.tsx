@@ -24,7 +24,7 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
         aria-hidden
         className="active-ring pointer-events-none absolute inset-1 border-2 border-[#3BC4FF] rounded-md"
       />
-      <span className={`${iconSrc.includes('/ai.svg') ? 'w-[56px] h-[56px]' : (iconSrc.includes('/home.svg') ? 'w-[44px] h-[44px]' : 'w-[40px] h-[40px]')} inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90`}>
+      <span className={`${iconSrc.includes('/ai.svg') ? 'w-[56px] h-[56px]' : (iconSrc.includes('/home.svg') ? 'w-[44px] h-[44px]' : (iconSrc.includes('/profile2.svg') ? 'w-[32px] h-[32px]' : 'w-[40px] h-[40px]'))} inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90`}>
         <img
           src={iconSrc}
           alt=""
@@ -65,7 +65,7 @@ export default function BottomNav() {
           <Item to="/battle"       iconSrc="/stickers/battle.svg" currentPath={pathname} />
           <Item to="/ai"           iconSrc="/stickers/ai.svg" currentPath={pathname} />
           <Item to="/subscription" iconSrc="/stickers/diamond.svg" currentPath={pathname} />
-          <Item to="/profile"      iconSrc="/stickers/profile.svg" currentPath={pathname} />
+          <Item to="/profile"      iconSrc="/stickers/profile2.svg" currentPath={pathname} />
         </div>
       </div>
     </nav>

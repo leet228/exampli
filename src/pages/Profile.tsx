@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
@@ -111,6 +112,9 @@ export default function Profile() {
     courseCode: string | null;
     courseTitle: string | null;
     avatar_url?: string | null;
+    max_streak?: number | null;
+    perfect_lessons?: number | null;
+    duel_wins?: number | null;
   } | null>(null);
   const [qrOpen, setQrOpen] = useState<boolean>(false);
   const [qrImgUrl, setQrImgUrl] = useState<string>('');
@@ -131,6 +135,17 @@ export default function Profile() {
     const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount / 100))));
     return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
   };
+
+  // Имя бота для подписи/ссылок
+  const botUsername = useMemo(() => {
+    try {
+      let b = (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined;
+      if (!b) return '';
+      b = String(b).trim();
+      if (!b) return '';
+      return b.startsWith('@') ? b : ('@' + b);
+    } catch { return ''; }
+  }, []);
 
   async function openQrInvite() {
     try {
@@ -307,9 +322,13 @@ export default function Profile() {
       setFriendStats(null);
       setFriendOpen(true);
       // Подтягиваем серверные данные (стрик/коины/курс/аватар)
-      const [{ data: urow }, countR] = await Promise.all([
-        supabase.from('users').select('streak, coins, added_course, avatar_url').eq('id', userId).single(),
+      // 1) cache-first: попробуем взять друга из кэша friends_list
+      const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+      const cached = cachedList.find(r => String(r.user_id) === String(userId)) || null;
+      // 2) параллельно рассчитываем число друзей через RPC (если доступно)
+      const [countR, urow] = await Promise.all([
         supabase.rpc('rpc_friend_count', { caller: userId } as any),
+        cached ? Promise.resolve({ data: cached }) : supabase.from('users').select('streak, coins, added_course, avatar_url, max_streak, perfect_lessons, duel_wins').eq('id', userId).single(),
       ]);
       let courseCode: string | null = null;
       let courseTitle: string | null = null;
@@ -328,11 +347,15 @@ export default function Profile() {
         courseCode,
         courseTitle,
         avatar_url: (urow as any)?.avatar_url ?? view.avatar_url ?? null,
+        max_streak: (urow as any)?.max_streak ?? null,
+        perfect_lessons: (urow as any)?.perfect_lessons ?? null,
+        duel_wins: (urow as any)?.duel_wins ?? null,
       });
     } catch {}
   }
 
   function closeFriendProfileOverlay() {
+    try { hapticSlideClose(); } catch {}
     setFriendOpen(false);
     setTimeout(() => { setFriendView(null); setFriendStats(null); }, 200);
   }
@@ -365,6 +388,10 @@ export default function Profile() {
         if (typeof e.detail?.streak === 'number') next.streak = Number(e.detail.streak);
         if (typeof e.detail?.coins === 'number') next.coins = Number(e.detail.coins);
         if (typeof e.detail?.energy === 'number') next.energy = Number(e.detail.energy);
+        // Новые поля для ачивок: обновляем сразу, чтобы бейджи менялись мгновенно
+        if (typeof (e as any).detail?.max_streak === 'number') next.max_streak = Number((e as any).detail.max_streak);
+        if (typeof (e as any).detail?.perfect_lessons === 'number') next.perfect_lessons = Number((e as any).detail.perfect_lessons);
+        if (typeof (e as any).detail?.duel_wins === 'number') next.duel_wins = Number((e as any).detail.duel_wins);
         return next;
       });
     };
@@ -409,6 +436,24 @@ export default function Profile() {
   const maskedPhone = phone ? phone : '';
   const atUsername = username ? `@${username}` : '';
 
+  // Иконки для оверлея друга — компоновка как в FriendsPanel
+  const friendIconsCloud = useMemo(() => {
+    const rows: { y: number; xs: number[] }[] = [
+      { y: 12, xs: [28, 72] },
+      { y: 24, xs: [18, 50, 82] },
+      { y: 30, xs: [28, 72] },
+      { y: 50, xs: [10, 30, 70, 90] },
+      { y: 70, xs: [28, 72] },
+      { y: 76, xs: [18, 50, 82] },
+      { y: 88, xs: [28, 72] },
+    ];
+    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
+    rows.forEach((row) => {
+      row.xs.forEach((x) => { items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 }); });
+    });
+    return items;
+  }, []);
+
   // helpers for share/date
   function formatDate(d: Date) {
     const dd = `${d.getDate()}`.padStart(2, '0');
@@ -428,61 +473,55 @@ export default function Profile() {
   async function shareStreak() {
     try {
       const blob = await renderStreakAchievmentImage();
-      const file = new File([blob], 'streak.png', { type: 'image/png' });
-      const tg = (window as any)?.Telegram?.WebApp;
-      // 1) Telegram share to story, if available
-      try {
-        if (tg?.shareToStory) {
-          const url = URL.createObjectURL(blob);
-          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
-          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
-          return;
-        }
-      } catch {}
-      // 2) Web Share with files
-      try {
-        const nav: any = navigator as any;
-        if (nav?.share && nav?.canShare?.({ files: [file] })) {
-          await nav.share({ files: [file], title: 'Моё достижение' });
-          return;
-        }
-      } catch {}
-      // 3) Fallback: offer download of the image
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'streak.png';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
+      await shareAchievementBlob(blob, 'streak.png', 'Моё достижение');
     } catch {}
   }
 
   async function sharePerfect() {
     try {
       const blob = await renderPerfectAchievementImage();
-      const file = new File([blob], 'perfect.png', { type: 'image/png' });
-      const tg = (window as any)?.Telegram?.WebApp;
-      try {
-        if (tg?.shareToStory) {
-          const url = URL.createObjectURL(blob);
-          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
-          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+      await shareAchievementBlob(blob, 'perfect.png', 'Моё достижение');
+    } catch {}
+  }
+
+  async function shareDuel() {
+    try {
+      const blob = await renderDuelAchievementImage();
+      await shareAchievementBlob(blob, 'duel.png', 'Моё достижение');
+    } catch {}
+  }
+
+  // Унифицированная отправка изображения достижения: Story → Telegram share link → Web Share → Download
+  async function shareAchievementBlob(blob: Blob, filename: string, text: string) {
+    const tg = (window as any)?.Telegram?.WebApp;
+    // 1) Попытка выложить в Stories (требуется публичный URL)
+    try {
+      const publicUrl = await uploadAchievementBlob(blob, filename);
+      if (publicUrl) {
+        try {
+          if (tg?.shareToStory) { tg.shareToStory(publicUrl, { text }); return; }
+        } catch {}
+        // 2) Если сторис недоступно — Telegram share ссылкой (как в AddFriendsPanel)
+        try {
+          const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
+          if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
+          if (navigator?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; }
+          window.open(shareUrl, '_blank');
           return;
-        }
-      } catch {}
-      try {
-        const nav: any = navigator as any;
-        if (nav?.share && nav?.canShare?.({ files: [file] })) {
-          await nav.share({ files: [file], title: 'Моё достижение' });
-          return;
-        }
-      } catch {}
+        } catch {}
+      }
+    } catch {}
+    // 3) Fallback: если не смогли загрузить — попробуем Web Share с файлом, затем скачивание
+    try {
+      const file = new File([blob], filename, { type: 'image/png' });
+      const nav: any = navigator as any;
+      if (nav?.share && nav?.canShare?.({ files: [file] })) { await nav.share({ files: [file], title: text }); return; }
+    } catch {}
+    try {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'perfect.png';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -490,35 +529,21 @@ export default function Profile() {
     } catch {}
   }
 
-  async function shareDuel() {
+  async function uploadAchievementBlob(blob: Blob, filename: string): Promise<string | null> {
     try {
-      const blob = await renderDuelAchievementImage();
-      const file = new File([blob], 'duel.png', { type: 'image/png' });
-      const tg = (window as any)?.Telegram?.WebApp;
-      try {
-        if (tg?.shareToStory) {
-          const url = URL.createObjectURL(blob);
-          try { tg.shareToStory(url, { text: 'Моё достижение' }); } catch {}
-          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
-          return;
-        }
-      } catch {}
-      try {
-        const nav: any = navigator as any;
-        if (nav?.share && nav?.canShare?.({ files: [file] })) {
-          await nav.share({ files: [file], title: 'Моё достижение' });
-          return;
-        }
-      } catch {}
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'duel.png';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
-    } catch {}
+      const bucket = (import.meta as any)?.env?.VITE_SUPABASE_BUCKET || 'ai-uploads';
+      const u = (cacheGet as any)(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || {};
+      const uid = u?.id ? String(u.id) : 'anon';
+      const path = `achievements/${uid}/${Date.now()}_${Math.random().toString(36).slice(2)}_${filename}`;
+      const { error: upErr } = await supabase.storage.from(bucket).upload(path, blob, {
+        cacheControl: '3600',
+        contentType: 'image/png',
+        upsert: false,
+      });
+      if (upErr) return null;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      return data?.publicUrl || null;
+    } catch { return null; }
   }
 
   // Render the opened streak achievement card to PNG blob (no external libs)
@@ -552,7 +577,7 @@ export default function Profile() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 40; // lower like UI
+    const numY = badgeY + badgeSize - 38; // ещё ниже
     // stroke
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
@@ -572,20 +597,30 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 28;
+    const pillY = badgeY + badgeSize + 48; // опускаем ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#ffd08a';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
 
-    // title text multiline
-    const title = `Ты достиг стрика на ${n} ${pluralDays(n)}!`;
+    // title text multiline (с именем вместо «Ты», если есть)
+    const name = (u?.first_name ? String(u.first_name).trim() : '');
+    const title = `${name || 'Ты'} достиг стрика на ${n} ${pluralDays(n)}!`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffb74d';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 40;
+    let ty = pillY + pillH + 60; // опускаем ниже текст
     for (const line of lines) {
       ctx.fillText(line, width / 2, ty);
       ty += 76;
+    }
+
+    // bot username at bottom for streak
+    if (botUsername) {
+      ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+      ctx.fillStyle = '#ffd08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(botUsername), width / 2, height - 40);
     }
 
     return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
@@ -658,13 +693,13 @@ export default function Profile() {
     ctx.drawImage(img, badgeX, badgeY, badgeSize, badgeSize);
 
     // number = perfect count
-    const n = Math.max(0, Number(u?.perfect_count ?? 0));
+    const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
     const digits = String(n).length;
     const fontSize = digits >= 3 ? 220 : (digits === 2 ? 240 : 270);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 40;
+    const numY = badgeY + badgeSize - 12; // ещё ниже
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
     ctx.strokeStyle = '#066629';
@@ -681,19 +716,26 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 28;
+    const pillY = badgeY + badgeSize + 48; // ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#b3f5c7';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
 
-    // title
-    const title = `Ты прошёл без ошибок ${n} ${pluralLessons(n)}!`;
+    // title (с именем вместо «Ты», если есть)
+    const name = (u?.first_name ? String(u.first_name).trim() : '');
+    const title = `${name || 'Ты'} прошёл без ошибок ${n} ${pluralLessons(n)}!`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#6cf087';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 40;
+    let ty = pillY + pillH + 60; // ниже
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
-
+    if (botUsername) {
+      ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+      ctx.fillStyle = '#b3f5c7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(botUsername), width / 2, height - 40);
+    }
     return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
   }
 
@@ -733,7 +775,7 @@ export default function Profile() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 40;
+    const numY = badgeY + badgeSize - 12; // ещё ниже
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
     ctx.strokeStyle = '#ff9803';
@@ -748,18 +790,25 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 28;
+    const pillY = badgeY + badgeSize + 48; // ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#ffd08a';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
 
-    const title = `Ты одержал победу ${n} ${pluralTimes(n)} в дуэли`;
+    const name = (u?.first_name ? String(u.first_name).trim() : '');
+    const title = `${name || 'Ты'} одержал победу ${n} ${pluralTimes(n)} в дуэли`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffc159';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 40;
+    let ty = pillY + pillH + 60; // ниже
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
-
+    if (botUsername) {
+      ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+      ctx.fillStyle = '#ffd08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(botUsername), width / 2, height - 40);
+    }
     return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
   }
 
@@ -833,18 +882,20 @@ export default function Profile() {
               aria-hidden
             />
           )}
-  {/* Friend Profile Overlay (reuse simplified version) */}
-  <AnimatePresence>
-    {friendOpen && friendView && (
+  {/* Friend Profile Overlay (exact like FriendsPanel) */}
+  {createPortal(
+    (
+      <AnimatePresence>
+      {friendOpen && friendView && (
       <motion.div
-        className="fixed inset-0 z-[55]"
+        className="fixed inset-0 z-[1000]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)' }}
         onClick={closeFriendProfileOverlay}
       >
-        <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="w-full h-full flex items-center justify-center p-4" style={{ overflow: 'hidden', touchAction: 'none' }}>
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -856,6 +907,11 @@ export default function Profile() {
           >
             {/* header background like profile */}
             <div className="relative w-full" style={{ height: 280, background: friendView.background_color || '#1d2837' }}>
+              <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)', WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)' }}>
+                {friendIconsCloud.map((it, i) => (
+                  <img key={i} src={`/profile_icons/${friendView.background_icon || 'bg_icon_cat'}.svg`} alt="" style={{ position: 'absolute', left: `${it.x}%`, top: `${it.y}%`, width: `${24 * it.s}px`, height: `${24 * it.s}px`, opacity: it.o, transform: `translate(-50%, -50%) rotate(${it.r}deg)`, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }} />
+                ))}
+              </div>
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                 <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                   {(friendStats?.avatar_url || friendView.avatar_url) ? (
@@ -872,6 +928,7 @@ export default function Profile() {
               </div>
             </div>
 
+            {/* body */}
             <div className="p-4" style={{ background: 'var(--bg)' }}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="px-1 py-1 flex flex-col items-center justify-center text-center">
@@ -892,20 +949,28 @@ export default function Profile() {
                 <div className="px-1 py-1 flex items-center gap-3">
                   <img src="/stickers/fire.svg" alt="Стрик" className="w-10 h-10" />
                   <div className="text-2xl font-extrabold tabular-nums">{friendStats?.streak ?? 0}</div>
-                  <div className="text-base">{(friendStats?.streak ?? 0) === 1 ? 'день' : 'дней'}</div>
                 </div>
                 <div className="px-1 py-1 flex items-center gap-3 justify-end">
                   <img src="/stickers/coin_cat.svg" alt="coins" className="w-9 h-9" />
                   <div className="text-2xl font-extrabold tabular-nums">{friendStats?.coins ?? 0}</div>
-                  <div className="text-base">coin</div>
+                </div>
+              </div>
+
+              {/* Достижения друга */}
+              <div className="mt-4">
+                <div className="flex items-end justify-evenly gap-2">
+                  <AchBadge img="/profile/streak_ach.svg" value={Math.max(0, Number((friendStats?.max_streak ?? friendStats?.streak ?? 0)))} stroke="#612300" fill="#9d4106" />
+                  <AchBadge img="/profile/perfect_ach.svg" value={Math.max(0, Number(friendStats?.perfect_lessons ?? 0))} stroke="#066629" fill="#1fb75b" />
+                  <AchBadge img="/profile/duel_ach.svg" value={Math.max(0, Number(friendStats?.duel_wins ?? 0))} stroke="#ff9803" fill="#b35102" />
                 </div>
               </div>
             </div>
           </motion.div>
         </div>
       </motion.div>
-    )}
-  </AnimatePresence>
+      )}
+      </AnimatePresence>
+    ), document.body)}
           <div className="absolute inset-0" style={{ pointerEvents: 'none' }} />
           {/* Кнопка Изменить в правом верхнем углу (скрыта в режиме редактирования) */}
           {!editing && (
@@ -1024,8 +1089,8 @@ export default function Profile() {
                 color: 'rgba(255,255,255,1)'
               }}
             >
-              <span className="text-lg">👤＋</span>
-              <span>Добавить друзей</span>
+              <img src="/stickers/add_friends.svg" alt="" className="w-9 h-9" style={{ transform: 'translateY(2px)' }} />
+              <span className="font-extrabold text-base uppercase">ДОБАВИТЬ ДРУЗЕЙ</span>
             </motion.button>
           </div>
 
@@ -1350,8 +1415,8 @@ export default function Profile() {
               >
                 {/* Top-right share only */}
                 <div className="absolute right-0 top-0 p-3">
-                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareStreak(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareStreak(); }} className="p-3 rounded-full" style={{ background: 'transparent', border: 'none' }}>
+                    <img src="/stickers/share_icon.svg" alt="share" className="w-6 h-6 opacity-95" />
                   </button>
                 </div>
                 <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#ffb74d' }}>
@@ -1398,8 +1463,8 @@ export default function Profile() {
               >
                 {/* share button */}
                 <div className="absolute right-0 top-0 p-3">
-                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void sharePerfect(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void sharePerfect(); }} className="p-3 rounded-full" style={{ background: 'transparent', border: 'none' }}>
+                    <img src="/stickers/share_icon.svg" alt="share" className="w-6 h-6 opacity-95" />
                   </button>
                 </div>
                 <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#6cf087' }}>
@@ -1443,8 +1508,8 @@ export default function Profile() {
                 onClick={(e) => { e.stopPropagation(); }}
               >
                 <div className="absolute right-0 top-0 p-3">
-                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareDuel(); }} className="p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <img src="/stickers/ai.svg" alt="share" className="w-6 h-6 opacity-90" />
+                  <button type="button" aria-label="Поделиться" onClick={() => { try { hapticSelect(); } catch {} void shareDuel(); }} className="p-3 rounded-full" style={{ background: 'transparent', border: 'none' }}>
+                    <img src="/stickers/share_icon.svg" alt="share" className="w-6 h-6 opacity-95" />
                   </button>
                 </div>
                 <div className="px-6 pt-16 pb-10 text-center" style={{ color: '#ffc159' }}>

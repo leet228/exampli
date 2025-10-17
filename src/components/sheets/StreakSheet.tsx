@@ -78,19 +78,38 @@ export function StreakSheetContent() {
   async function loadMonth(y: number, m: number, force = false): Promise<void> {
     const key = monthKey(y, m);
     if (!force && monthData[key]?.loaded) return;
-    const uid = await resolveUserId(); if (!uid) return;
-    const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
-    const { data } = await supabase
-      .from('streak_days')
-      .select('day, kind')
-      .eq('user_id', uid)
-      .gte('day', toIsoDate(first))
-      .lte('day', toIsoDate(last));
+    // 1) cache-first: пробуем взять полные streak_days из CACHE_KEYS.streakDaysAll
+    const all = cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || [];
     const days: Record<number, 'active' | 'freeze'> = {}; let active = 0; let freeze = 0;
-    (data || []).forEach((r: any) => {
-      const d = new Date(String(r.day)); const dn = d.getDate(); const k = (String(r.kind || '').toLowerCase() === 'freeze') ? 'freeze' : 'active';
-      days[dn] = k as any; if (k === 'active') active += 1; else freeze += 1;
-    });
+    if (Array.isArray(all) && all.length) {
+      try {
+        const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
+        const fIso = toIsoDate(first); const lIso = toIsoDate(last);
+        all.forEach((r: any) => {
+          const day = String(r?.day || '');
+          if (day >= fIso && day <= lIso) {
+            const d = new Date(day); const dn = d.getDate();
+            const k = (String(r.kind || '').toLowerCase() === 'freeze') ? 'freeze' : 'active';
+            days[dn] = k as any; if (k === 'active') active += 1; else freeze += 1;
+          }
+        });
+      } catch {}
+    }
+    // 2) если кэша нет — фолбэк к базе как раньше
+    if (!Object.keys(days).length) {
+      const uid = await resolveUserId(); if (!uid) return;
+      const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
+      const { data } = await supabase
+        .from('streak_days')
+        .select('day, kind')
+        .eq('user_id', uid)
+        .gte('day', toIsoDate(first))
+        .lte('day', toIsoDate(last));
+      (data || []).forEach((r: any) => {
+        const d = new Date(String(r.day)); const dn = d.getDate(); const k = (String(r.kind || '').toLowerCase() === 'freeze') ? 'freeze' : 'active';
+        days[dn] = k as any; if (k === 'active') active += 1; else freeze += 1;
+      });
+    }
     setMonthData(prev => ({ ...prev, [key]: { days, active, freeze, loaded: true } }));
   }
 

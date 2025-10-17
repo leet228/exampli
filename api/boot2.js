@@ -37,12 +37,14 @@ export default async function handler(req, res) {
       return;
     }
 
-  const [friendsListRaw, invites, subjectsAll, topicsOnly, lessonsByTopic] = await Promise.all([
+  const [friendsListRaw, invites, subjectsAll, topicsOnly, lessonsByTopic, streakDaysAll, friendsStats] = await Promise.all([
       supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
       supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
     fetchTopics(supabase, activeId),
     fetchLessonsByTopic(supabase, activeId),
+    fetchAllStreakDays(supabase, userId),
+    fetchFriendsStats(supabase, userId),
     ]);
 
     // Try server RPC that already returns streaks/avatars; fallback to manual enrichment
@@ -83,7 +85,7 @@ export default async function handler(req, res) {
       } catch {}
     }
 
-    res.status(200).json({ friends: friendsList, invites, subjectsAll, topicsBySubject: topicsOnly.topicsBySubject, lessonsByTopic });
+    res.status(200).json({ friends: friendsList, invites, subjectsAll, topicsBySubject: topicsOnly.topicsBySubject, lessonsByTopic, streakDaysAll, friendsStats });
   } catch (e) {
     console.error('[api/boot2] error', e);
     res.status(500).json({ error: 'Internal error' });
@@ -125,6 +127,41 @@ async function fetchLessonsByTopic(supabase, subjectId) {
     map[tid].push({ id: l.id, topic_id: l.topic_id, order_index: l.order_index });
   });
   return map;
+}
+
+async function fetchAllStreakDays(supabase, userId) {
+  try {
+    const { data } = await supabase
+      .from('streak_days')
+      .select('day, kind')
+      .eq('user_id', userId)
+      .order('day', { ascending: true });
+    return (data || []).map(r => ({ day: String(r.day), kind: String(r.kind || 'active') }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchFriendsStats(supabase, userId) {
+  try {
+    // Собираем всех друзей и тянем их ключевые поля (streak, coins, avatar_url, plus_until, max_streak, perfect_lessons, duel_wins)
+    const { data: links } = await supabase
+      .from('friend_links')
+      .select('a_id,b_id,status')
+      .eq('status', 'accepted')
+      .or(`a_id.eq.${userId},b_id.eq.${userId}`);
+    const ids = Array.from(new Set((links || []).map(l => (l.a_id === userId ? l.b_id : l.a_id)).filter(Boolean)));
+    if (!ids.length) return {};
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, streak, coins, avatar_url, plus_until, max_streak, perfect_lessons, duel_wins')
+      .in('id', ids);
+    const map = {};
+    (users || []).forEach(u => { map[String(u.id)] = u; });
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 async function safeJson(req) {
