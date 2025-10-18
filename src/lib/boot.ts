@@ -568,11 +568,13 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
     try { if (Array.isArray(data.streakDaysAll)) cacheSet(CACHE_KEYS.streakDaysAll, data.streakDaysAll); } catch {}
     try {
       const statsMap = data.friendsStats || {};
-      // сольём с friendsList: добавим недостающие поля в friend объекты
+      // сольём с friendsList: добавим недостающие поля в friend объекты (включая added_course)
       const list = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+      const keys = ['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins','added_course'];
       const merged = list.map((f: any) => {
         const s = statsMap?.[String(f.user_id)] || {};
-        return { ...f, ...(['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins'].reduce((acc: any, k) => { if (s[k] !== undefined) acc[k] = s[k]; return acc; }, {})) };
+        const extra = keys.reduce((acc: any, k) => { if (s[k] !== undefined) acc[k] = s[k]; return acc; }, {});
+        return { ...f, ...extra };
       });
       cacheSet(CACHE_KEYS.friendsList, merged);
       try { (window as any).__exampliBootFriends = merged; } catch {}

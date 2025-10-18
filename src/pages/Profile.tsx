@@ -332,7 +332,7 @@ export default function Profile() {
       ]);
       let courseCode: string | null = null;
       let courseTitle: string | null = null;
-      const added = (urow as any)?.added_course as number | null | undefined;
+      const added = ((urow as any)?.added_course ?? (cached as any)?.added_course) as number | null | undefined;
       if (added) {
         try {
           const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();
@@ -491,27 +491,20 @@ export default function Profile() {
     } catch {}
   }
 
-  // Унифицированная отправка изображения достижения: Story → Telegram share link → Web Share → Download
+  // Унифицированная отправка изображения достижения: Telegram share link → Web Share → Download
   async function shareAchievementBlob(blob: Blob, filename: string, text: string) {
     const tg = (window as any)?.Telegram?.WebApp;
-    // 1) Попытка выложить в Stories (требуется публичный URL)
+    // 1) Загружаем PNG и открываем окно «Поделиться» в Telegram (как в AddFriendsPanel)
     try {
       const publicUrl = await uploadAchievementBlob(blob, filename);
       if (publicUrl) {
-        try {
-          if (tg?.shareToStory) { tg.shareToStory(publicUrl, { text }); return; }
-        } catch {}
-        // 2) Если сторис недоступно — Telegram share ссылкой (как в AddFriendsPanel)
-        try {
-          const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
-          if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
-          if (navigator?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; }
-          window.open(shareUrl, '_blank');
-          return;
-        } catch {}
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
+        try { if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; } } catch {}
+        try { if ((navigator as any)?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; } } catch {}
+        try { window.open(shareUrl, '_blank'); return; } catch {}
       }
     } catch {}
-    // 3) Fallback: если не смогли загрузить — попробуем Web Share с файлом, затем скачивание
+    // 2) Fallback: если не смогли загрузить — попробуем Web Share с файлом, затем скачивание
     try {
       const file = new File([blob], filename, { type: 'image/png' });
       const nav: any = navigator as any;
@@ -577,7 +570,7 @@ export default function Profile() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 38; // ещё ниже
+    const numY = badgeY + badgeSize + 64; // ещё ниже бейджа
     // stroke
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
@@ -597,7 +590,7 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 48; // опускаем ниже
+    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#ffd08a';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
@@ -608,7 +601,8 @@ export default function Profile() {
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffb74d';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 60; // опускаем ниже текст
+    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    let ty = textStart;
     for (const line of lines) {
       ctx.fillText(line, width / 2, ty);
       ty += 76;
@@ -699,7 +693,7 @@ export default function Profile() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 12; // ещё ниже
+    const numY = badgeY + badgeSize + 64; // ещё ниже бейджа
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
     ctx.strokeStyle = '#066629';
@@ -716,7 +710,7 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 48; // ниже
+    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#b3f5c7';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
@@ -727,7 +721,8 @@ export default function Profile() {
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#6cf087';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 60; // ниже
+    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    let ty = textStart;
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
     if (botUsername) {
       ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
@@ -775,7 +770,7 @@ export default function Profile() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     const numX = width / 2;
-    const numY = badgeY + badgeSize - 12; // ещё ниже
+    const numY = badgeY + badgeSize + 64; // ещё ниже бейджа
     ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.lineWidth = 24;
     ctx.strokeStyle = '#ff9803';
@@ -790,7 +785,7 @@ export default function Profile() {
     const pillW = dateW + pillPadX * 2;
     const pillH = 38 + pillPadY * 2;
     const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 48; // ниже
+    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
     roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
     ctx.fillStyle = '#ffd08a';
     ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
@@ -800,7 +795,8 @@ export default function Profile() {
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffc159';
     const lines = breakLine(ctx, title, width - 160);
-    let ty = pillY + pillH + 60; // ниже
+    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    let ty = textStart;
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
     if (botUsername) {
       ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;

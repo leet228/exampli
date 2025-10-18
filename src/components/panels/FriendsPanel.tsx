@@ -329,7 +329,7 @@ export default function FriendsPanel({ open, onClose }: Props) {
       ]);
       let courseCode: string | null = null;
       let courseTitle: string | null = null;
-      const added = (urow as any)?.added_course as number | null | undefined;
+      const added = ((urow as any)?.added_course ?? (cached as any)?.added_course) as number | null | undefined;
       if (added) {
         try {
           const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();

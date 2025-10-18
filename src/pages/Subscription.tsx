@@ -141,6 +141,8 @@ export default function Subscription() {
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const [coins, setCoins] = useState<number>(0);
   const [sheetOpen, setSheetOpen] = useState<null | { days: 1 | 2; price: number; icon: string }>(null);
+  const [frosts, setFrosts] = useState<number>(() => { try { return Number((cacheGet<any>(CACHE_KEYS.stats)?.frosts) ?? 0); } catch { return 0; } });
+  const [frostsPulseKey, setFrostsPulseKey] = useState<number>(0);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isPlus, setIsPlus] = useState<boolean>(false);
   const [plusUntil, setPlusUntil] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export default function Subscription() {
 
 
 
-  // ловим сигнал для подсветки секции коинов
+  // ловим сигнал для подсветки секции коинов, инициализируем frosts
   useEffect(() => {
     // локальный счётчик монет для верхнего HUD страницы
     try {
@@ -157,16 +159,25 @@ export default function Subscription() {
       if (cs?.coins != null) setCoins(Number(cs.coins));
     } catch {}
     try {
+      const cs = cacheGet<any>(CACHE_KEYS.stats);
+      if (cs?.frosts != null) setFrosts(Math.max(0, Number(cs.frosts)));
+    } catch {}
+    try {
       const boot = (window as any)?.__exampliBoot;
       const bc = boot?.stats?.coins;
       if (bc != null) setCoins(Number(bc));
     } catch {}
     const onStats = (evt: Event) => {
-      const e = evt as CustomEvent<{ coins?: number }>;
+      const e = evt as CustomEvent<{ coins?: number; frosts?: number }>;
       if (typeof e.detail?.coins === 'number') setCoins(e.detail.coins);
+      if (typeof e.detail?.frosts === 'number') setFrosts(Math.max(0, Number(e.detail.frosts)));
     };
     window.addEventListener('exampli:statsChanged', onStats as EventListener);
+    const onFrostPulse = () => setFrostsPulseKey((k) => k + 1);
+    window.addEventListener('exampli:frostsPulse', onFrostPulse as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
+    // eslint-disable-next-line no-unreachable
+    return () => { window.removeEventListener('exampli:frostsPulse', onFrostPulse as EventListener); };
   }, []);
 
   // Поймаем возврат c ?paid=1 или startapp=paid (из t.me/...) и покажем уведомление
@@ -362,15 +373,39 @@ export default function Subscription() {
 
   return (
     <div className="space-y-6">
-      {/* Локальный фиксированный HUD для страницы подписки (только счётчик монет справа) */}
+      {/* Локальный фиксированный HUD: слева заморозки, справа монеты */}
       <div className="hud-fixed hud-compact bg-[var(--bg)]">
-        <div className="max-w-xl mx-auto px-5 py-2">
+        <div className="max-w-xl mx-auto px-6 py-2 relative">
+          {/* Фиксированное положение монет — как было раньше */}
           <div className="grid grid-cols-4 items-center">
             <div className="col-span-3" />
-            <div className="justify-self-end flex items-center gap-1">
+            <div className="justify-self-end flex items-center gap-1 pr-1">
               <img src="/stickers/coin_cat.svg" alt="" className="w-8 h-8 select-none" draggable={false} />
               <span className="text-yellow-300 font-extrabold tabular-nums text-lg">{coins}</span>
             </div>
+          </div>
+          {/* Слева — заморозки, размеры как у монет (w-8 h-8, text-lg) и такой же пульс, как у энергии */}
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <motion.img
+              src="/stickers/frozen_fire.svg"
+              alt=""
+              className="w-10 h-10 select-none"
+              draggable={false}
+              key={frostsPulseKey}
+              initial={{ scale: 1 }}
+              animate={frostsPulseKey ? { scale: [1, 2.4, 1] } : { scale: 1 }}
+              transition={{ duration: 1, times: [0, 0.5, 1], ease: 'easeInOut' }}
+            />
+            {isPlus && (
+              <img
+                src="/stickers/frozen_plus.svg"
+                alt="+"
+                className="w-7 h-7 select-none translate-y-[1px]"
+                draggable={false}
+                onError={(e) => { try { (e.currentTarget as HTMLImageElement).src = '/stickers/ice_version.svg'; } catch {} }}
+              />
+            )}
+            <span className="text-sky-400 font-extrabold tabular-nums text-xl">{frosts}</span>
           </div>
         </div>
       </div>
@@ -685,6 +720,41 @@ function PressButton({
 // Локальная нижняя шторка для покупки заморозки
 function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolean; onClose: () => void; coins: number; days: 1 | 2; price: number; icon: string }) {
   if (!open) return null as any;
+  async function buy() {
+    try {
+      // закрываем шторку сразу
+      try { onClose(); } catch {}
+      // проверяем баланс
+      const currentCoins = Number(coins || 0);
+      if (currentCoins < price) {
+        // недостаточно монет — подсветим HUD монет
+        try { window.dispatchEvent(new CustomEvent('exampli:highlightCoins')); } catch {}
+        // всплывашка
+        try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'warn', text: 'Недостаточно монет' } } as any)); } catch {}
+        return;
+      }
+      // хватает монет — списываем локально и в БД, добавляем frost дни
+      const newCoins = Math.max(0, currentCoins - price);
+      const cs = (cacheGet as any)(CACHE_KEYS.stats) || {};
+      const nextFrosts = Math.max(0, Number(cs?.frosts || 0)) + (days as number);
+      (cacheSet as any)(CACHE_KEYS.stats, { ...cs, coins: newCoins, frosts: nextFrosts });
+      try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: newCoins, frosts: nextFrosts } } as any)); } catch {}
+      // пульс заморозок как у энергии
+      try { window.dispatchEvent(new CustomEvent('exampli:frostsPulse')); } catch {}
+      // БД
+      const boot: any = (window as any).__exampliBoot || {};
+      const userId = boot?.user?.id || (cacheGet as any)(CACHE_KEYS.user)?.id || null;
+      if (userId) {
+        try {
+          const { data } = await (supabase as any).from('users').select('coins, frosts').eq('id', userId).maybeSingle();
+          const dbCoins = Number((data as any)?.coins ?? currentCoins);
+          const dbFrosts = Number((data as any)?.frosts ?? 0);
+          const upd = { coins: Math.max(0, dbCoins - price), frosts: Math.max(0, dbFrosts + (days as number)) };
+          await (supabase as any).from('users').update(upd).eq('id', userId);
+        } catch {}
+      }
+    } catch {}
+  }
   const darkenStrong = (hex: string, amount = 32) => {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -730,6 +800,7 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
               shadowHeight={6}
               darken={darkenStrong}
               onSelectHaptic={hapticSelect}
+              onClick={() => { void buy(); }}
             >
               <div className="flex items-center justify-center gap-2" style={{ color: 'var(--bg)' }}>
                 <span>Купить за</span>

@@ -10,6 +10,7 @@ export type UserStats = {
   max_streak?: number | null;
   perfect_lessons?: number | null;
   duel_wins?: number | null;
+  frosts?: number | null;
 };
 
 function getTgId(): string | null {
@@ -214,19 +215,6 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             maxStreakToPersist = newMax;
           }
         } catch {}
-        // Если урок был идеальный — инкрементируем perfect_lessons
-        try {
-          const wasPerfect = Boolean((window as any)?.__exampliLessonPerfect);
-          if (wasPerfect) {
-            const cu2 = cacheGet<any>(CACHE_KEYS.user) || {};
-            const cur = Number(cu2?.perfect_lessons ?? 0);
-            const next = cur + 1;
-            cacheSet(CACHE_KEYS.user, { ...cu2, perfect_lessons: next });
-            window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { perfect_lessons: next } } as any));
-            // Отложим запись в БД, чтобы не блокировать финализацию стрика
-            perfectLessonsToPersist = next;
-          }
-        } catch {}
         // Также положим last_streak_day, строго по МСК
         try {
           const toIso = (d: Date) => {
@@ -252,6 +240,19 @@ export async function finishLesson({ correct }: { correct: boolean }) {
           window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: optimisticStreak, last_active_at: now.toISOString() } } as any));
         }
       }
+      // Если урок был идеальный — инкрементируем perfect_lessons (НЕ зависит от shouldInc)
+      try {
+        const wasPerfect = Boolean((window as any)?.__exampliLessonPerfect);
+        if (wasPerfect) {
+          const cu2 = cacheGet<any>(CACHE_KEYS.user) || {};
+          const cur = Number(cu2?.perfect_lessons ?? 0);
+          const next = cur + 1;
+          cacheSet(CACHE_KEYS.user, { ...cu2, perfect_lessons: next });
+          window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { perfect_lessons: next } } as any));
+          // Отложим запись в БД, чтобы не блокировать финализацию стрика
+          perfectLessonsToPersist = next;
+        }
+      } catch {}
     } catch {}
 
     // 2) Серверный апдейт — подтверждаем и правим кэш, если нужно
@@ -295,6 +296,16 @@ export async function finishLesson({ correct }: { correct: boolean }) {
               // неблокирующая запись max_streak
               try { if (uid) { setTimeout(() => { supabase.from('users').update({ max_streak: newMax }).eq('id', uid); }, 0); } } catch {}
             }
+            // persist perfect_lessons/max_streak асинхронно, если появились новые значения
+            try {
+              const uid2 = (cacheGet<any>(CACHE_KEYS.user)?.id) || uid;
+              if (uid2 && maxStreakToPersist != null && maxStreakToPersist >= newMax) {
+                setTimeout(() => { supabase.from('users').update({ max_streak: maxStreakToPersist as number }).eq('id', uid2 as any); }, 0);
+              }
+              if (uid2 && perfectLessonsToPersist != null) {
+                setTimeout(() => { supabase.from('users').update({ perfect_lessons: perfectLessonsToPersist as number }).eq('id', uid2 as any); }, 0);
+              }
+            } catch {}
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)
             try {

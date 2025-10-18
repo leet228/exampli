@@ -154,7 +154,7 @@ async function fetchFriendsStats(supabase, userId) {
     if (!ids.length) return {};
     const { data: users } = await supabase
       .from('users')
-      .select('id, streak, coins, avatar_url, plus_until, max_streak, perfect_lessons, duel_wins')
+      .select('id, streak, coins, avatar_url, plus_until, max_streak, perfect_lessons, duel_wins, added_course')
       .in('id', ids);
     const map = {};
     (users || []).forEach(u => { map[String(u.id)] = u; });
