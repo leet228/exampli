@@ -129,10 +129,43 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
   const normalized = React.useMemo(() => {
     try {
       let t = String(content || '');
-      // Строка содержит только inline-формулу → делаем блочной
+      // 0) Распаковка обёрток и нормализация экранирования от моделей
+      try {
+        const trimmed = t.trim();
+        if (/^"?content"?\s*:/i.test(trimmed)) {
+          try {
+            const fixed = `{"content":${trimmed.replace(/^"?content"?\s*:/i, '')}}`;
+            const obj = JSON.parse(fixed);
+            if (typeof obj?.content === 'string') t = String(obj.content);
+          } catch {}
+        }
+        const s = t.trim();
+        if ((s.startsWith('"""') && s.endsWith('"""')) || (s.startsWith("'''") && s.endsWith("'''"))) t = s.slice(3, -3);
+        else if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith('\'') && s.endsWith('\''))) t = s.slice(1, -1);
+        // Преобразуем \\(...), \\[...] → \(...), \[...]
+        t = t
+          .replace(/\\\\\(/g, '\\(')
+          .replace(/\\\\\)/g, '\\)')
+          .replace(/\\\\\[/g, '\\[')
+          .replace(/\\\\\]/g, '\\]');
+      } catch {}
+      // 1) Блочные кейсы для \\( ... \\)
       t = t.replace(/^\s*\\\(([\s\S]+?)\\\)\s*$/gm, (_m, expr) => `$$${String(expr).trim()}$$`);
       // После двоеточия в конце строки стоит inline-формула → переносим в блочную
       t = t.replace(/:\s*\\\(([\s\S]+?)\\\)\s*(?:[.!?])?\s*$/gm, (_m, expr) => `:\n\n$$${String(expr).trim()}$$`);
+
+      // 2) Глобально конвертируем \[...\] → $$...$$ и \(...\) → $...$ вне код-блоков
+      const parts = t.split(/(```[\s\S]*?```)/g);
+      for (let i = 0; i < parts.length; i += 1) {
+        const seg = parts[i];
+        if (!seg) continue;
+        const isCode = seg.startsWith('```');
+        if (isCode) continue;
+        parts[i] = seg
+          .replace(/\\\[([\s\S]+?)\\\]/g, (_m, expr) => `$$${String(expr).trim()}$$`)
+          .replace(/\\\(([\s\S]+?)\\\)/g, (_m, expr) => `$${String(expr).trim()}$`);
+      }
+      t = parts.join('');
       return t;
     } catch {
       return content;
