@@ -90,11 +90,36 @@ export default async function handler(req, res) {
     }
 
     // read minimal profile
-    const [{ data: profData }, { data: friendsCnt }, subjectAndLessons] = await Promise.all([
-      supabase.from('user_profile').select('background_color, background_icon, phone_number, first_name, username').eq('user_id', userRow.id).single(),
-      supabase.rpc('rpc_friend_count', { caller: userRow.id }).then(r => ({ data: !r.error ? Number(r.data || 0) : 0 })),
-      fetchActiveSubjectAndLessons(supabase, userRow, activeCodeFromClient),
-    ]);
+    // One RPC to fetch profile, friend count, active subject & lessons
+    let profData = null;
+    let friendsCnt = 0;
+    let subjectAndLessons = { active_id: null, active_code: null, subject: null, lessons: [] };
+    try {
+      const rpc = await supabase.rpc('rpc_boot1', {
+        p_user_id: userRow.id,
+        p_active_code: activeCodeFromClient,
+      });
+      if (rpc.error) throw rpc.error;
+      const pack = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : (rpc.data || {});
+      profData = pack.profile || null;
+      friendsCnt = Number(pack.friends_count || 0);
+      subjectAndLessons = {
+        active_id: pack.active_id || null,
+        active_code: pack.active_code || null,
+        subject: pack.subject || null,
+        lessons: pack.lessons || [],
+      };
+    } catch (e) {
+      // Fallback: previous 3 queries if RPC is unavailable
+      const arr = await Promise.all([
+        supabase.from('user_profile').select('background_color, background_icon, phone_number, first_name, username').eq('user_id', userRow.id).single(),
+        supabase.rpc('rpc_friend_count', { caller: userRow.id }).then(r => ({ data: !r.error ? Number(r.data || 0) : 0 })),
+        fetchActiveSubjectAndLessons(supabase, userRow, activeCodeFromClient),
+      ]);
+      profData = arr[0]?.data || null;
+      friendsCnt = Number(arr[1]?.data || 0);
+      subjectAndLessons = arr[2] || { active_id: null, active_code: null, subject: null, lessons: [] };
+    }
 
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
     // Синхронизируем phone_number из профиля в users, чтобы клиентская логика видела номер в users

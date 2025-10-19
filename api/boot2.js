@@ -37,15 +37,40 @@ export default async function handler(req, res) {
       return;
     }
 
-  const [friendsListRaw, invites, subjectsAll, topicsOnly, lessonsByTopic, streakDaysAll, friendsStats] = await Promise.all([
-      supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
-      supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
-      supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
-    fetchTopics(supabase, activeId),
-    fetchLessonsByTopic(supabase, activeId),
-    fetchAllStreakDays(supabase, userId),
-    fetchFriendsStats(supabase, userId),
-    ]);
+    // Prefer single RPC that returns everything; fallback to previous multi-requests
+    let friendsListRaw = [];
+    let invites = [];
+    let subjectsAll = [];
+    let topicsOnly = { topicsBySubject: {} };
+    let lessonsByTopic = {};
+    let streakDaysAll = [];
+    let friendsStats = {};
+    try {
+      const rpc = await supabase.rpc('rpc_boot2', { p_user_id: userId, p_active_id: activeId });
+      if (!rpc.error && rpc.data) {
+        const d = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : rpc.data;
+        friendsListRaw = Array.isArray(d.friends) ? d.friends : [];
+        invites = Array.isArray(d.invites) ? d.invites : [];
+        subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
+        topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
+        lessonsByTopic = d.lessonsByTopic || {};
+        streakDaysAll = Array.isArray(d.streakDaysAll) ? d.streakDaysAll : [];
+        friendsStats = d.friendsStats || {};
+      } else {
+        throw rpc.error || new Error('rpc_boot2 failed');
+      }
+    } catch {
+      const arr = await Promise.all([
+        supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
+        supabase.rpc('rpc_friend_incoming', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
+        supabase.from('subjects').select('id,code,title,level').order('level', { ascending: true }).order('title', { ascending: true }).then(({ data }) => data || []),
+        fetchTopics(supabase, activeId),
+        fetchLessonsByTopic(supabase, activeId),
+        fetchAllStreakDays(supabase, userId),
+        fetchFriendsStats(supabase, userId),
+      ]);
+      friendsListRaw = arr[0]; invites = arr[1]; subjectsAll = arr[2]; topicsOnly = arr[3]; lessonsByTopic = arr[4]; streakDaysAll = arr[5]; friendsStats = arr[6];
+    }
 
     // Try server RPC that already returns streaks/avatars; fallback to manual enrichment
     let friendsList = Array.isArray(friendsListRaw) ? friendsListRaw : [];

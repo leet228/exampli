@@ -59,6 +59,14 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
 
   // ШАГ 1 — один запрос к нашему агрегирующему API /api/boot1 (критический путь)
   phase('Готовим профиль и прогресс');
+  // Preconnect Supabase (перенесено сюда из index.html)
+  try {
+    const url = (import.meta as any)?.env?.VITE_SUPABASE_URL as string | undefined;
+    if (url) {
+      const l = document.createElement('link'); l.rel = 'preconnect'; l.href = url; l.crossOrigin = 'anonymous';
+      document.head.appendChild(l);
+    }
+  } catch {}
   const tg = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null;
   let activeCodeHint: string | null = null;
   try { activeCodeHint = localStorage.getItem('exampli:activeSubjectCode'); } catch {}
@@ -494,8 +502,6 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       preloadImage('/stickers/coin_cat.svg'),
       preloadImage('/stickers/lightning.svg'),
     ]);
-    // ачивки (SVG) — предзагрузка в фоне, не блокируем сплэш
-    setTimeout(() => { try { void preloadImage('/profile/streak_ach.svg'); void preloadImage('/profile/perfect_ach.svg'); void preloadImage('/profile/duel_ach.svg'); } catch {} }, 0);
   } catch {}
   // финал boot
   report(100);
