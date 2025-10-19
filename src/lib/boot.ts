@@ -493,11 +493,9 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       preloadImage('/stickers/dead_fire.svg'),
       preloadImage('/stickers/coin_cat.svg'),
       preloadImage('/stickers/lightning.svg'),
-      // ачивки (SVG) — чтобы мгновенно рендерить PNG для шаринга
-      preloadImage('/profile/streak_ach.svg'),
-      preloadImage('/profile/perfect_ach.svg'),
-      preloadImage('/profile/duel_ach.svg'),
     ]);
+    // ачивки (SVG) — предзагрузка в фоне, не блокируем сплэш
+    setTimeout(() => { try { void preloadImage('/profile/streak_ach.svg'); void preloadImage('/profile/perfect_ach.svg'); void preloadImage('/profile/duel_ach.svg'); } catch {} }, 0);
   } catch {}
   // финал boot
   report(100);
