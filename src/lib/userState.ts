@@ -195,9 +195,7 @@ export async function finishLesson({ correct }: { correct: boolean }) {
         else if (diffDays === 1 || diffDays === 2) { optimisticStreak = currentStreak + 1; shouldInc = true; }
         else { optimisticStreak = 1; shouldInc = true; }
       }
-      // Будущие серверные записи, которые сохраним неблокирующе после подтверждения
-      let maxStreakToPersist: number | null = null;
-      let perfectLessonsToPersist: number | null = null;
+      // используем внешние переменные maxStreakToPersist/perfectLessonsToPersist (не переобъявляем)
 
       if (shouldInc) {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};

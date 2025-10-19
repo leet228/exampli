@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
@@ -6,6 +6,7 @@ import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../lib/haptics';
+import { bootPreloadBackground } from '../lib/boot';
 
 function AchBadge({ img, value, stroke, fill, onClick, width = 96, numBoost = 0, bottomOffset = 0 }: { img: string; value: number; stroke: string; fill: string; onClick?: () => void; width?: number; numBoost?: number; bottomOffset?: number }) {
   const safe = Math.max(0, Number(value || 0));
@@ -127,6 +128,8 @@ export default function Profile() {
   const [streakAchOpen, setStreakAchOpen] = useState<boolean>(false);
   const [perfectAchOpen, setPerfectAchOpen] = useState<boolean>(false);
   const [duelAchOpen, setDuelAchOpen] = useState<boolean>(false);
+  const streakBlobRef = useRef<{ value: number; blob: Blob } | null>(null);
+  const perfectBlobRef = useRef<{ value: number; blob: Blob } | null>(null);
   const darken = (hex: string, amount = 18) => {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -321,35 +324,57 @@ export default function Profile() {
       setFriendView(view);
       setFriendStats(null);
       setFriendOpen(true);
-      // Подтягиваем серверные данные (стрик/коины/курс/аватар)
-      // 1) cache-first: попробуем взять друга из кэша friends_list
+      // Подтягиваем данные из кэша, при необходимости обновляем boot2 (обход RLS)
       const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-      const cached = cachedList.find(r => String(r.user_id) === String(userId)) || null;
-      // 2) параллельно рассчитываем число друзей через RPC (если доступно)
-      const [countR, urow] = await Promise.all([
-        supabase.rpc('rpc_friend_count', { caller: userId } as any),
-        cached ? Promise.resolve({ data: cached }) : supabase.from('users').select('streak, coins, added_course, avatar_url, max_streak, perfect_lessons, duel_wins').eq('id', userId).single(),
-      ]);
-      let courseCode: string | null = null;
-      let courseTitle: string | null = null;
-      const added = ((urow as any)?.added_course ?? (cached as any)?.added_course) as number | null | undefined;
-      if (added) {
+      let row: any = cachedList.find(r => String(r.user_id) === String(userId)) || null;
+      // если нет нужных полей, обновим фоновой boot2 и перечитаем кэш
+      const needFields = (r: any) => (r && (r.streak !== undefined || r.coins !== undefined || r.added_course !== undefined));
+      if (!needFields(row)) {
         try {
-          const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();
-          courseCode = (subj as any)?.code ?? null;
-          courseTitle = (subj as any)?.title ?? null;
+          const myId: string | undefined = (window as any)?.__exampliBoot?.user?.id as string | undefined;
+          const subjects: any[] = (window as any)?.__exampliBoot?.subjects || [];
+          const activeCode = cacheGet<string>(CACHE_KEYS.activeCourseCode) || (subjects[0]?.code as string | undefined) || null;
+          const activeId = (() => {
+            if (!activeCode) return null as any;
+            const found = subjects.find((s: any) => s.code === activeCode);
+            return found ? found.id : null;
+          })();
+          if (myId) await bootPreloadBackground(myId, activeId);
+          const after = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+          row = after.find(r => String(r.user_id) === String(userId)) || row;
         } catch {}
       }
+      // Вычислим курс по subjectsAll/subjects без сетевого запроса
+      let courseCode: string | null = null;
+      let courseTitle: string | null = null;
+      try {
+        const added = (row as any)?.added_course as number | null | undefined;
+        if (added) {
+          const boot: any = (window as any).__exampliBoot || {};
+          const listAll: any[] | undefined = boot?.subjectsAll;
+          const listUser: any[] | undefined = boot?.subjects;
+          let found = Array.isArray(listAll) ? listAll.find((s: any) => Number(s.id) === Number(added)) : null;
+          if (!found && Array.isArray(listUser)) found = listUser.find((s: any) => Number(s.id) === Number(added)) || null;
+          if (found?.code) courseCode = String(found.code);
+          if (found?.title) courseTitle = String(found.title);
+        }
+      } catch {}
+      // Количество друзей друга через RPC (если доступно)
+      let friendsCount = 0;
+      try {
+        const countR = await supabase.rpc('rpc_friend_count', { caller: userId } as any);
+        if (!countR.error) friendsCount = Number(countR.data || 0);
+      } catch {}
       setFriendStats({
-        streak: Number((urow as any)?.streak ?? 0),
-        coins: Number((urow as any)?.coins ?? 0),
-        friendsCount: countR && !countR.error ? Number(countR.data || 0) : 0,
+        streak: Number((row as any)?.streak ?? 0),
+        coins: Number((row as any)?.coins ?? 0),
+        friendsCount,
         courseCode,
         courseTitle,
-        avatar_url: (urow as any)?.avatar_url ?? view.avatar_url ?? null,
-        max_streak: (urow as any)?.max_streak ?? null,
-        perfect_lessons: (urow as any)?.perfect_lessons ?? null,
-        duel_wins: (urow as any)?.duel_wins ?? null,
+        avatar_url: (row as any)?.avatar_url ?? view.avatar_url ?? null,
+        max_streak: (row as any)?.max_streak ?? null,
+        perfect_lessons: (row as any)?.perfect_lessons ?? null,
+        duel_wins: (row as any)?.duel_wins ?? null,
       });
     } catch {}
   }
@@ -472,14 +497,26 @@ export default function Profile() {
 
   async function shareStreak() {
     try {
+      const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
+      if (streakBlobRef.current && streakBlobRef.current.value === n) {
+        await shareAchievementBlob(streakBlobRef.current.blob, 'streak.png', 'Моё достижение');
+        return;
+      }
       const blob = await renderStreakAchievmentImage();
+      streakBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'streak.png', 'Моё достижение');
     } catch {}
   }
 
   async function sharePerfect() {
     try {
+      const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
+      if (perfectBlobRef.current && perfectBlobRef.current.value === n) {
+        await shareAchievementBlob(perfectBlobRef.current.blob, 'perfect.png', 'Моё достижение');
+        return;
+      }
       const blob = await renderPerfectAchievementImage();
+      perfectBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'perfect.png', 'Моё достижение');
     } catch {}
   }
@@ -661,6 +698,33 @@ export default function Profile() {
       img.src = src;
     });
   }
+
+  // Пререндер PNG ачивок при обновлении значений — для мгновенного шаринга
+  useEffect(() => {
+    (async () => {
+      try {
+        const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
+        if (!streakBlobRef.current || streakBlobRef.current.value !== n) {
+          // прогрев SVG (на случай, если не прогрет)
+          try { const img = new Image(); img.src = '/profile/streak_ach.svg'; } catch {}
+          const b = await renderStreakAchievmentImage();
+          streakBlobRef.current = { value: n, blob: b };
+        }
+      } catch {}
+    })();
+  }, [u?.max_streak, u?.streak]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
+        if (!perfectBlobRef.current || perfectBlobRef.current.value !== n) {
+          try { const img = new Image(); img.src = '/profile/perfect_ach.svg'; } catch {}
+          const b = await renderPerfectAchievementImage();
+          perfectBlobRef.current = { value: n, blob: b };
+        }
+      } catch {}
+    })();
+  }, [u?.perfect_lessons]);
 
   // Perfect achievement image
   async function renderPerfectAchievementImage(): Promise<Blob> {

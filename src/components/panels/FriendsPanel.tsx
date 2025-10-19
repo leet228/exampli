@@ -318,35 +318,38 @@ export default function FriendsPanel({ open, onClose }: Props) {
     try {
       // cache-first: сливаем с кэшем friends_list
       const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-      const cached = cachedList.find(r => String(r.user_id) === String(f.user_id)) || null;
-      const [countR, urow] = await Promise.all([
-        supabase.rpc('rpc_friend_count', { caller: f.user_id } as any),
-        cached ? Promise.resolve({ data: cached }) : supabase
-          .from('users')
-          .select('streak, coins, added_course, avatar_url, max_streak, perfect_lessons, duel_wins')
-          .eq('id', f.user_id)
-          .single(),
-      ]);
+      let row: any = cachedList.find(r => String(r.user_id) === String(f.user_id)) || null;
+      // курс из boot.subjects/subjectsAll
       let courseCode: string | null = null;
       let courseTitle: string | null = null;
-      const added = ((urow as any)?.added_course ?? (cached as any)?.added_course) as number | null | undefined;
-      if (added) {
-        try {
-          const { data: subj } = await supabase.from('subjects').select('code,title').eq('id', added).single();
-          courseCode = (subj as any)?.code ?? null;
-          courseTitle = (subj as any)?.title ?? null;
-        } catch {}
-      }
+      try {
+        const added = (row as any)?.added_course as number | null | undefined;
+        if (added) {
+          const boot: any = (window as any).__exampliBoot || {};
+          const listAll: any[] | undefined = boot?.subjectsAll;
+          const listUser: any[] | undefined = boot?.subjects;
+          let found = Array.isArray(listAll) ? listAll.find((s: any) => Number(s.id) === Number(added)) : null;
+          if (!found && Array.isArray(listUser)) found = listUser.find((s: any) => Number(s.id) === Number(added)) || null;
+          if (found?.code) courseCode = String(found.code);
+          if (found?.title) courseTitle = String(found.title);
+        }
+      } catch {}
+      // количество друзей друга
+      let friendsCount = 0;
+      try {
+        const countR = await supabase.rpc('rpc_friend_count', { caller: f.user_id } as any);
+        if (!countR.error) friendsCount = Number(countR.data || 0);
+      } catch {}
       setFriendStats({
-        streak: Number((urow as any)?.streak ?? 0),
-        coins: Number((urow as any)?.coins ?? 0),
-        friendsCount: countR && !countR.error ? Number(countR.data || 0) : 0,
+        streak: Number((row as any)?.streak ?? 0),
+        coins: Number((row as any)?.coins ?? 0),
+        friendsCount,
         courseCode,
         courseTitle,
-        avatar_url: (urow as any)?.avatar_url ?? f.avatar_url ?? null,
-        max_streak: (urow as any)?.max_streak ?? null,
-        perfect_lessons: (urow as any)?.perfect_lessons ?? null,
-        duel_wins: (urow as any)?.duel_wins ?? null,
+        avatar_url: (row as any)?.avatar_url ?? f.avatar_url ?? null,
+        max_streak: (row as any)?.max_streak ?? null,
+        perfect_lessons: (row as any)?.perfect_lessons ?? null,
+        duel_wins: (row as any)?.duel_wins ?? null,
       });
     } catch {}
   }

@@ -85,6 +85,18 @@ export default async function handler(req, res) {
       } catch {}
     }
 
+    // Дополнительно проложим added_course/метрики в friendsList из friendsStats
+    try {
+      const keys = ['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins','added_course'];
+      if (friendsList && friendsStats && typeof friendsStats === 'object') {
+        friendsList = friendsList.map((f) => {
+          const st = (friendsStats || {})[String(f.user_id)] || {};
+          const extra = {};
+          for (const k of keys) if (st[k] !== undefined) extra[k] = st[k];
+          return { ...f, ...extra };
+        });
+      }
+    } catch {}
     res.status(200).json({ friends: friendsList, invites, subjectsAll, topicsBySubject: topicsOnly.topicsBySubject, lessonsByTopic, streakDaysAll, friendsStats });
   } catch (e) {
     console.error('[api/boot2] error', e);
