@@ -124,6 +124,20 @@ const PlotlyBlock: React.FC<{ code: string }> = ({ code }) => {
 };
 
 export default function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+  // Нормализуем математику: одиночные строки с \( ... \) → $$ ... $$, а также
+  // случаи вида ": \( ... \)." в конце строки переносим в блочную запись ниже
+  const normalized = React.useMemo(() => {
+    try {
+      let t = String(content || '');
+      // Строка содержит только inline-формулу → делаем блочной
+      t = t.replace(/^\s*\\\(([\s\S]+?)\\\)\s*$/gm, (_m, expr) => `$$${String(expr).trim()}$$`);
+      // После двоеточия в конце строки стоит inline-формула → переносим в блочную
+      t = t.replace(/:\s*\\\(([\s\S]+?)\\\)\s*(?:[.!?])?\s*$/gm, (_m, expr) => `:\n\n$$${String(expr).trim()}$$`);
+      return t;
+    } catch {
+      return content;
+    }
+  }, [content]);
   return (
     <ReactMarkdown
       className={className}
@@ -172,7 +186,7 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
         },
       }}
     >
-      {content}
+      {normalized}
     </ReactMarkdown>
   );
 }
