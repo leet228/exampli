@@ -38,28 +38,29 @@ export default async function handler(req, res) {
     const todayIso = localNow.toISOString().slice(0, 10); // YYYY-MM-DD в выбранной TZ
     const todayStart = Date.parse(`${todayIso}T00:00:00.000Z`) - offsetMs; // UTC-начало локального дня
 
-    // Считываем последние до 60 дней активности (как ISO-строки YYYY-MM-DD)
-    let daysIsoArr = [];
+    // Считываем последние до 60 дней streak_days с kind, разделяем на active/freeze
+    let daysRaw = [];
     try {
       const { data } = await supabase
         .from('streak_days')
-        .select('day')
+        .select('day, kind')
         .eq('user_id', userRow.id)
         .lte('day', todayIso)
         .order('day', { ascending: false })
-        .limit(60);
-      daysIsoArr = Array.isArray(data) ? data.map(r => String(r.day)) : [];
+        .limit(90);
+      daysRaw = Array.isArray(data) ? data : [];
     } catch {}
 
-    const daysIso = new Set(daysIsoArr);
+    const activeDays = new Set(daysRaw.filter(r => String(r.kind || 'active') === 'active').map(r => String(r.day)));
+    const freezeDays = new Set(daysRaw.filter(r => String(r.kind || '') === 'freeze').map(r => String(r.day)));
     const yesterdayIso = new Date(Date.parse(todayIso + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-    const hasToday = daysIso.has(todayIso);
+    const hasToday = activeDays.has(todayIso);
 
     // Вычисляем длину цепочки подряд идущих дней, заканчивающейся baseDay
     const computeChainLen = (baseIso) => {
       let len = 0;
       let cur = baseIso;
-      while (daysIso.has(cur)) {
+      while (activeDays.has(cur)) {
         len += 1;
         cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
       }
@@ -100,28 +101,40 @@ export default async function handler(req, res) {
     }
 
     // Нет записи за сегодня — определим, можно ли инкрементить
-    const latestIso = daysIsoArr[0] || null; // последний активный день (<= сегодня)
-    const hasYesterday = daysIso.has(yesterdayIso);
+    // Найдём последний активный день (<= сегодня)
+    const latestActiveIso = (() => {
+      for (const r of daysRaw) { const di = String(r.day); if (String(r.kind || 'active') === 'active') return di; }
+      return null;
+    })();
+    const hasYesterdayActive = activeDays.has(yesterdayIso);
+    const hasYesterdayFreeze = freezeDays.has(yesterdayIso);
     let newStreak = 1;
-    if (hasYesterday) {
-      // есть отметка за вчера — считаем цепочку строго по истории
+    if (hasYesterdayActive) {
+      // Вчера был активный день — обычная логика
       const chainYesterday = computeChainLen(yesterdayIso);
       newStreak = chainYesterday + 1;
-    } else if (latestIso) {
-      const gapDays = Math.round((Date.parse(todayIso + 'T00:00:00Z') - Date.parse(latestIso + 'T00:00:00Z')) / 86400000);
-      if (gapDays <= 0) {
-        // последний активный день — сегодня
-        const chainToday = computeChainLen(todayIso);
-        newStreak = chainToday; // обычно 0
-      } else if (gapDays === 1) {
-        // вчера отсутствует в выборке (например, отфильтровано) — начинаем новую цепочку
-        newStreak = 1;
+    } else if (hasYesterdayFreeze && latestActiveIso) {
+      // Вчера был freeze: проверим, полностью ли промежуток между последним активным и вчера закрыт freeze-днями
+      const coveredByFreeze = (() => {
+        let cur = new Date(Date.parse(latestActiveIso + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+        while (cur <= yesterdayIso) {
+          if (!freezeDays.has(cur)) return false;
+          cur = new Date(Date.parse(cur + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+        }
+        return true;
+      })();
+      if (coveredByFreeze) {
+        const chainLastActive = computeChainLen(latestActiveIso);
+        newStreak = chainLastActive + 1;
       } else {
-        // пропущен хотя бы один полный день
         newStreak = 1;
       }
+    } else if (latestActiveIso) {
+      // Нет активности вчера и freeze тоже отсутствует → разрыв
+      const gapDays = Math.round((Date.parse(todayIso + 'T00:00:00Z') - Date.parse(latestActiveIso + 'T00:00:00Z')) / 86400000);
+      newStreak = gapDays <= 0 ? computeChainLen(todayIso) : 1;
     } else {
-      // истории нет — первая активность
+      // Истории нет — первая активность
       newStreak = 1;
     }
 

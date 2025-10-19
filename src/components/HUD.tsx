@@ -31,6 +31,7 @@ export default function HUD() {
   const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [lastStreakDay, setLastStreakDay] = useState<string | null>(null);
+  const [yesterdayFrozen, setYesterdayFrozen] = useState<boolean>(false);
   const [energy, setEnergy] = useState(25);
   // Признак активной подписки (PLUS)
   const [isPlus, setIsPlus] = useState<boolean>(false);
@@ -110,6 +111,30 @@ export default function HUD() {
     }
 
     if (user?.id) {
+      // Определим в МСК, был ли вчера freeze-день
+      try {
+        const tz = 'Europe/Moscow';
+        const toIso = (date: Date) => {
+          const f = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+          const parts = f.formatToParts(date);
+          const yy = Number(parts.find(p => p.type === 'year')?.value || NaN);
+          const mm = Number(parts.find(p => p.type === 'month')?.value || NaN);
+          const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${yy}-${pad(mm)}-${pad(dd)}`;
+        };
+        const now = new Date();
+        const yesterdayIso = toIso(new Date(now.getTime() - 86400000));
+        const { data: sd } = await supabase
+          .from('streak_days')
+          .select('kind')
+          .eq('user_id', user.id)
+          .eq('day', yesterdayIso)
+          .maybeSingle();
+        setYesterdayFrozen(String(sd?.kind || '') === 'freeze');
+      } catch {
+        setYesterdayFrozen(false);
+      }
       // читаем выбранный курс: сперва кешированный user, затем база
       const cachedU = cacheGet<any>(CACHE_KEYS.user);
       let addedId: number | null | undefined = cachedU?.added_course;
@@ -373,7 +398,11 @@ export default function HUD() {
                   const yesterdayIso = toIso(new Date(now.getTime() - 86400000));
                   const lastIso = (lastStreakDay ? String(lastStreakDay) : null);
                   if (lastIso === todayIso) { icon = '/stickers/fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
-                  else if (lastIso === yesterdayIso) { icon = '/stickers/almost_dead_fire.svg'; streakColorClass = 'text-[#f6b73c]'; }
+                  else if (lastIso === yesterdayIso) {
+                    // если вчера freeze — показываем frozen_fire и подсвечиваем число сине-голубым
+                    icon = yesterdayFrozen ? '/stickers/frozen_fire.svg' : '/stickers/almost_dead_fire.svg';
+                    streakColorClass = yesterdayFrozen ? 'text-[#5cc8ff]' : 'text-[#f6b73c]';
+                  }
                   else { icon = '/stickers/dead_fire.svg'; streakColorClass = 'text-[color:var(--muted)]'; }
                 } else {
                   display = 0;
