@@ -25,6 +25,24 @@ function loadMermaid() {
   return mermaidPromise;
 }
 
+// Lazy loader для Plotly: подключаем только при наличии блока ```plotly
+let plotlyComponentPromise: Promise<any> | null = null;
+function loadPlotly() {
+  if (!plotlyComponentPromise) {
+    plotlyComponentPromise = Promise.all([
+      // @ts-ignore — модуль существует, типы задаём через d.ts
+      import('react-plotly.js/factory'),
+      // @ts-ignore — модуль существует, типы задаём через d.ts
+      import('plotly.js-dist-min'),
+    ]).then(([factoryMod, plotlyMod]) => {
+      const factory = (factoryMod as any).default || (factoryMod as any);
+      const Plotly = (plotlyMod as any).default || (plotlyMod as any);
+      return factory(Plotly);
+    });
+  }
+  return plotlyComponentPromise;
+}
+
 function escapeHtml(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -53,6 +71,58 @@ const MermaidBlock: React.FC<{ code: string }> = ({ code }) => {
   return <div className="not-prose my-2" dangerouslySetInnerHTML={{ __html: svg }} />;
 };
 
+const PlotlyBlock: React.FC<{ code: string }> = ({ code }) => {
+  const [Plot, setPlot] = React.useState<any>(null);
+  const [parsed, setParsed] = React.useState<any>(null);
+  const [error, setError] = React.useState<string>('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const json = JSON.parse(String(code || '').trim());
+        if (!cancelled) setParsed(json);
+      } catch (e: any) {
+        if (!cancelled) setError('Некорректный JSON для plotly');
+      }
+      try {
+        const Comp = await loadPlotly();
+        if (!cancelled) setPlot(() => Comp);
+      } catch {
+        if (!cancelled) setError('Не удалось загрузить Plotly');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [code]);
+
+  if (error) {
+    return (
+      <pre className="overflow-auto rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-red-200">
+        {`${error}\n${code}`}
+      </pre>
+    );
+  }
+  if (!Plot || !parsed) {
+    return <div className="text-sm text-[var(--muted)] py-2">Загрузка графика…</div>;
+  }
+
+  const data = Array.isArray(parsed.data) ? parsed.data : [];
+  const layout = parsed.layout && typeof parsed.layout === 'object' ? parsed.layout : {};
+  const config = parsed.config && typeof parsed.config === 'object' ? parsed.config : { responsive: true };
+
+  return (
+    <div className="not-prose my-2">
+      <Plot
+        data={data}
+        layout={{ ...layout }}
+        config={{ displaylogo: false, ...config }}
+        useResizeHandler
+        style={{ width: '100%', height: layout?.height ? undefined : '420px' }}
+      />
+    </div>
+  );
+};
+
 export default function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
@@ -72,6 +142,9 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
           const lang = match ? match[1].toLowerCase() : '';
           if (!inline && lang === 'mermaid') {
             return <MermaidBlock code={txt} />;
+          }
+          if (!inline && lang === 'plotly') {
+            return <PlotlyBlock code={txt} />;
           }
           return (
             <code className={cls} {...rest}>
