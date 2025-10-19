@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 import { ensureUser } from './userState';
 import { cacheSet, cacheGet, CACHE_KEYS } from './cache';
-import { precomputeAchievementPNGs } from './achievements';
+import { precomputeAchievementPNGs, preuploadAchievementPNGs } from './achievements';
 
 export type SubjectRow = {
   id: number;
@@ -569,11 +569,13 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
         } catch {}
       });
     } catch {}
-    // Пререндер PNG ачивок в фоне
+    // Пререндер PNG ачивок в фоне и фоновая загрузка их в CDN
     try {
       const u: any = (window as any)?.__exampliBoot?.user || (cacheGet<any>(CACHE_KEYS.user) || {});
       const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
       await precomputeAchievementPNGs(u || {}, bot);
+      // параллельно — загрузка в Supabase Storage и кэш public URL'ов
+      preuploadAchievementPNGs(u || {}, bot);
     } catch {}
   } catch {}
 }

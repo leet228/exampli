@@ -85,6 +85,52 @@ export default async function handler(req, res) {
       } catch {}
     }
 
+    // Merge extended stats from friendsStats map (users table: max_streak, perfect_lessons, duel_wins, added_course, plus_until)
+    try {
+      const statsMap = friendsStats || {};
+      friendsList = (friendsList || []).map((f) => {
+        const s = statsMap[String(f.user_id)] || {};
+        return {
+          ...f,
+          plus_until: s?.plus_until ?? null,
+          max_streak: Number(s?.max_streak ?? 0),
+          perfect_lessons: Number(s?.perfect_lessons ?? 0),
+          duel_wins: Number(s?.duel_wins ?? 0),
+          added_course: s?.added_course ?? null,
+        };
+      });
+    } catch {}
+
+    // Compute friends_count for each friend in one query
+    try {
+      const ids = Array.from(new Set((friendsList || []).map(r => r.user_id).filter(Boolean)));
+      if (ids.length) {
+        const { data: links } = await supabase
+          .from('friend_links')
+          .select('a_id,b_id,status')
+          .eq('status', 'accepted')
+          .or(ids.map(id => `a_id.eq.${id}`).concat(ids.map(id => `b_id.eq.${id}`)).join(','));
+        const countMap = new Map();
+        (links || []).forEach((l) => {
+          const a = String(l.a_id || '');
+          const b = String(l.b_id || '');
+          if (ids.includes(a)) countMap.set(a, (countMap.get(a) || 0) + 1);
+          if (ids.includes(b)) countMap.set(b, (countMap.get(b) || 0) + 1);
+        });
+        friendsList = friendsList.map((f) => ({ ...f, friends_count: Number(countMap.get(String(f.user_id)) || 0) }));
+      }
+    } catch {}
+
+    // Attach course_code/title for each friend using subjectsAll
+    try {
+      const subjById = new Map((subjectsAll || []).map((s) => [String(s.id), s]));
+      friendsList = friendsList.map((f) => {
+        const sid = f?.added_course != null ? String(f.added_course) : null;
+        const subj = sid ? subjById.get(sid) : null;
+        return { ...f, course_code: subj?.code ?? null, course_title: subj?.title ?? null };
+      });
+    } catch {}
+
     // Дополнительно проложим added_course/метрики в friendsList из friendsStats
     try {
       const keys = ['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins','added_course'];

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from './cache';
+import { precomputeAchievementPNGs, preuploadAchievementPNGs } from './achievements';
 
 export type UserStats = {
   id: string;
@@ -287,13 +288,24 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
             const prevMax = Number(cu?.max_streak ?? 0);
+            const prevPerfect = Number(cu?.perfect_lessons ?? 0);
             const newMax = Number(js?.max_streak != null ? js.max_streak : Math.max(prevMax, serverStreak));
             const uid = js?.user_id || cu.id || userId;
-            const nextPerfect = Number(js?.perfect_lessons != null ? js.perfect_lessons : (cu?.perfect_lessons ?? null));
-            cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax, ...(nextPerfect != null ? { perfect_lessons: nextPerfect } : {}) });
+            const nextPerfectMaybe = js?.perfect_lessons != null ? Number(js.perfect_lessons) : (cu?.perfect_lessons ?? null);
+            cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax, ...(nextPerfectMaybe != null ? { perfect_lessons: nextPerfectMaybe } : {}) });
             if (newMax !== prevMax) {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
             }
+            // Если ачивки изменились — перерендерим и перезагрузим PNG в фоне
+            try {
+              const achChanged = (newMax > prevMax) || (nextPerfectMaybe != null && Number(nextPerfectMaybe) !== prevPerfect);
+              if (achChanged) {
+                const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
+                const uFor = cacheGet<any>(CACHE_KEYS.user) || {};
+                setTimeout(() => { try { precomputeAchievementPNGs(uFor || {}, bot); } catch {} }, 0);
+                setTimeout(() => { try { preuploadAchievementPNGs(uFor || {}, bot); } catch {} }, 0);
+              }
+            } catch {}
             // сервер теперь сам пишет perfect_lessons/max_streak, клиент не дублирует
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)

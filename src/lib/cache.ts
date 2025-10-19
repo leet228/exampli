@@ -61,6 +61,10 @@ export const CACHE_KEYS = {
   topicsBySubject: (subjectId: string | number) => `topics_by_subject:${subjectId}`,
   // cached SVG data URL for topic icons by order_index (1..N)
   topicIconSvg: (orderIndex: number | string) => `topic_icon_svg:${orderIndex}`,
+  // pre-uploaded public URLs for achievement PNGs
+  achUrlStreak: 'ach_url_streak',
+  achUrlPerfect: 'ach_url_perfect',
+  achUrlDuel: 'ach_url_duel',
 };
 
 

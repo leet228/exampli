@@ -316,40 +316,18 @@ export default function FriendsPanel({ open, onClose }: Props) {
     setFriendStats(null);
     setFriendOpen(true);
     try {
-      // cache-first: сливаем с кэшем friends_list
-      const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-      let row: any = cachedList.find(r => String(r.user_id) === String(f.user_id)) || null;
-      // курс из boot.subjects/subjectsAll
-      let courseCode: string | null = null;
-      let courseTitle: string | null = null;
-      try {
-        const added = (row as any)?.added_course as number | null | undefined;
-        if (added) {
-          const boot: any = (window as any).__exampliBoot || {};
-          const listAll: any[] | undefined = boot?.subjectsAll;
-          const listUser: any[] | undefined = boot?.subjects;
-          let found = Array.isArray(listAll) ? listAll.find((s: any) => Number(s.id) === Number(added)) : null;
-          if (!found && Array.isArray(listUser)) found = listUser.find((s: any) => Number(s.id) === Number(added)) || null;
-          if (found?.code) courseCode = String(found.code);
-          if (found?.title) courseTitle = String(found.title);
-        }
-      } catch {}
-      // количество друзей друга
-      let friendsCount = 0;
-      try {
-        const countR = await supabase.rpc('rpc_friend_count', { caller: f.user_id } as any);
-        if (!countR.error) friendsCount = Number(countR.data || 0);
-      } catch {}
+      // ТОЛЬКО из кэша boot2
+      const row: any = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []).find(r => String(r.user_id) === String(f.user_id)) || {};
       setFriendStats({
-        streak: Number((row as any)?.streak ?? 0),
-        coins: Number((row as any)?.coins ?? 0),
-        friendsCount,
-        courseCode,
-        courseTitle,
-        avatar_url: (row as any)?.avatar_url ?? f.avatar_url ?? null,
-        max_streak: (row as any)?.max_streak ?? null,
-        perfect_lessons: (row as any)?.perfect_lessons ?? null,
-        duel_wins: (row as any)?.duel_wins ?? null,
+        streak: Number(row?.streak ?? 0),
+        coins: Number(row?.coins ?? 0),
+        friendsCount: Number(row?.friends_count ?? 0),
+        courseCode: row?.course_code ?? null,
+        courseTitle: row?.course_title ?? null,
+        avatar_url: row?.avatar_url ?? f.avatar_url ?? null,
+        max_streak: row?.max_streak ?? null,
+        perfect_lessons: row?.perfect_lessons ?? null,
+        duel_wins: row?.duel_wins ?? null,
       });
     } catch {}
   }

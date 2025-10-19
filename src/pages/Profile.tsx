@@ -311,8 +311,8 @@ export default function Profile() {
 
   async function openFriendProfileById(userId: string) {
     try {
-      // базовые данные из boot/cached friends_list
-      const seed = ((window as any)?.__exampliBootFriends as any[]) || (cacheGet<any[]>(CACHE_KEYS.friendsList) || []);
+      // базовые данные только из кэша boot2
+      const seed = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []);
       const base = (seed || []).find((r: any) => String(r.user_id) === String(userId)) || {};
       const view = {
         user_id: String(userId),
@@ -325,57 +325,18 @@ export default function Profile() {
       setFriendView(view);
       setFriendStats(null);
       setFriendOpen(true);
-      // Подтягиваем данные из кэша, при необходимости обновляем boot2 (обход RLS)
-      const cachedList = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-      let row: any = cachedList.find(r => String(r.user_id) === String(userId)) || null;
-      // если нет нужных полей, обновим фоновой boot2 и перечитаем кэш
-      const needFields = (r: any) => (r && (r.streak !== undefined || r.coins !== undefined || r.added_course !== undefined));
-      if (!needFields(row)) {
-        try {
-          const myId: string | undefined = (window as any)?.__exampliBoot?.user?.id as string | undefined;
-          const subjects: any[] = (window as any)?.__exampliBoot?.subjects || [];
-          const activeCode = cacheGet<string>(CACHE_KEYS.activeCourseCode) || (subjects[0]?.code as string | undefined) || null;
-          const activeId = (() => {
-            if (!activeCode) return null as any;
-            const found = subjects.find((s: any) => s.code === activeCode);
-            return found ? found.id : null;
-          })();
-          if (myId) await bootPreloadBackground(myId, activeId);
-          const after = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-          row = after.find(r => String(r.user_id) === String(userId)) || row;
-        } catch {}
-      }
-      // Вычислим курс по subjectsAll/subjects без сетевого запроса
-      let courseCode: string | null = null;
-      let courseTitle: string | null = null;
-      try {
-        const added = (row as any)?.added_course as number | null | undefined;
-        if (added) {
-          const boot: any = (window as any).__exampliBoot || {};
-          const listAll: any[] | undefined = boot?.subjectsAll;
-          const listUser: any[] | undefined = boot?.subjects;
-          let found = Array.isArray(listAll) ? listAll.find((s: any) => Number(s.id) === Number(added)) : null;
-          if (!found && Array.isArray(listUser)) found = listUser.find((s: any) => Number(s.id) === Number(added)) || null;
-          if (found?.code) courseCode = String(found.code);
-          if (found?.title) courseTitle = String(found.title);
-        }
-      } catch {}
-      // Количество друзей друга через RPC (если доступно)
-      let friendsCount = 0;
-      try {
-        const countR = await supabase.rpc('rpc_friend_count', { caller: userId } as any);
-        if (!countR.error) friendsCount = Number(countR.data || 0);
-      } catch {}
+      // Достаём все статы только из кэша boot2
+      const row: any = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []).find(r => String(r.user_id) === String(userId)) || {};
       setFriendStats({
-        streak: Number((row as any)?.streak ?? 0),
-        coins: Number((row as any)?.coins ?? 0),
-        friendsCount,
-        courseCode,
-        courseTitle,
-        avatar_url: (row as any)?.avatar_url ?? view.avatar_url ?? null,
-        max_streak: (row as any)?.max_streak ?? null,
-        perfect_lessons: (row as any)?.perfect_lessons ?? null,
-        duel_wins: (row as any)?.duel_wins ?? null,
+        streak: Number(row?.streak ?? 0),
+        coins: Number(row?.coins ?? 0),
+        friendsCount: Number(row?.friends_count ?? 0),
+        courseCode: row?.course_code ?? null,
+        courseTitle: row?.course_title ?? null,
+        avatar_url: row?.avatar_url ?? view.avatar_url ?? null,
+        max_streak: row?.max_streak ?? null,
+        perfect_lessons: row?.perfect_lessons ?? null,
+        duel_wins: row?.duel_wins ?? null,
       });
     } catch {}
   }
@@ -532,7 +493,17 @@ export default function Profile() {
     const tg = (window as any)?.Telegram?.WebApp;
     // 1) Загружаем PNG и открываем окно «Поделиться» в Telegram (как в AddFriendsPanel)
     try {
-      const publicUrl = await uploadAchievementBlob(blob, filename);
+      // Если уже есть заранее загруженный public URL (из boot2), используем его
+      const cachedUrl = (() => {
+        try {
+          const kind = filename.includes('streak') ? 'streak' : (filename.includes('perfect') ? 'perfect' : (filename.includes('duel') ? 'duel' : ''));
+          const key = kind === 'streak' ? (CACHE_KEYS as any).achUrlStreak : (kind === 'perfect' ? (CACHE_KEYS as any).achUrlPerfect : (kind === 'duel' ? (CACHE_KEYS as any).achUrlDuel : ''));
+          if (!key) return null;
+          const entry = (cacheGet as any)(key) || null;
+          return entry?.url || null;
+        } catch { return null; }
+      })();
+      const publicUrl = cachedUrl || await uploadAchievementBlob(blob, filename);
       if (publicUrl) {
         const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
         try { if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; } } catch {}

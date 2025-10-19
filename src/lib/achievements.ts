@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+import { cacheSet, cacheGet, CACHE_KEYS } from './cache';
 // Lightweight client-side achievement PNG renderer and cache
 // Used to precompute shareable images during boot step 2
 
@@ -202,6 +204,49 @@ export async function precomputeAchievementPNGs(user: UserForAch, botUsername: s
     setGlobal('streak', streakN, b1);
     setGlobal('perfect', perfectN, b2);
     setGlobal('duel', duelN, b3);
+  } catch {}
+}
+
+async function uploadBlobToBucket(path: string, blob: Blob, bucket?: string): Promise<string | null> {
+  try {
+    const b = bucket || ((import.meta as any)?.env?.VITE_SUPABASE_BUCKET) || 'ai-uploads';
+    const { error } = await supabase.storage.from(b).upload(path, blob, { cacheControl: '3600', contentType: 'image/png', upsert: true });
+    if (error) return null;
+    const { data } = supabase.storage.from(b).getPublicUrl(path);
+    return data?.publicUrl || null;
+  } catch { return null; }
+}
+
+export async function preuploadAchievementPNGs(user: any, botUsername: string | null | undefined): Promise<void> {
+  try {
+    const uid = user?.id ? String(user.id) : '';
+    if (!uid) return;
+    const nameTag = (() => {
+      if (!botUsername) return '';
+      const s = String(botUsername).trim();
+      return s ? (s.startsWith('@') ? s : ('@' + s)) : '';
+    })();
+    const u: UserForAch = user || {};
+    const streakN = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
+    const perfectN = Math.max(0, Number(u?.perfect_lessons ?? 0));
+    const duelN = Math.max(0, Number(u?.duel_wins ?? 0));
+    const [b1, b2, b3] = await Promise.all([
+      renderStreak(u, nameTag),
+      renderPerfect(u, nameTag),
+      renderDuel(u, nameTag),
+    ]);
+    const ts = Date.now();
+    const p1 = `achievements/${uid}/streak_${streakN}_${ts}.png`;
+    const p2 = `achievements/${uid}/perfect_${perfectN}_${ts}.png`;
+    const p3 = `achievements/${uid}/duel_${duelN}_${ts}.png`;
+    const [u1, u2, u3] = await Promise.all([
+      uploadBlobToBucket(p1, b1),
+      uploadBlobToBucket(p2, b2),
+      uploadBlobToBucket(p3, b3),
+    ]);
+    try { cacheSet(CACHE_KEYS.achUrlStreak, { value: streakN, url: u1 || null }); } catch {}
+    try { cacheSet(CACHE_KEYS.achUrlPerfect, { value: perfectN, url: u2 || null }); } catch {}
+    try { cacheSet(CACHE_KEYS.achUrlDuel, { value: duelN, url: u3 || null }); } catch {}
   } catch {}
 }
 
