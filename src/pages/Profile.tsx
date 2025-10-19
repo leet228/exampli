@@ -514,6 +514,14 @@ export default function Profile() {
   // Унифицированная отправка изображения достижения: Telegram share link → Web Share → Download
   async function shareAchievementBlob(blob: Blob, filename: string, text: string) {
     const tg = (window as any)?.Telegram?.WebApp;
+    const isIOS = (() => { try { return /iPad|iPhone|iPod/i.test(navigator.userAgent) || String((tg as any)?.platform || '').toLowerCase() === 'ios'; } catch { return false; } })();
+    const isAbort = (e: any) => {
+      try {
+        const name = String(e?.name || '');
+        const msg = String(e?.message || '');
+        return /Abort/i.test(name) || /abort|cancel/i.test(msg);
+      } catch { return false; }
+    };
     // 1) Загружаем PNG и открываем окно «Поделиться» в Telegram (как в AddFriendsPanel)
     try {
       // Если уже есть заранее загруженный public URL (из boot2), используем его
@@ -530,7 +538,11 @@ export default function Profile() {
       if (publicUrl) {
         const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
         try { if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; } } catch {}
-        try { if ((navigator as any)?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; } } catch {}
+        try {
+          if ((navigator as any)?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; }
+        } catch (e) {
+          if (isAbort(e)) return; // пользователь отменил — ничего не открываем
+        }
         try { window.open(shareUrl, '_blank'); return; } catch {}
       }
     } catch {}
@@ -539,8 +551,12 @@ export default function Profile() {
       const file = new File([blob], filename, { type: 'image/png' });
       const nav: any = navigator as any;
       if (nav?.share && nav?.canShare?.({ files: [file] })) { await nav.share({ files: [file], title: text }); return; }
-    } catch {}
+    } catch (e) {
+      if (isAbort(e)) return; // отмена — не открываем ничего
+    }
     try {
+      // На iOS избегаем открытия PNG-viewer: не делаем download-фолбэк
+      if (isIOS) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -331,8 +331,19 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
             list = list.map(r => ({ ...r, avatar_url: r.avatar_url ?? map.get(r.user_id) ?? null }));
           }
         } catch {}
-        cacheSet(CACHE_KEYS.friendsList, list);
-        try { (window as any).__exampliBootFriends = list; } catch {}
+        // merge with existing enriched cache to preserve stats from boot2
+        try {
+          const prev = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
+          const byId = new Map<string, any>(prev.map((x: any) => [String(x.user_id), x]));
+          const merged = list.map((r) => ({ ...(byId.get(String(r.user_id)) || {}), ...r }));
+          cacheSet(CACHE_KEYS.friendsList, merged);
+          try { (window as any).__exampliBootFriends = merged; } catch {}
+          try { window.dispatchEvent(new CustomEvent('exampli:friendsUpdated')); } catch {}
+        } catch {
+          cacheSet(CACHE_KEYS.friendsList, list);
+          try { (window as any).__exampliBootFriends = list; } catch {}
+          try { window.dispatchEvent(new CustomEvent('exampli:friendsUpdated')); } catch {}
+        }
       }
     } catch {}
   })();
