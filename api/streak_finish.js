@@ -67,9 +67,35 @@ export default async function handler(req, res) {
     };
 
     if (hasToday) {
-      // Уже есть запись на сегодня: просто актуализируем текущее значение стрика по streak_days
+      // Уже есть запись на сегодня: актуализируем стрик и при необходимости max_streak/perfect_lessons
       const chain = computeChainLen(todayIso);
-      res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), timezone: tz, debug: { todayIso, hasToday: true } });
+      // Прочитаем текущие значения max_streak и perfect_lessons
+      let prevMax = 0, prevPerfect = 0;
+      try {
+        const { data: prev } = await supabase
+          .from('users')
+          .select('id, max_streak, perfect_lessons')
+          .eq('id', userRow.id)
+          .maybeSingle();
+        prevMax = Number(prev && prev.max_streak != null ? prev.max_streak : 0);
+        prevPerfect = Number(prev && prev.perfect_lessons != null ? prev.perfect_lessons : 0);
+      } catch {}
+      const perfectInc = (() => { try { const v = body?.perfect || body?.perfect_inc || 0; return Number(v) ? 1 : 0; } catch { return 0; } })();
+      // max_streak обновляем только если новый стрик побил рекорд
+      const nextMax = chain > prevMax ? chain : prevMax;
+      const nextPerfect = prevPerfect + (perfectInc ? 1 : 0);
+      try {
+        const upd = await supabase
+          .from('users')
+          .update({ max_streak: nextMax, ...(perfectInc ? { perfect_lessons: nextPerfect } : {}) })
+          .eq('id', userRow.id)
+          .select('id, streak, last_active_at, max_streak, perfect_lessons')
+          .single();
+        const row = upd && upd.data ? upd.data : { streak: chain, last_active_at: userRow.last_active_at, max_streak: nextMax, perfect_lessons: nextPerfect };
+        res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(row.streak || chain), last_active_at: row.last_active_at || null, max_streak: Number(row.max_streak || nextMax), perfect_lessons: Number(row.perfect_lessons != null ? row.perfect_lessons : nextPerfect), timezone: tz, debug: { todayIso, hasToday: true } });
+      } catch (e) {
+        res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), max_streak: nextMax, perfect_lessons: nextPerfect, timezone: tz, debug: { todayIso, hasToday: true } });
+      }
       return;
     }
 
@@ -99,13 +125,31 @@ export default async function handler(req, res) {
       newStreak = 1;
     }
 
-    let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null };
+    let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null, max_streak: userRow.max_streak ?? null, perfect_lessons: userRow.perfect_lessons ?? null };
+    // Прочитаем текущие значения max_streak и perfect_lessons
+    let prevMax = 0, prevPerfect = 0;
+    try {
+      const { data: prev } = await supabase
+        .from('users')
+        .select('id, max_streak, perfect_lessons')
+        .eq('id', userRow.id)
+        .maybeSingle();
+      prevMax = Number(prev && prev.max_streak != null ? prev.max_streak : 0);
+      prevPerfect = Number(prev && prev.perfect_lessons != null ? prev.perfect_lessons : 0);
+    } catch {}
+    // Флаг идеального урока (инкремент perfect_lessons)
+    const perfectInc = (() => {
+      try { const v = body?.perfect || body?.perfect_inc || 0; return Number(v) ? 1 : 0; } catch { return 0; }
+    })();
+    // max_streak обновляем только если новый стрик побил рекорд
+    const nextMax = newStreak > prevMax ? newStreak : prevMax;
+    const nextPerfect = prevPerfect + (perfectInc ? 1 : 0);
     // Всегда пишем сегодняшний день и users (мы точно в ветке hasToday === false)
     const { data, error: updErr } = await supabase
       .from('users')
-      .update({ streak: newStreak, last_active_at: new Date(todayStart).toISOString() })
+      .update({ streak: newStreak, last_active_at: new Date(todayStart).toISOString(), max_streak: nextMax, ...(perfectInc ? { perfect_lessons: nextPerfect } : {}) })
       .eq('id', userRow.id)
-      .select('id, streak, last_active_at')
+      .select('id, streak, last_active_at, max_streak, perfect_lessons')
       .single();
     if (updErr) {
       try { console.error('[streak_finish] update users error:', updErr); } catch {}
@@ -131,7 +175,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, timezone: tz, debug: { todayIso, hasToday: false, hasYesterday, latestIso, computed: newStreak } });
+    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, max_streak: Number(updated && updated.max_streak != null ? updated.max_streak : nextMax), perfect_lessons: Number(updated && updated.perfect_lessons != null ? updated.perfect_lessons : (perfectInc ? nextPerfect : prevPerfect)), timezone: tz, debug: { todayIso, hasToday: false, hasYesterday, latestIso, computed: newStreak } });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
     res.status(500).json({ ok: false, code: 'internal', error: 'Internal error' });

@@ -6,6 +6,7 @@ import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../lib/haptics';
+import { getPrecomputedAchievement } from '../lib/achievements';
 import { bootPreloadBackground } from '../lib/boot';
 
 function AchBadge({ img, value, stroke, fill, onClick, width = 96, numBoost = 0, bottomOffset = 0 }: { img: string; value: number; stroke: string; fill: string; onClick?: () => void; width?: number; numBoost?: number; bottomOffset?: number }) {
@@ -498,10 +499,9 @@ export default function Profile() {
   async function shareStreak() {
     try {
       const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
-      if (streakBlobRef.current && streakBlobRef.current.value === n) {
-        await shareAchievementBlob(streakBlobRef.current.blob, 'streak.png', 'Моё достижение');
-        return;
-      }
+      const pre = getPrecomputedAchievement('streak');
+      if (pre && pre.value === n) { await shareAchievementBlob(pre.blob, 'streak.png', 'Моё достижение'); return; }
+      if (streakBlobRef.current && streakBlobRef.current.value === n) { await shareAchievementBlob(streakBlobRef.current.blob, 'streak.png', 'Моё достижение'); return; }
       const blob = await renderStreakAchievmentImage();
       streakBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'streak.png', 'Моё достижение');
@@ -511,10 +511,9 @@ export default function Profile() {
   async function sharePerfect() {
     try {
       const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
-      if (perfectBlobRef.current && perfectBlobRef.current.value === n) {
-        await shareAchievementBlob(perfectBlobRef.current.blob, 'perfect.png', 'Моё достижение');
-        return;
-      }
+      const pre = getPrecomputedAchievement('perfect');
+      if (pre && pre.value === n) { await shareAchievementBlob(pre.blob, 'perfect.png', 'Моё достижение'); return; }
+      if (perfectBlobRef.current && perfectBlobRef.current.value === n) { await shareAchievementBlob(perfectBlobRef.current.blob, 'perfect.png', 'Моё достижение'); return; }
       const blob = await renderPerfectAchievementImage();
       perfectBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'perfect.png', 'Моё достижение');

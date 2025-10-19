@@ -273,7 +273,8 @@ export async function finishLesson({ correct }: { correct: boolean }) {
       }
       const r = await fetch('/api/streak_finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, tg_id: tgId })
+        // Передаём perfect_inc, чтобы сервер сам инкрементил perfect_lessons и max_streak
+        body: JSON.stringify({ user_id: userId, tg_id: tgId, perfect_inc: (() => { try { return (window as any)?.__exampliLessonPerfect ? 1 : 0; } catch { return 0; } })() })
       });
       if (r.ok) {
         let js: any = null;
@@ -286,24 +287,14 @@ export async function finishLesson({ correct }: { correct: boolean }) {
             cacheSet(CACHE_KEYS.stats, { ...cs, streak: serverStreak });
             const cu = cacheGet<any>(CACHE_KEYS.user) || {};
             const prevMax = Number(cu?.max_streak ?? 0);
-            const newMax = Math.max(prevMax, serverStreak);
+            const newMax = Number(js?.max_streak != null ? js.max_streak : Math.max(prevMax, serverStreak));
             const uid = js?.user_id || cu.id || userId;
-            cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax });
+            const nextPerfect = Number(js?.perfect_lessons != null ? js.perfect_lessons : (cu?.perfect_lessons ?? null));
+            cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax, ...(nextPerfect != null ? { perfect_lessons: nextPerfect } : {}) });
             if (newMax !== prevMax) {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
-              // неблокирующая запись max_streak
-              try { if (uid) { setTimeout(() => { supabase.from('users').update({ max_streak: newMax }).eq('id', uid); }, 0); } } catch {}
             }
-            // persist perfect_lessons/max_streak асинхронно, если появились новые значения
-            try {
-              const uid2 = (cacheGet<any>(CACHE_KEYS.user)?.id) || uid;
-              if (uid2 && maxStreakToPersist != null && maxStreakToPersist >= newMax) {
-                setTimeout(() => { supabase.from('users').update({ max_streak: maxStreakToPersist as number }).eq('id', uid2 as any); }, 0);
-              }
-              if (uid2 && perfectLessonsToPersist != null) {
-                setTimeout(() => { supabase.from('users').update({ perfect_lessons: perfectLessonsToPersist as number }).eq('id', uid2 as any); }, 0);
-              }
-            } catch {}
+            // сервер теперь сам пишет perfect_lessons/max_streak, клиент не дублирует
             if (Array.isArray((js?.debug?.hasToday !== undefined) ? [] : undefined)) {}
             // Сервер не возвращает last_streak_day отдельным полем, но если он засчитан сегодня, проставим локально текущую дату (по МСК)
             try {

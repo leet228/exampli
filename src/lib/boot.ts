@@ -2,6 +2,7 @@
 import { supabase } from './supabase';
 import { ensureUser } from './userState';
 import { cacheSet, cacheGet, CACHE_KEYS } from './cache';
+import { precomputeAchievementPNGs } from './achievements';
 
 export type SubjectRow = {
   id: number;
@@ -568,20 +569,11 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
         } catch {}
       });
     } catch {}
-    // Новое: сохраняем все streak_days и статы друзей
-    try { if (Array.isArray(data.streakDaysAll)) cacheSet(CACHE_KEYS.streakDaysAll, data.streakDaysAll); } catch {}
+    // Пререндер PNG ачивок в фоне
     try {
-      const statsMap = data.friendsStats || {};
-      // сольём с friendsList: добавим недостающие поля в friend объекты (включая added_course)
-      const list = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []) as any[];
-      const keys = ['streak','coins','avatar_url','plus_until','max_streak','perfect_lessons','duel_wins','added_course'];
-      const merged = list.map((f: any) => {
-        const s = statsMap?.[String(f.user_id)] || {};
-        const extra = keys.reduce((acc: any, k) => { if (s[k] !== undefined) acc[k] = s[k]; return acc; }, {});
-        return { ...f, ...extra };
-      });
-      cacheSet(CACHE_KEYS.friendsList, merged);
-      try { (window as any).__exampliBootFriends = merged; } catch {}
+      const u: any = (window as any)?.__exampliBoot?.user || (cacheGet<any>(CACHE_KEYS.user) || {});
+      const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
+      await precomputeAchievementPNGs(u || {}, bot);
     } catch {}
   } catch {}
 }
