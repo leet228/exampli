@@ -258,6 +258,29 @@ export default function Profile() {
     })();
   }, []);
 
+  // Когда boot2 обновил кэш друзей — если открыт оверлей и выбран друг, перечитаем из кэша
+  useEffect(() => {
+    const handler = () => {
+      if (!friendOpen || !friendView) return;
+      try {
+        const row: any = (cacheGet<any[]>(CACHE_KEYS.friendsList) || []).find(r => String(r.user_id) === String(friendView.user_id)) || {};
+        setFriendStats({
+          streak: Number(row?.streak ?? 0),
+          coins: Number(row?.coins ?? 0),
+          friendsCount: Number(row?.friends_count ?? 0),
+          courseCode: row?.course_code ?? null,
+          courseTitle: row?.course_title ?? null,
+          avatar_url: row?.avatar_url ?? friendView.avatar_url ?? null,
+          max_streak: row?.max_streak ?? null,
+          perfect_lessons: row?.perfect_lessons ?? null,
+          duel_wins: row?.duel_wins ?? null,
+        });
+      } catch {}
+    };
+    try { window.addEventListener('exampli:friendsUpdated', handler as any); } catch {}
+    return () => { try { window.removeEventListener('exampli:friendsUpdated', handler as any); } catch {} };
+  }, [friendOpen, friendView]);
+
   // Загружаем друзей и их стрики, сортируем по убыванию, берём топ‑5
   useEffect(() => { void refreshFriendStreakSlots(); }, [friendsCount]);
   useEffect(() => {

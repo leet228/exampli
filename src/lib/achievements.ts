@@ -207,14 +207,26 @@ export async function precomputeAchievementPNGs(user: UserForAch, botUsername: s
   } catch {}
 }
 
-async function uploadBlobToBucket(path: string, blob: Blob, bucket?: string): Promise<string | null> {
+async function uploadViaServer(userId: string, files: Array<{ filename: string; blob: Blob }>): Promise<Record<string, string | null>> {
   try {
-    const b = bucket || ((import.meta as any)?.env?.VITE_SUPABASE_BUCKET) || 'ai-uploads';
-    const { error } = await supabase.storage.from(b).upload(path, blob, { cacheControl: '3600', contentType: 'image/png', upsert: true });
-    if (error) return null;
-    const { data } = supabase.storage.from(b).getPublicUrl(path);
-    return data?.publicUrl || null;
-  } catch { return null; }
+    const rows = await Promise.all(files.map(async (f) => {
+      const b64 = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String((r.result as string || '').split(',').pop() || ''));
+        r.readAsDataURL(f.blob);
+      });
+      return { filename: f.filename, data: b64, contentType: 'image/png' };
+    }));
+    const r = await fetch('/api/achievements_upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, files: rows }) });
+    if (!r.ok) return {};
+    const js = await r.json();
+    const res: Record<string, string | null> = {};
+    try {
+      const results = js?.results || {};
+      Object.keys(results).forEach((k) => { res[k] = results[k]?.url || null; });
+    } catch {}
+    return res;
+  } catch { return {}; }
 }
 
 export async function preuploadAchievementPNGs(user: any, botUsername: string | null | undefined): Promise<void> {
@@ -239,11 +251,14 @@ export async function preuploadAchievementPNGs(user: any, botUsername: string | 
     const p1 = `achievements/${uid}/streak_${streakN}_${ts}.png`;
     const p2 = `achievements/${uid}/perfect_${perfectN}_${ts}.png`;
     const p3 = `achievements/${uid}/duel_${duelN}_${ts}.png`;
-    const [u1, u2, u3] = await Promise.all([
-      uploadBlobToBucket(p1, b1),
-      uploadBlobToBucket(p2, b2),
-      uploadBlobToBucket(p3, b3),
+    const urls = await uploadViaServer(uid, [
+      { filename: `streak_${streakN}_${ts}.png`, blob: b1 },
+      { filename: `perfect_${perfectN}_${ts}.png`, blob: b2 },
+      { filename: `duel_${duelN}_${ts}.png`, blob: b3 },
     ]);
+    const u1 = urls[`streak_${streakN}_${ts}.png`] || null;
+    const u2 = urls[`perfect_${perfectN}_${ts}.png`] || null;
+    const u3 = urls[`duel_${duelN}_${ts}.png`] || null;
     try { cacheSet(CACHE_KEYS.achUrlStreak, { value: streakN, url: u1 || null }); } catch {}
     try { cacheSet(CACHE_KEYS.achUrlPerfect, { value: perfectN, url: u2 || null }); } catch {}
     try { cacheSet(CACHE_KEYS.achUrlDuel, { value: duelN, url: u3 || null }); } catch {}
