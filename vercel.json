@@ -8,6 +8,11 @@
             { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
         ]
     }],
+    "functions": {
+        "api/**/*.{js,mjs,ts}": {
+            "runtime": "nodejs20.x"
+        }
+    },
     "rewrites": [
         { "source": "/api/(.*)", "destination": "/api/$1" },
         { "source": "/(.*)", "destination": "/index.html" }

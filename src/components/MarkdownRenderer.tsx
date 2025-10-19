@@ -134,7 +134,7 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
       // Рендер KaTeX и подсветка кода
       rehypePlugins={[[rehypeKatex as any, { strict: false }], rehypeHighlight as any]}
       components={{
-        // Рендерим mermaid, если язык блока — mermaid
+        // Рендерим mermaid/plotly, если язык блока соответствующий
         code(props: any) {
           const { inline, className: cls, children, ...rest } = props || {};
           const txt = String(children || '');
@@ -145,6 +145,15 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
           }
           if (!inline && lang === 'plotly') {
             return <PlotlyBlock code={txt} />;
+          }
+          // Авто-детект: если lang === 'json' и внутри объект с ключами data/layout — считаем это Plotly
+          if (!inline && (lang === 'json' || lang === '')) {
+            try {
+              const obj = JSON.parse(txt);
+              if (obj && (Array.isArray(obj.data) || obj.layout)) {
+                return <PlotlyBlock code={txt} />;
+              }
+            } catch {}
           }
           return (
             <code className={cls} {...rest}>
