@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
     // 4) Apply freezes (yesterday) in batches
     const freezeRows = [];
-    for (const id of [...toFreezeFree, ...toFreezeSpend]) freezeRows.push({ user_id: id, day: yesterdayIso, kind: 'freeze' });
+    for (const id of [...toFreezeFree, ...toFreezeSpend]) freezeRows.push({ user_id: id, day: yesterdayIso, kind: 'freeze', timezone: tz });
     let freezeCount = 0;
     if (freezeRows.length) {
       const fChunks = chunk(freezeRows, 500);
