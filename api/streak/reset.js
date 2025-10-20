@@ -17,6 +17,9 @@ export default async function handler(req, res) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
     if (!supabaseUrl || !supabaseKey) { res.status(500).json({ error: 'env_missing' }); return; }
     const supabase = createClient(supabaseUrl, supabaseKey);
+    // Optional debug flag via query string
+    const urlObj = (() => { try { return new URL(req.url || '/', 'http://localhost'); } catch { return new URL('http://localhost'); } })();
+    const debug = urlObj.searchParams.get('debug') === '1';
 
     // Moscow date boundaries
     const tz = 'Europe/Moscow';
@@ -120,8 +123,36 @@ export default async function handler(req, res) {
     if (freezeRows.length) {
       const fChunks = chunk(freezeRows, 500);
       for (const batch of fChunks) {
-        const { data, error } = await supabase.from('streak_days').upsert(batch, { onConflict: 'user_id,day' }).select('user_id');
-        if (!error) freezeCount += (data || []).length;
+        const { data, error } = await supabase
+          .from('streak_days')
+          .upsert(batch, { onConflict: 'user_id,day' })
+          .select('user_id');
+        if (!error) {
+          freezeCount += (data || []).length;
+          continue;
+        }
+        // Fallback: сначала пытаемся update, если 0 строк затронуто — делаем insert
+        for (const row of batch) {
+          let ok = false;
+          try {
+            const upd = await supabase
+              .from('streak_days')
+              .update({ kind: row.kind, timezone: row.timezone })
+              .eq('user_id', row.user_id)
+              .eq('day', row.day)
+              .select('user_id,day');
+            const affected = Array.isArray(upd?.data) ? upd.data.length : 0;
+            if (affected > 0) { freezeCount += affected; ok = true; }
+          } catch {}
+          if (!ok) {
+            const ins = await supabase
+              .from('streak_days')
+              .insert(row)
+              .select('user_id,day')
+              .single();
+            if (!ins.error && ins.data) freezeCount += 1;
+          }
+        }
       }
     }
 
@@ -130,8 +161,24 @@ export default async function handler(req, res) {
     if (frostUpdates.length) {
       const uChunks = chunk(frostUpdates, 500);
       for (const batch of uChunks) {
-        const { data, error } = await supabase.from('users').upsert(batch, { onConflict: 'id' }).select('id');
-        if (!error) frostSpent += (data || []).length;
+        const { data, error } = await supabase
+          .from('users')
+          .upsert(batch, { onConflict: 'id' })
+          .select('id');
+        if (!error) {
+          frostSpent += (data || []).length;
+          continue;
+        }
+        // Fallback: обновляем по одному пользователю, чтобы гарантированно списать frost
+        for (const u of batch) {
+          const { data: upd, error: updErr } = await supabase
+            .from('users')
+            .update({ frosts: u.frosts })
+            .eq('id', u.id)
+            .select('id')
+            .single();
+          if (!updErr && upd) frostSpent += 1;
+        }
       }
     }
 
@@ -146,7 +193,7 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ ok: true, todayIso, yesterdayIso, reset_count: resetAffected, freeze_count: freezeCount, frost_spent: frostSpent });
+    res.status(200).json({ ok: true, todayIso, yesterdayIso, reset_count: resetAffected, freeze_count: freezeCount, frost_spent: frostSpent, ...(debug ? { debug: { users_considered: userRows.length, toFreezeFree, toFreezeSpend, idsToReset, days: { todayIso, yesterdayIso, dMinus1Iso, dMinus2Iso } } } : {}) });
   } catch (e) {
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
   }
