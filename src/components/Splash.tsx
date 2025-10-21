@@ -50,6 +50,9 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
 
   useEffect(() => {
     let live = true;
+    // Глобальный предохранитель от двойного запуска boot (StrictMode/двойной маунт)
+    // module-scope переменная
+    (window as any).__exampliBootOnce = (window as any).__exampliBootOnce || { started: false };
     // проверим, не попросили ли показать спец-сплэш курса
     try {
       const over = (window as any).__exampliLoadingSubject as { code?: string; title?: string } | undefined;
@@ -82,7 +85,9 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
         try { (window as any).__exampliLoadingSubject = undefined; } catch {}
       }
     } catch {}
-    const runBoot = async () => {
+    const runBoot = async (force?: boolean) => {
+      if ((window as any).__exampliBootOnce.started && !force) return;
+      (window as any).__exampliBootOnce.started = true;
       const data = await bootPreload(undefined, (label) => setPhase(label || 'Загрузка…'));
       if (!live) return;
       setBoot(data);
@@ -97,9 +102,11 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
 
     const locked = (() => { try { return Boolean((window as any).__exampliBootLocked); } catch { return false; } })();
     if (locked) {
-      const starter = () => { window.removeEventListener('exampli:startBoot', starter as any); void runBoot(); };
+      const starter = () => { window.removeEventListener('exampli:startBoot', starter as any); void runBoot(true); };
       const finisher = () => {
         window.removeEventListener('exampli:finishSplash', finisher as any);
+        // Разрешим следующий управляемый запуск boot после завершения онбординга
+        try { (window as any).__exampliBootOnce.started = false; } catch {}
         const current = (window as any).__exampliBoot as BootData | undefined;
         const data = current || (boot as BootData | null) || null;
         if (!live) return;
