@@ -561,6 +561,46 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
     try { cacheSet(CACHE_KEYS.friendsCount, Array.isArray(data.friends) ? data.friends.length : 0); } catch {}
     try { cacheSet(CACHE_KEYS.invitesIncomingList, data.invites || []); cacheSet(CACHE_KEYS.invitesIncomingCount, (data.invites || []).length); } catch {}
     try { cacheSet(CACHE_KEYS.subjectsAll, data.subjectsAll || []); } catch {}
+    // Новое: кладём ВСЕ streak_days (active+freeze) в кэш для мгновенного UI
+    try {
+      const allDays = Array.isArray(data.streakDaysAll) ? data.streakDaysAll : [];
+      cacheSet(CACHE_KEYS.streakDaysAll, allDays);
+      // Обновим last_streak_day и уведомим UI
+      try {
+        // today/yesterday строго по МСК
+        const tz = 'Europe/Moscow';
+        const now = new Date();
+        const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const parts = fmt.formatToParts(now);
+        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+        const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+        const d = Number(parts.find(p => p.type === 'day')?.value || NaN);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const todayIso = `${y}-${pad(m)}-${pad(d)}`;
+        const yesterday = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
+        const yParts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(yesterday);
+        const yy = Number(yParts.find(p => p.type === 'year')?.value || NaN);
+        const ym = Number(yParts.find(p => p.type === 'month')?.value || NaN);
+        const yd = Number(yParts.find(p => p.type === 'day')?.value || NaN);
+        const yesterdayIso = `${yy}-${pad(ym)}-${pad(yd)}`;
+
+        // last_streak_day — последний день <= сегодня
+        let lastDay: string | null = null;
+        for (const r of allDays) {
+          const di = String((r as any)?.day || '');
+          if (!di || di > todayIso) continue;
+          if (!lastDay || di > lastDay) lastDay = di;
+        }
+        if (lastDay) {
+          cacheSet(CACHE_KEYS.lastStreakDay, lastDay);
+          try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { last_streak_day: lastDay } } as any)); } catch {}
+        }
+        // Сообщим о статусе «вчера: freeze?» чтобы HUD/шторка могли обновить иконку без доп. запросов
+        const yRec = (allDays || []).find((r: any) => String(r?.day || '') === yesterdayIso);
+        const yFrozen = String(yRec?.kind || '') === 'freeze';
+        try { window.dispatchEvent(new CustomEvent('exampli:streakDaysLoaded', { detail: { yesterday_frozen: yFrozen } } as any)); } catch {}
+      } catch {}
+    } catch {}
     try {
       const topicsBySubject = data.topicsBySubject || {};
       Object.entries(topicsBySubject).forEach(([sid, arr]) => cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any));

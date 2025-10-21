@@ -276,6 +276,14 @@ export default function HUD() {
     window.addEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+    // Когда boot2 положит streakDaysAll, подхватим yesterdayFrozen без запроса к БД
+    const onStreakDaysLoaded = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<{ yesterday_frozen?: boolean } & any>;
+        if (typeof e.detail?.yesterday_frozen === 'boolean') setYesterdayFrozen(Boolean(e.detail.yesterday_frozen));
+      } catch {}
+    };
+    window.addEventListener('exampli:streakDaysLoaded', onStreakDaysLoaded as EventListener);
 
     return () => {
       alive = false;
@@ -283,6 +291,7 @@ export default function HUD() {
       window.removeEventListener('exampli:subjectsChanged', refresh as unknown as EventListener);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('exampli:statsChanged', onStatsChanged as EventListener);
+      window.removeEventListener('exampli:streakDaysLoaded', onStreakDaysLoaded as EventListener);
       try { unsub(); } catch {}
     };
   }, [loadUserSnapshot]);

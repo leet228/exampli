@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import BottomSheet from './BottomSheet';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
-import { supabase } from '../../lib/supabase';
 
 // Контент для верхней шторки HUD и для нижней шторки (переиспользуемый)
 export function StreakSheetContent() {
@@ -19,6 +18,7 @@ export function StreakSheetContent() {
   const [createdAt, setCreatedAt] = useState<Date | null>(null);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const [monthData, setMonthData] = useState<Record<string, { days: Record<number, 'active' | 'freeze'>; active: number; freeze: number; loaded: boolean }>>({});
+  const [yesterdayFrozen, setYesterdayFrozen] = useState<boolean>(false);
 
   useEffect(() => {
     // быстрый снимок из boot-кэша, чтобы число совпадало с HUD
@@ -61,20 +61,6 @@ export function StreakSheetContent() {
     return `${y}-${m}-${dd}`;
   };
 
-  async function resolveUserId(): Promise<string | null> {
-    if (userId) return userId;
-    try {
-      const tgId: string | null = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id ? String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id) : null;
-      if (tgId) {
-        const { data } = await supabase.from('users').select('id').eq('tg_id', tgId).maybeSingle();
-        const uid = (data as any)?.id ? String((data as any).id) : null;
-        if (uid) { setUserId(uid); return uid; }
-      }
-    } catch {}
-    try { const uid = (cacheGet<any>(CACHE_KEYS.user)?.id) || (window as any)?.__exampliBoot?.user?.id || null; if (uid) { setUserId(String(uid)); return String(uid); } } catch {}
-    return null;
-  }
-
   async function loadMonth(y: number, m: number, force = false): Promise<void> {
     const key = monthKey(y, m);
     if (!force && monthData[key]?.loaded) return;
@@ -95,26 +81,42 @@ export function StreakSheetContent() {
         });
       } catch {}
     }
-    // 2) если кэша нет — фолбэк к базе как раньше
-    if (!Object.keys(days).length) {
-      const uid = await resolveUserId(); if (!uid) return;
-      const first = new Date(y, m, 1); const last = new Date(y, m + 1, 0);
-      const { data } = await supabase
-        .from('streak_days')
-        .select('day, kind')
-        .eq('user_id', uid)
-        .gte('day', toIsoDate(first))
-        .lte('day', toIsoDate(last));
-      (data || []).forEach((r: any) => {
-        const d = new Date(String(r.day)); const dn = d.getDate(); const k = (String(r.kind || '').toLowerCase() === 'freeze') ? 'freeze' : 'active';
-        days[dn] = k as any; if (k === 'active') active += 1; else freeze += 1;
-      });
-    }
     setMonthData(prev => ({ ...prev, [key]: { days, active, freeze, loaded: true } }));
   }
 
-  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), false); }, []);
-  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), false); }, [view]);
+  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), true); }, []);
+  useEffect(() => { void loadMonth(view.getFullYear(), view.getMonth(), true); }, [view]);
+
+  // Определяем, был ли вчера freeze (по МСК), чтобы корректно показать иконку
+  useEffect(() => {
+    try {
+      const tz = 'Europe/Moscow';
+      const toIso = (date: Date) => {
+        try {
+          const f = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+          const parts = f.formatToParts(date);
+          const yy = Number(parts.find(p => p.type === 'year')?.value || NaN);
+          const mm = Number(parts.find(p => p.type === 'month')?.value || NaN);
+          const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${yy}-${pad(mm)}-${pad(dd)}`;
+        } catch { const yy = date.getUTCFullYear(); const mm = date.getUTCMonth() + 1; const dd = date.getUTCDate(); const pad = (n: number) => String(n).padStart(2, '0'); return `${yy}-${pad(mm)}-${pad(dd)}`; }
+      };
+      const now = new Date();
+      const yesterdayIso = toIso(new Date(now.getTime() - 86400000));
+      const all = cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || [];
+      const rec = (all || []).find((r: any) => String(r?.day || '') === yesterdayIso);
+      setYesterdayFrozen(String(rec?.kind || '') === 'freeze');
+    } catch { setYesterdayFrozen(false); }
+    const onLoaded = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<{ yesterday_frozen?: boolean } & any>;
+        if (typeof e.detail?.yesterday_frozen === 'boolean') setYesterdayFrozen(Boolean(e.detail.yesterday_frozen));
+      } catch {}
+    };
+    window.addEventListener('exampli:streakDaysLoaded', onLoaded as EventListener);
+    return () => window.removeEventListener('exampli:streakDaysLoaded', onLoaded as EventListener);
+  }, [view]);
 
   // Конструируем календарь на выбранный месяц (понедельник — первый)
   const year = view.getFullYear();
@@ -187,8 +189,9 @@ export function StreakSheetContent() {
             const lp = toParts(la);
             const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
             const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-            const diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
+            let diffDays = (lastStart == null) ? Infinity : Math.round((todayStart - lastStart) / 86400000);
             if (diffDays <= 0) icon = '/stickers/fire.svg';
+            else if (yesterdayFrozen) icon = '/stickers/frozen_fire.svg';
             else if (diffDays === 1) icon = '/stickers/almost_dead_fire.svg';
             else icon = '/stickers/dead_fire.svg';
           }
