@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     const idsToReset = [];
     const toFreezeFree = []; // freeze without consuming frosts
     const toFreezeSpend = []; // freeze and spend 1 frost
-    const frostUpdates = []; // { id, frosts }
+    let frostUpdates = []; // { id, frosts } — заполним ПОСЛЕ успешной записи freeze
 
     const nowMs = Date.now();
 
@@ -120,6 +120,8 @@ export default async function handler(req, res) {
     const freezeRows = [];
     for (const id of [...toFreezeFree, ...toFreezeSpend]) freezeRows.push({ user_id: id, day: yesterdayIso, kind: 'freeze', timezone: tz });
     let freezeCount = 0;
+    const successfulFreezeIds = new Set();
+    const freezeErrors = [];
     if (freezeRows.length) {
       const fChunks = chunk(freezeRows, 500);
       for (const batch of fChunks) {
@@ -128,9 +130,12 @@ export default async function handler(req, res) {
           .upsert(batch, { onConflict: 'user_id,day' })
           .select('user_id');
         if (!error) {
-          freezeCount += (data || []).length;
+          const wrote = (data || []);
+          freezeCount += wrote.length;
+          for (const r of wrote) { try { if (r?.user_id) successfulFreezeIds.add(String(r.user_id)); } catch {} }
           continue;
         }
+        try { if (error?.message) freezeErrors.push(String(error.message)); } catch {}
         // Fallback: сначала пытаемся update, если 0 строк затронуто — делаем insert
         for (const row of batch) {
           let ok = false;
@@ -142,7 +147,7 @@ export default async function handler(req, res) {
               .eq('day', row.day)
               .select('user_id,day');
             const affected = Array.isArray(upd?.data) ? upd.data.length : 0;
-            if (affected > 0) { freezeCount += affected; ok = true; }
+            if (affected > 0) { freezeCount += affected; ok = true; successfulFreezeIds.add(String(row.user_id)); }
           } catch {}
           if (!ok) {
             const ins = await supabase
@@ -150,14 +155,21 @@ export default async function handler(req, res) {
               .insert(row)
               .select('user_id,day')
               .single();
-            if (!ins.error && ins.data) freezeCount += 1;
+            if (!ins.error && ins.data) { freezeCount += 1; successfulFreezeIds.add(String(row.user_id)); }
+            else { try { if (ins?.error?.message) freezeErrors.push(String(ins.error.message)); } catch {} }
           }
         }
       }
     }
 
-    // 5) Spend frosts (batched upsert of users with new frosts)
+    // 5) Spend frosts (batched upsert of users with new frosts) — ТОЛЬКО для тех, у кого freeze реально записался
     let frostSpent = 0;
+    if (toFreezeSpend.length) {
+      // Подготовим апдейты только для подтверждённых freeze
+      const frostsByUser = new Map((userRows || []).map(u => [String(u.id), Number(u.frosts || 0)]));
+      const confirmedSpendIds = toFreezeSpend.filter(id => successfulFreezeIds.has(String(id)));
+      frostUpdates = confirmedSpendIds.map((id) => ({ id, frosts: Math.max(0, Number(frostsByUser.get(String(id)) || 0) - 1) }));
+    }
     if (frostUpdates.length) {
       const uChunks = chunk(frostUpdates, 500);
       for (const batch of uChunks) {
@@ -193,7 +205,7 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ ok: true, todayIso, yesterdayIso, reset_count: resetAffected, freeze_count: freezeCount, frost_spent: frostSpent, ...(debug ? { debug: { users_considered: userRows.length, toFreezeFree, toFreezeSpend, idsToReset, days: { todayIso, yesterdayIso, dMinus1Iso, dMinus2Iso } } } : {}) });
+    res.status(200).json({ ok: true, todayIso, yesterdayIso, reset_count: resetAffected, freeze_count: freezeCount, frost_spent: frostSpent, ...(debug ? { debug: { users_considered: userRows.length, toFreezeFree, toFreezeSpend, idsToReset, wrote_freeze_ids: Array.from(successfulFreezeIds), freezeErrors, days: { todayIso, yesterdayIso, dMinus1Iso, dMinus2Iso } } } : {}) });
   } catch (e) {
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
   }
