@@ -156,7 +156,7 @@ export async function addUserSubject(subjectCode: string) {
   } catch {}
 }
 
-export async function finishLesson({ correct }: { correct: boolean }) {
+export async function finishLesson({ correct, elapsedMs }: { correct: boolean; elapsedMs?: number }) {
   // Не блокируемся на отсутствии getStats: для стрика достаточно user_id или tg_id
   let u: any = null;
   try { u = await getStats(); } catch {}
@@ -333,6 +333,49 @@ export async function finishLesson({ correct }: { correct: boolean }) {
                 setTimeout(() => { supabase.from('users').update({ perfect_lessons: perfectLessonsToPersist as number }).eq('id', uid2 as any); }, 0);
               }
             } catch {}
+          } catch {}
+          // После успешного завершения урока: обновим прогресс ежедневных заданий (lessons/perfect)
+          try {
+            const uid = (cacheGet<any>(CACHE_KEYS.user)?.id) || userId || js?.user_id || null;
+            const wasPerfect = (() => { try { return Boolean((window as any)?.__exampliLessonPerfect); } catch { return false; } })();
+            const { minutesInc, secondsInc } = (() => {
+              try {
+                const ms = (typeof elapsedMs === 'number' ? elapsedMs : (window as any)?.__exampliLessonMs);
+                const total = Math.max(0, Number(ms || 0));
+                const minutes = Math.floor(total / 60000);
+                const seconds = Math.min(59, Math.floor((total % 60000) / 1000));
+                return { minutesInc: minutes, secondsInc: seconds };
+              } catch { return { minutesInc: 0, secondsInc: 0 }; }
+            })();
+            if (uid) {
+              const rQ = await fetch('/api/daily_quests_event', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: uid, event: 'lesson_finished', perfect: wasPerfect, minutes: minutesInc, seconds: secondsInc })
+              });
+              if (rQ.ok) {
+                try {
+                  const upd = await rQ.json();
+                  const arr = Array.isArray(upd?.updated) ? upd.updated : [];
+                  if (arr.length) {
+                    const prog = (cacheGet<Record<string, any>>(CACHE_KEYS.dailyQuestsProgress) || {});
+                    const timeMap = (cacheGet<Record<string, number>>(CACHE_KEYS.dailyQuestsTimeSeconds) || {});
+                    for (const p of arr) {
+                      const code = String(p.code);
+                      try { prog[code] = p; } catch {}
+                      try {
+                        if (String(p?.metric_key || '').toLowerCase() === 'minutes_studied') {
+                          const partial = Number((p as any)?.seconds_partial || 0);
+                          timeMap[code] = Math.max(0, Math.min(59, partial));
+                        }
+                      } catch {}
+                    }
+                    cacheSet(CACHE_KEYS.dailyQuestsProgress, prog);
+                    cacheSet(CACHE_KEYS.dailyQuestsTimeSeconds, timeMap);
+                    try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: arr } } as any)); } catch {}
+                  }
+                } catch {}
+              }
+            }
           } catch {}
         } else {
           // Fallback: сделаем клиентский апдейт users (если знаем userId)

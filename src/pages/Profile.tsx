@@ -12,23 +12,32 @@ import { bootPreloadBackground } from '../lib/boot';
 function AchBadge({ img, value, stroke, fill, onClick, width = 96, numBoost = 0, bottomOffset = 0 }: { img: string; value: number; stroke: string; fill: string; onClick?: () => void; width?: number; numBoost?: number; bottomOffset?: number }) {
   const safe = Math.max(0, Number(value || 0));
   const str = String(safe);
-  const size = str.length >= 3 ? 28 : (str.length === 2 ? 30 : 34);
+  const baseSize = (str.length >= 3 ? 30 : (str.length === 2 ? 34 : 40)) + numBoost;
+  const y = width + 6 + bottomOffset; // ещё ниже за предел нижней кромки
   return (
     <div className="relative select-none" onClick={onClick} role={onClick ? 'button' : undefined} style={{ width }}>
       <img src={img} alt="" className="block object-contain" style={{ width, height: width }} />
-      <div
-        className="absolute left-1/2 -translate-x-1/2 font-extrabold tabular-nums"
-        style={{
-          bottom: -18 + bottomOffset,
-          fontSize: size + numBoost,
-          color: fill,
-          WebkitTextStrokeWidth: '4px',
-          WebkitTextStrokeColor: stroke,
-          textShadow: '0 1px 0 rgba(0,0,0,0.08)'
-        }}
-      >
-        {str}
-      </div>
+      {/* SVG‑текст даёт стабильную базовую линию и ровные цифры */}
+      <svg width={width} height={width} className="absolute left-0 top-0 pointer-events-none" style={{ overflow: 'visible' }}>
+        <text
+          x="50%"
+          y={y}
+          textAnchor="middle"
+          dominantBaseline="alphabetic"
+          style={{
+            fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial',
+            fontWeight: 800,
+            fontSize: `${baseSize}px`,
+            letterSpacing: '0.5px',
+            paintOrder: 'stroke fill',
+            stroke: stroke,
+            strokeWidth: 5,
+            fill: fill,
+          }}
+        >
+          {str}
+        </text>
+      </svg>
     </div>
   );
 }

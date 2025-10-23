@@ -503,6 +503,28 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       preloadImage('/stickers/lightning.svg'),
     ]);
   } catch {}
+  // Фоново запишем квесты дня в кэш (cache-first для страницы /quests)
+  try {
+    const uid = (step1?.user?.id as any) || '';
+    if (uid) {
+      (async () => {
+        try {
+          const r = await fetch('/api/daily_quests_today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
+          if (r.ok) {
+            const js = await r.json();
+            try { cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] }); } catch {}
+            try {
+              const progRec = {} as Record<string, any>;
+              (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });
+              cacheSet(CACHE_KEYS.dailyQuestsProgress, progRec);
+              // уведомим UI об обновлении прогресса из boot2
+              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: Object.values(progRec) } } as any)); } catch {}
+            } catch {}
+          }
+        } catch {}
+      })();
+    }
+  } catch {}
   // финал boot
   report(100);
 

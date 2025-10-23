@@ -317,9 +317,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       finishSavedRef.current = true;
       // Передадим признак идеального урока через глобал (не ломая сигнатуры)
       try { (window as any).__exampliLessonPerfect = !hadAnyMistakes; } catch {}
+      try { (window as any).__exampliLessonMs = Math.max(0, Number(Date.now() - lessonStartedAt)); } catch {}
       (async () => {
-        try { await finishLesson({ correct: true }); } catch {}
-        finally { try { (window as any).__exampliLessonPerfect = undefined; } catch {} }
+        try { await finishLesson({ correct: true, elapsedMs: Math.max(0, Number(Date.now() - lessonStartedAt)) }); } catch {}
+        finally { try { (window as any).__exampliLessonPerfect = undefined; (window as any).__exampliLessonMs = undefined; } catch {} }
       })();
     }
   }, [showFinish, hadAnyMistakes]);
@@ -402,7 +403,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 </div>
                 {/* Центрированный прогресс поверх шапки */}
                 <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-full">
-                  <div className="progress w-[70%] max-w-[420px] -ml-6" ref={progressRef}>
+                  <div className="progress w-[64%] max-w-[400px] -ml-6" ref={progressRef}>
                     <div style={{ width: `${Math.round(((progressCount) / Math.max(1, planned.length || 1)) * 100)}%`, background: (streakLocal >= 10 ? '#123ba3' : (streakLocal >= 5 ? '#2c58c7' : '#3c73ff')) }} />
                   </div>
                 </div>

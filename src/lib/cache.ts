@@ -65,6 +65,10 @@ export const CACHE_KEYS = {
   achUrlStreak: 'ach_url_streak',
   achUrlPerfect: 'ach_url_perfect',
   achUrlDuel: 'ach_url_duel',
+  // Daily quests (cache-first UI)
+  dailyQuests: 'daily_quests_meta', // { day: 'YYYY-MM-DD', quests: Template[] }
+  dailyQuestsProgress: 'daily_quests_progress', // Record<code, { progress, target, status, completed_at, claimed_at }>
+  dailyQuestsTimeSeconds: 'daily_quests_time_seconds', // Record<code, number 0..59>
 };
 
 
