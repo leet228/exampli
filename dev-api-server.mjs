@@ -52,6 +52,7 @@ async function handleRequest(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     const url = new URL(req.url || '/', 'http://localhost');
+    try { console.log(`[dev-api] ${req.method} ${url.pathname}`); } catch {}
     if (!url.pathname.startsWith('/api/')) {
       res.statusCode = 404;
       res.end('Not Found');
@@ -63,6 +64,7 @@ async function handleRequest(req, res) {
     const modulePath = join(process.cwd(), 'api', rel + '.js');
 
     if (!existsSync(modulePath)) {
+      try { console.warn('[dev-api] missing handler for', modulePath); } catch {}
       res.statusCode = 404;
       res.end('Missing handler');
       return;
@@ -79,6 +81,7 @@ async function handleRequest(req, res) {
     }
 
     await handler(req, wrapRes(res));
+    try { console.log(`[dev-api] done ${req.method} ${url.pathname} → ${res.statusCode}`); } catch {}
   } catch (e) {
     try { console.error('[dev-api] error', e); } catch {}
     try { wrapRes(res).status(500).json({ error: 'dev-api error', message: String(e?.message || e) }); } catch {}
@@ -90,7 +93,7 @@ const server = createServer((req, res) => {
   handleRequest(req, res);
 });
 
-const PORT = Number(process.env.API_PORT || 5174);
+const PORT = Number(process.env.API_PORT || 3000);
 server.listen(PORT, () => {
   console.log(`[dev-api] listening on http://localhost:${PORT}`);
 });

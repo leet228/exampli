@@ -29,16 +29,7 @@ function loadMermaid() {
 let plotlyComponentPromise: Promise<any> | null = null;
 function loadPlotly() {
   if (!plotlyComponentPromise) {
-    plotlyComponentPromise = Promise.all([
-      // @ts-ignore — модуль существует, типы задаём через d.ts
-      import('react-plotly.js/factory'),
-      // @ts-ignore — модуль существует, типы задаём через d.ts
-      import('plotly.js-dist-min'),
-    ]).then(([factoryMod, plotlyMod]) => {
-      const factory = (factoryMod as any).default || (factoryMod as any);
-      const Plotly = (plotlyMod as any).default || (plotlyMod as any);
-      return factory(Plotly);
-    });
+    plotlyComponentPromise = import('react-plotly.js').then((mod) => (mod as any).default || (mod as any));
   }
   return plotlyComponentPromise;
 }

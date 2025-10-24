@@ -7,13 +7,14 @@ import svgr from '@svgr/rollup';
 export default defineConfig({
   plugins: [react(), svgr()],
   server: {
-    port: 5174,
+    port: 5173,
     strictPort: true,
     host: true,
-    allowedHosts: ['unlight-pseudocandidly-rachelle.ngrok-free.dev'],
+    allowedHosts: ['unlight-pseudocandidly-rachelle.ngrok-free.dev', '192.168.78.1'],
+    hmr: { host: '192.168.78.1', protocol: 'ws' },
     proxy: {
       '/api': {
-        target: 'http://localhost:5174',
+        target: 'http://localhost:3000',
         changeOrigin: true
       }
     }

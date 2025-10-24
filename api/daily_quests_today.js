@@ -8,7 +8,12 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+    let supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseKey) {
+      const isProd = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+      if (isProd) { res.status(500).json({ error: 'Missing SUPABASE_SERVICE_ROLE on server' }); return; }
+      supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+    }
     if (!supabaseUrl || !supabaseKey) { res.status(500).json({ error: 'env_missing' }); return; }
     const supabase = createClient(supabaseUrl, supabaseKey);
 

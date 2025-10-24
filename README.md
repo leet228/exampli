@@ -1,3 +1,48 @@
+## Локальный запуск фронта и API
+
+1) Создайте файл `.env.local` в корне проекта по примеру ниже:
+
+```
+# Supabase — требуется существующий проект
+SUPABASE_URL= https://YOUR_PROJECT_ID.supabase.co
+SUPABASE_ANON_KEY= your-anon-or-service-role
+SUPABASE_SERVICE_ROLE_KEY= your-service-role
+
+# Фронту нужны публичные ключи через VITE_
+VITE_SUPABASE_URL= https://YOUR_PROJECT_ID.supabase.co
+VITE_SUPABASE_ANON_KEY= your-anon-key
+
+# Опционально для платежей/телеграма в dev
+TELEGRAM_BOT_TOKEN=
+RUB_PER_STAR=1
+
+# Порт dev API (по умолчанию 3000)
+API_PORT=3000
+```
+
+2) Запуск локального API (сервер исполняет файлы из папки `api` на http://localhost:3000):
+
+```
+npm run dev:api
+```
+
+3) Запуск фронтенда:
+
+```
+npm run dev
+```
+
+Фронт проксирует `/api/*` на локальный API (порт 3000).
+
+4) Быстрая проверка ручек:
+
+```
+curl -i http://localhost:3000/api/online
+curl -i -X POST http://localhost:3000/api/boot1 -H "Content-Type: application/json" -d "{}"
+```
+
+Убедитесь, что переменные окружения Supabase корректны и в проекте Supabase есть таблицы, ожидаемые API (users, user_profile, subjects и т.д.).
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
