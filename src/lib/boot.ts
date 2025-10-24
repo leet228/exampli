@@ -512,7 +512,11 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
           const r = await fetch('/api/daily_quests_today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
           if (r.ok) {
             const js = await r.json();
-            try { cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] }); } catch {}
+            try {
+              cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] });
+              // уведомим UI, что сами метаданные квестов обновились (даже без прогресса)
+              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: [] } } as any)); } catch {}
+            } catch {}
             try {
               const progRec = {} as Record<string, any>;
               (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });

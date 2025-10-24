@@ -316,7 +316,7 @@ export function StreakSheetContent() {
                 const kind = currentMonth.days[d as number] as ('active' | 'freeze' | undefined);
                 if (isBeforeFirstUse) return <div key={d} className="h-10 rounded-2xl border border-white/5 flex items-center justify-center text-sm text-white/35">{d}</div>;
                 if (kind === 'active') return <div key={d} className="h-10 rounded-2xl border flex items-center justify-center text-sm font-extrabold" style={{ borderColor: 'rgba(246,183,60,0.45)', background: 'rgba(246,183,60,0.16)', color: '#f6b73c' }}>{d}</div>;
-                if (kind === 'freeze') return <div key={d} className="h-10 rounded-2xl border flex items-center justify-center text-sm font-extrabold" style={{ borderColor: 'rgba(86,200,255,0.45)', background: 'rgba(86,200,255,0.16)', color: '#5cc8ff' }}>{d}</div>;
+                if (kind === 'freeze') return <div key={d} className="h-10 rounded-2xl border flex items-center justify-center text-sm font-extrabold" style={{ borderColor: 'rgba(64,160,255,0.55)', background: 'rgba(64,160,255,0.22)', color: '#43b2ff' }}>{d}</div>;
                 return <div key={d} className="h-10 rounded-2xl border border-white/10 flex items-center justify-center text-sm text-white/90">{d}</div>;
               })}
             </motion.div>

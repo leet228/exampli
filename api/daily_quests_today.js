@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       .maybeSingle();
     let dayRow = dayRowExisting;
     if (!dayRow) {
-      const rolled = await fetchSelf('/api/daily_quests_roll');
+      const rolled = await fetchSelf(req, '/api/daily_quests_roll');
       if (rolled?.picked) dayRow = rolled.picked;
     }
 
@@ -76,13 +76,25 @@ async function safeJson(req) {
 }
 function read(req) { return new Promise((r) => { let b=''; req.on('data', (c)=>b+=c); req.on('end', ()=>r(b)); }); }
 
-function originBase() {
-  try { const h = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_SITE_URL || ''; if (h) return `https://${h}`; } catch {}
+function originBase(req) {
+  // На Vercel корректно восстанавливаем origin: сначала X-Forwarded-Proto/Host, затем переменные окружения
+  try {
+    const xfProto = req?.headers?.['x-forwarded-proto'];
+    const xfHost = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+    if (xfHost) {
+      const proto = Array.isArray(xfProto) ? (xfProto[0] || 'https') : (xfProto || 'https');
+      return `${proto}://${xfHost}`;
+    }
+  } catch {}
+  try {
+    const url = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_SITE_URL || '';
+    if (url) return url.startsWith('http') ? url : `https://${url}`;
+  } catch {}
   return 'http://localhost:3000';
 }
-async function fetchSelf(path) {
+async function fetchSelf(req, path) {
   try {
-    const r = await fetch(originBase() + path, { method: 'GET' });
+    const r = await fetch(originBase(req) + path, { method: 'GET' });
     if (!r.ok) return null; return await r.json();
   } catch { return null; }
 }

@@ -37,13 +37,30 @@ export default function Quests() {
     } catch {}
     const onProg = (e: any) => {
       try {
+        // Всегда обновляем метаданные квестов из кэша (могли прийти фоном во время boot)
+        const meta = cacheGet<any>(CACHE_KEYS.dailyQuests) || { day: null, quests: [] };
+        const chestByDiff: Record<string, string> = { easy: '/quests/chest1.svg', medium: '/quests/chest2.svg', hard: '/quests/chest3.svg' };
+        const list: QuestT[] = (Array.isArray(meta.quests) ? meta.quests : []).map((q: any) => ({
+          code: String(q.code),
+          difficulty: String(q.difficulty) as any,
+          title: String(q.title || ''),
+          target: Number(q.target || 1),
+          chest: chestByDiff[String(q.difficulty)] || '/quests/chest1.svg',
+        }));
+        setQuests(orderByDifficulty(list));
+
+        // Обновляем прогресс, если он пришёл в событии; иначе синхронизируем из кэша
         const arr = Array.isArray(e?.detail?.updated) ? e.detail.updated : [];
-        if (!arr.length) return;
-        setProgress((prev) => {
-          const next = { ...prev } as any;
-          arr.forEach((p: any) => { next[String(p.code)] = p; });
-          return next;
-        });
+        if (arr.length) {
+          setProgress((prev) => {
+            const next = { ...prev } as any;
+            arr.forEach((p: any) => { next[String(p.code)] = p; });
+            return next;
+          });
+        } else {
+          const prog = cacheGet<Record<string, any>>(CACHE_KEYS.dailyQuestsProgress) || {};
+          setProgress(prog);
+        }
       } catch {}
     };
     window.addEventListener('exampli:dailyQuestsProgress', onProg as EventListener);

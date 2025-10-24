@@ -90,7 +90,8 @@ export default async function handler(req, res) {
         const prevSec = Math.max(0, Number(existing?.progress || 0));
         const incSec = Math.max(0, Math.round(inc * 60));
         const targetFromExisting = Number(existing?.target || 0);
-        const targetSec = targetFromExisting > 60 ? targetFromExisting : Math.max(1, Number(t.target || 1) * 60);
+        // Теперь трактуем шаблонный target как СЕКУНДЫ (без умножения на 60)
+        const targetSec = targetFromExisting > 0 ? targetFromExisting : Math.max(1, Number(t.target || 60));
         const nextSec = Math.min(targetSec, prevSec + incSec);
         const completed = nextSec >= targetSec;
         const status = completed ? 'completed' : (existing?.status || 'in_progress');
