@@ -20,7 +20,8 @@ export default function Quests() {
   const [quests, setQuests] = useState<QuestT[]>([]);
   const [progress, setProgress] = useState<Record<string, { progress: number; target: number; status: string; claimed_at?: string|null }>>({});
   const [timerText, setTimerText] = useState<string>('');
-  const [timerColor, setTimerColor] = useState<string>('text-white');
+  const [timerColor, setTimerColor] = useState<string>('#d1d5db');
+  const [timerIcon, setTimerIcon] = useState<string>('/quests/def_timer.svg');
 
   // Выбираем иконку кота в HUD по выполнению квестов за сегодня (только из кэша/state)
   const catSrc = (() => {
@@ -58,15 +59,19 @@ export default function Quests() {
         if (diff <= 60 * 60 * 1000) {
           const min = Math.max(0, Math.floor(diff / 60000));
           setTimerText(`${min} мин`);
-          setTimerColor('text-red-500');
+          setTimerColor('#ef4444');
+          setTimerIcon('/quests/red_timer.svg');
         } else {
           const hrs = Math.max(0, Math.floor(diff / 3600000));
           setTimerText(`${hrs} ч`);
-          setTimerColor(hrs <= 3 ? 'text-red-500' : 'text-white');
+          const isRed = hrs <= 3;
+          setTimerColor(isRed ? '#ef4444' : '#d1d5db');
+          setTimerIcon(isRed ? '/quests/red_timer.svg' : '/quests/def_timer.svg');
         }
       } catch {
         setTimerText('');
-        setTimerColor('text-white');
+        setTimerColor('#d1d5db');
+        setTimerIcon('/quests/def_timer.svg');
       }
     };
     compute();
@@ -143,14 +148,17 @@ export default function Quests() {
       </div>
 
       {/* Контент страницы */}
-      <div className="max-w-xl mx-auto px-4 pt-28 pb-6 grid gap-6">
+      <div className="max-w-xl mx-auto px-4 pt-32 pb-6 grid gap-8">
         <div>
           {/* Заголовок и таймер */}
           <div className="flex items-center justify-between">
-            <div className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-white/70">ЕЖЕДНЕВНЫЕ ЗАДАНИЯ</div>
-            <div className={`text-[12px] font-extrabold ${timerColor}`}>{timerText}</div>
+            <div className="text-[12px] font-extrabold uppercase tracking-[0.08em]" style={{ color: '#d1d5db' }}>ЕЖЕДНЕВНЫЕ ЗАДАНИЯ</div>
+            <div className="flex items-center gap-2">
+              <img src={timerIcon} alt="" className="w-4 h-4" />
+              <div className="text-[12px] font-extrabold" style={{ color: timerColor }}>{timerText}</div>
+            </div>
           </div>
-          <div className="mt-4" />
+          <div className="mt-6" />
           <div className="grid gap-8">
             {quests.map((m, i) => {
               const p = progress[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
