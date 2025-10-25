@@ -319,7 +319,30 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
               const pad = (n: number) => String(n).padStart(2, '0');
               const todayIso = `${y}-${pad(m)}-${pad(dd)}`;
               cacheSet(CACHE_KEYS.lastStreakDay, todayIso);
+              // Также сразу положим сегодняшний день в streakDaysAll, чтобы шторка увидела его мгновенно
+              try {
+                const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+                const exists = (all || []).some(r => String(r?.day || '') === todayIso && String(r?.kind || '') === 'active');
+                if (!exists) {
+                  all.push({ day: todayIso, kind: 'active' });
+                  cacheSet(CACHE_KEYS.streakDaysAll, all);
+                }
+              } catch {}
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null, last_streak_day: todayIso } } as any));
+              // Обновим флаг "вчера заморожено" для иконки HUD/шторки
+              try {
+                const tz = 'Europe/Moscow';
+                const ref = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
+                const ps = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(ref);
+                const yy = Number(ps.find(p => p.type === 'year')?.value || NaN);
+                const ym = Number(ps.find(p => p.type === 'month')?.value || NaN);
+                const yd = Number(ps.find(p => p.type === 'day')?.value || NaN);
+                const yIso = `${yy}-${pad(ym)}-${pad(yd)}`;
+                const all2 = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+                const yRec = (all2 || []).find(r => String(r?.day || '') === yIso);
+                const yFrozen = String(yRec?.kind || '') === 'freeze';
+                window.dispatchEvent(new CustomEvent('exampli:streakDaysLoaded', { detail: { yesterday_frozen: yFrozen } } as any));
+              } catch {}
             } catch {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: serverStreak, last_active_at: js?.last_active_at ?? null } } as any));
             }
@@ -393,8 +416,8 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
                 .select('id, streak, last_active_at')
                 .single();
               if (data) {
-                const finalStreak = Number((data as any)?.streak ?? Math.max(1, current));
-                const finalLast = (data as any)?.last_active_at ?? now.toISOString();
+              const finalStreak = Number((data as any)?.streak ?? Math.max(1, current));
+              const finalLast = (data as any)?.last_active_at ?? now.toISOString();
                 cacheSet(CACHE_KEYS.stats, { ...cs, streak: finalStreak });
                 const cu = cacheGet<any>(CACHE_KEYS.user) || {};
                 const prevMax = Number(cu?.max_streak ?? 0);
@@ -404,7 +427,37 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
                   window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
                   try { setTimeout(() => { supabase.from('users').update({ max_streak: newMax }).eq('id', userId as any); }, 0); } catch {}
                 }
-                window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: finalStreak, last_active_at: finalLast } } as any));
+              // Поставим last_streak_day и streakDaysAll локально по МСК, чтобы шторка сразу увидела день
+              try {
+                const tzLocal = 'Europe/Moscow';
+                const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' });
+                const parts = fmt.formatToParts(new Date());
+                const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+                const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+                const dd = Number(parts.find(p => p.type === 'day')?.value || NaN);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const todayIso = `${y}-${pad(m)}-${pad(dd)}`;
+                cacheSet(CACHE_KEYS.lastStreakDay, todayIso);
+                try {
+                  const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+                  const exists = (all || []).some(r => String(r?.day || '') === todayIso && String(r?.kind || '') === 'active');
+                  if (!exists) { all.push({ day: todayIso, kind: 'active' }); cacheSet(CACHE_KEYS.streakDaysAll, all); }
+                } catch {}
+                // Обновим иконку HUD по флагу вчерашнего freeze
+                try {
+                  const ref = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
+                  const ps = new Intl.DateTimeFormat('ru-RU', { timeZone: tzLocal, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(ref);
+                  const yy = Number(ps.find(p => p.type === 'year')?.value || NaN);
+                  const ym = Number(ps.find(p => p.type === 'month')?.value || NaN);
+                  const yd = Number(ps.find(p => p.type === 'day')?.value || NaN);
+                  const yIso = `${yy}-${pad(ym)}-${pad(yd)}`;
+                  const all2 = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+                  const yRec = (all2 || []).find(r => String(r?.day || '') === yIso);
+                  const yFrozen = String(yRec?.kind || '') === 'freeze';
+                  window.dispatchEvent(new CustomEvent('exampli:streakDaysLoaded', { detail: { yesterday_frozen: yFrozen } } as any));
+                } catch {}
+              } catch {}
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { streak: finalStreak, last_active_at: finalLast } } as any));
                 // Неблокирующие персисты, если были
                 try {
                   if (maxStreakToPersist != null && maxStreakToPersist >= newMax) {

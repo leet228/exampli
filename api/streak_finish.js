@@ -113,6 +113,9 @@ export default async function handler(req, res) {
     })();
     const hasYesterdayActive = activeDays.has(yesterdayIso);
     const hasYesterdayFreeze = freezeDays.has(yesterdayIso);
+    // Backward-compatible aliases for debug payload
+    const hasYesterday = hasYesterdayActive;
+    const latestIso = latestActiveIso;
     let newStreak = 1;
     if (hasYesterdayActive) {
       // Вчера был активный день — обычная логика
