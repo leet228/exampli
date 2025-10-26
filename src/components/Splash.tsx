@@ -286,7 +286,7 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
                     animationData={blinkAnim}
                     loop
                     autoplay
-                    style={{ width: '80%', maxWidth: 560 }}
+                    style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }}
                     // onLoopComplete не везде срабатывает у обёртки: продублировано хуком выше
                   />
                 ) : (
@@ -296,7 +296,7 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
                       animationData={finishAnim}
                       loop={false}
                       autoplay
-                      style={{ width: '80%', maxWidth: 560 }}
+                      style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }}
                       onComplete={() => {
                         if (readyData && !readySent) {
                           try { onReady(readyData); warmupLoadSvgs(); } catch {}
