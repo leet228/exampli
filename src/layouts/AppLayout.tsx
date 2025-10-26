@@ -45,6 +45,7 @@ export default function AppLayout() {
   const [bootReady, setBootReady] = useState(false); // данные загружены и кэшированы
   const [uiWarmed, setUiWarmed] = useState(false);   // профиль смонтирован
   const [bootData, setBootData] = useState<BootData | null>(null);
+  const [splashDone, setSplashDone] = useState(false); // сплэш скрыт
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
@@ -56,7 +57,7 @@ export default function AppLayout() {
   const addCourseRootRef = useRef<HTMLDivElement | null>(null);
   const [prewarmACDone, setPrewarmACDone] = useState(false);
   const [prewarmFriendsDone, setPrewarmFriendsDone] = useState(false);
-  const bootDone = bootReady && uiWarmed;
+  const appReady = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -78,7 +79,7 @@ export default function AppLayout() {
     const ready = (e: Event) => {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
-      setBootReady(true);
+      // не меняем splashDone здесь; bootReady управляется через onReady Splash
       // Проверяем телефон из users, а если пуст — берём из userProfile (чтобы не зависеть от рассинхрона)
       const userHasPhone = Boolean((ce.detail?.user as any)?.phone_number || ce.detail?.userProfile?.phone_number);
       const userHasCourse = !!(ce.detail?.user as any)?.added_course;
@@ -94,14 +95,14 @@ export default function AppLayout() {
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
-    const reboot = () => { setBootReady(false); setUiWarmed(false); };
+    const reboot = () => { setBootReady(false); setUiWarmed(false); setSplashDone(false); };
     window.addEventListener('exampli:reboot', reboot as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
 
   // После ухода сплэша подсказать оверлеям пересчитать позицию
   useEffect(() => {
-    if (bootDone) {
+    if (splashDone) {
       window.dispatchEvent(new Event('exampli:overlayToggled'));
       // Фоновый прогрев для мгновенных панелей: если есть список всех предметов — прогреем ещё 1-2 помимо активного
       try {
@@ -115,7 +116,7 @@ export default function AppLayout() {
         });
       } catch {}
     }
-  }, [bootDone]);
+  }, [splashDone]);
 
   // как только данные готовы и профиль будет смонтирован, подтверждаем прогрев UI
   useEffect(() => {
@@ -173,24 +174,27 @@ export default function AppLayout() {
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
-      {!bootDone && (
+      {!splashDone && (
         <Splash
           onReady={(data) => {
             setBootData(data);
             setBootReady(true);
           }}
+          onFinish={() => {
+            setSplashDone(true);
+          }}
         />
       )}
 
       {/* Прогрев TopicsPanel после готовности данных, но до скрытия сплэша */}
-      {bootReady && !bootDone && (
+      {bootReady && !splashDone && (
         <div className="prewarm-mount" aria-hidden="true">
           <TopicsPanel open onClose={() => {}} />
         </div>
       )}
 
       {/* Прогрев BottomNav (невидимый), HUD монтируется постоянно ниже */}
-      {bootReady && !bootDone && (
+      {bootReady && !splashDone && (
         <div className="prewarm-mount" aria-hidden="true">
           <BottomNav />
         </div>
@@ -260,7 +264,7 @@ export default function AppLayout() {
       </div>
 
       {/* Onboarding поверх после boot */}
-      {bootDone && (
+      {splashDone && (
         <Onboarding
           open={showOnboarding}
           onDone={() => {
@@ -285,7 +289,7 @@ export default function AppLayout() {
       />
 
       {/* Нижняя навигация (после загрузки, чтобы не мигала под сплэшем) */}
-      {showBottom && bootDone && <BottomNav />}
+      {showBottom && splashDone && <BottomNav />}
 
       {/* Vercel Speed Insights */}
       <SpeedInsights />
