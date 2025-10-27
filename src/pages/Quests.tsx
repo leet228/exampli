@@ -148,7 +148,7 @@ export default function Quests() {
       </div>
 
       {/* Контент страницы */}
-      <div className="max-w-xl mx-auto px-4 pt-32 pb-6 grid gap-8">
+      <div className="max-w-xl mx-auto px-4 pt-20 pb-6 grid gap-8">
         <div>
           {/* Заголовок и таймер */}
           <div className="flex items-center justify-between">
@@ -158,7 +158,7 @@ export default function Quests() {
               <div className="text-[12px] font-extrabold" style={{ color: timerColor }}>{timerText}</div>
             </div>
           </div>
-          <div className="mt-6" />
+          <div className="mt-16" />
           <div className="grid gap-8">
             {quests.map((m, i) => {
               const p = progress[m.code] || { progress: 0, target: m.target, status: 'in_progress' };

@@ -24,6 +24,7 @@ export default async function handler(req, res) {
 
         const parsed = await safeReadBody(req);
         const messages = parsed && Array.isArray(parsed.messages) ? parsed.messages : null;
+        const userId = parsed && parsed.user_id ? String(parsed.user_id) : null;
         if (!messages) {
             res.status(400).json({ error: 'Invalid payload: messages must be an array' });
             return;
@@ -57,6 +58,15 @@ export default async function handler(req, res) {
         ], 35000);
 
         // Нестриминговый ответ (полный текст сразу)
+        // Опционально прикидываем лимит перед запросом (грубая оценка по символам)
+        const plainForEstimate = (messages || []).map(extractPlainTextFromMessage).join('\n');
+        const estTokens = Math.ceil((plainForEstimate.length || 0) / 4); // очень грубо: 4 chars ≈ 1 токен
+        const pre = await assertWithinLimit({ userId, estTokens });
+        if (!pre.ok) {
+            res.status(402).json({ error: 'limit_exceeded', detail: `Лимит на месяц исчерпан. Доступно снова в следующем месяце.` });
+            return;
+        }
+
         const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -78,6 +88,10 @@ export default async function handler(req, res) {
         }
         const json = await dsResponse.json();
         const content = json?.choices?.[0]?.message?.content || '';
+        try {
+            const usedTokens = (json?.usage?.total_tokens) || (json?.usage?.prompt_tokens || 0) + (json?.usage?.completion_tokens || 0) || 0;
+            await trackUsage({ userId, usedTokens });
+        } catch {}
         res.status(200).json({ content });
     } catch (error) {
         console.error('[api/chat] Unhandled error:', error);
@@ -287,4 +301,52 @@ function decodeDataUrl(dataUrl) {
     const buffer = Buffer.from(base64, 'base64');
     const ext = mime.split('/')[1] || 'png';
     return { mime, buffer, ext };
+}
+
+// --- Simple monthly token limit using Supabase table ai_usage (user_id text, month text, tokens bigint) ---
+async function trackUsage({ userId, usedTokens }) {
+    try {
+        if (!userId) return;
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+        if (!url || !key) return;
+        const supabase = createClient(url, key);
+        const month = new Date().toISOString().slice(0,7); // YYYY-MM
+        // upsert increment
+        const { data: row } = await supabase
+            .from('ai_usage')
+            .select('tokens')
+            .eq('user_id', userId)
+            .eq('month', month)
+            .single();
+        const current = Number(row?.tokens || 0);
+        const next = current + Number(usedTokens || 0);
+        await supabase.from('ai_usage').upsert({ user_id: userId, month, tokens: next }, { onConflict: 'user_id,month' });
+    } catch {}
+}
+
+async function assertWithinLimit({ userId, estTokens }) {
+    try {
+        if (!userId) return { ok: true, remain: Infinity };
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+        if (!url || !key) return { ok: true, remain: Infinity };
+        const supabase = createClient(url, key);
+        const month = new Date().toISOString().slice(0,7);
+        const RUB_LIMIT = Number(process.env.AI_MONTHLY_RUB_LIMIT || 750);
+        const RUB_PER_1K = Number(process.env.AI_COST_RUB_PER_1K || 3); // примерная цена за 1K токенов
+        const tokenCap = Math.max(1000, Math.floor((RUB_LIMIT / Math.max(0.01, RUB_PER_1K)) * 1000));
+        const { data: row } = await supabase
+            .from('ai_usage')
+            .select('tokens')
+            .eq('user_id', userId)
+            .eq('month', month)
+            .single();
+        const used = Number(row?.tokens || 0);
+        const remain = Math.max(0, tokenCap - used);
+        if (remain <= 0 || (estTokens && estTokens > remain)) return { ok: false, remain };
+        return { ok: true, remain };
+    } catch {
+        return { ok: true, remain: Infinity };
+    }
 }

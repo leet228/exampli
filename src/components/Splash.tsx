@@ -286,7 +286,9 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
                     animationData={blinkAnim}
                     loop
                     autoplay
-                    style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }}
+                    renderer={("canvas" as unknown) as any}
+                    rendererSettings={({ clearCanvas: true, progressiveLoad: true } as unknown) as any}
+                    style={{ width: '100%', height: '100%', contain: 'layout paint size', willChange: 'transform, opacity' }}
                     // onLoopComplete не везде срабатывает у обёртки: продублировано хуком выше
                   />
                 ) : (
@@ -296,7 +298,9 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
                       animationData={finishAnim}
                       loop={false}
                       autoplay
-                      style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none' }}
+                      renderer={("canvas" as unknown) as any}
+                      rendererSettings={({ clearCanvas: true, progressiveLoad: true } as unknown) as any}
+                      style={{ width: '100%', height: '100%', contain: 'layout paint size', willChange: 'transform, opacity' }}
                       onComplete={() => {
                         if (readyData && !readySent) {
                           try { onReady(readyData); warmupLoadSvgs(); } catch {}

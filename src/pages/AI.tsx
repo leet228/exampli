@@ -184,11 +184,24 @@ export default function AI() {
     try { hapticTiny(); } catch {}
 
     try {
+      const userId = (() => {
+        try {
+          const w = (window as any);
+          const id1 = w?.__exampliBoot?.user?.id || null;
+          if (id1) return String(id1);
+        } catch {}
+        try {
+          const u = cacheGet<any>(CACHE_KEYS.user) || null;
+          if (u?.id) return String(u.id);
+        } catch {}
+        return null;
+      })();
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+          user_id: userId
         }),
       });
 

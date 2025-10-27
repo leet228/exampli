@@ -158,7 +158,7 @@ export default function TopicsPanel({ open, onClose }: Props) {
     if (!topics.length) return <div className="card">В этом курсе пока нет тем.</div>;
 
     return (
-      <div className="space-y-2" style={{ overscrollBehaviorY: 'contain' }}>
+      <div className="space-y-3" style={{ overscrollBehaviorY: 'contain' }}>
         {topics.map((t) => {
           const selected = String(currentTopicId ?? '') === String(t.id);
           const shade = darken(selected ? accentColor : baseGrey, 18);
