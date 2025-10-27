@@ -576,12 +576,19 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
 // ШАГ 2 — один запрос к нашему агрегирующему API /api/boot2 (фон, после возврата boot)
 export async function bootPreloadBackground(userId: string, activeId: number | null) {
   try {
+    if (!userId) {
+      console.warn('[boot2] skipped: no userId');
+      return;
+    }
     const r2 = await fetch('/api/boot2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, active_id: activeId })
     });
-    if (!r2.ok) return;
+    if (!r2.ok) {
+      console.warn('[boot2] request failed:', r2.status);
+      return;
+    }
     const data = await r2.json();
     try { cacheSet(CACHE_KEYS.friendsList, data.friends || []); try { window.dispatchEvent(new CustomEvent('exampli:friendsUpdated')); } catch {} } catch {}
     try { cacheSet(CACHE_KEYS.friendsCount, Array.isArray(data.friends) ? data.friends.length : 0); } catch {}

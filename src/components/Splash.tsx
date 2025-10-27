@@ -78,6 +78,14 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
       const existed = (window as any).__exampliBoot as BootData | undefined;
       if (existed && !readySent) {
         setReadyData(existed);
+        // Запустим boot2 и для существующего boot (на случай перезагрузки)
+        const uid = existed?.user?.id ? String(existed.user.id) : null;
+        const activeId = existed?.subjects?.[0]?.id ? Number(existed.subjects[0].id) : null;
+        if (uid) {
+          bootPreloadBackground(uid, activeId).catch((err) => {
+            console.warn('[Splash] boot2 (existing) failed:', err);
+          });
+        }
         try { onReady(existed); warmupLoadSvgs(); } catch {}
         setReadySent(true);
       }
@@ -134,11 +142,15 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
       setBoot(data);
       setReadyData(data);
       // Фоновый ШАГ 2: один запрос на тяжелые данные
-      try {
-        const uid = (data?.user as any)?.id as string | undefined;
-        const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null;
-        if (uid) void bootPreloadBackground(uid, activeId);
-      } catch {}
+      // bootPreloadBackground запускается параллельно с UI-прогревом (не блокируя)
+      const uid = data?.user?.id ? String(data.user.id) : null;
+      const activeId = data?.subjects?.[0]?.id ? Number(data.subjects[0].id) : null;
+      if (uid) {
+        // Запускаем boot2 асинхронно, не блокируя UI
+        bootPreloadBackground(uid, activeId).catch((err) => {
+          console.warn('[Splash] boot2 failed:', err);
+        });
+      }
       // Отдаём данные наверх сразу, чтобы экран под сплэшем подготовился
       if (!readySent) {
         try { onReady(data); warmupLoadSvgs(); } catch {}
