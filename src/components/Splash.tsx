@@ -233,6 +233,16 @@ export default function Splash({ onReady, onFinish }: { onReady: (boot: BootData
         try { onReady(readyData); warmupLoadSvgs(); } catch {}
         setReadySent(true);
       }
+      // Доп. запасной запуск boot2 уже после скрытия Splash (мобильные кейсы отмены запроса)
+      try {
+        const u: any = (window as any)?.__exampliBoot?.user || null;
+        const subj: any[] = (window as any)?.__exampliBoot?.subjects || [];
+        const uid = u?.id ? String(u.id) : null;
+        const activeId = (Array.isArray(subj) && subj[0]?.id) ? Number(subj[0].id) : null;
+        if (uid) {
+          setTimeout(() => { try { bootPreloadBackground(uid, activeId); } catch {} }, 300);
+        }
+      } catch {}
       setDone(true);
       try { onFinish?.(); } catch {}
       try { anim?.removeEventListener?.('complete', onComplete); } catch {}

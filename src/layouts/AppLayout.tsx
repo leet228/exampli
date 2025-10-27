@@ -38,9 +38,13 @@ export default function AppLayout() {
 
   // HUD всегда смонтирован, но скрывается вне «Дороги»
   const showHUD = true;
-  // нижняя навигация на этих маршрутах
+  // нижняя навигация на этих маршрутах (Battle снова включён)
   const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
   const isAI = pathname === '/ai';
+  const isBattle = pathname === '/battle';
+  const isProfile = pathname === '/profile';
+  const isHome = pathname === '/';
+  const isSubs = pathname === '/subscription';
 
   const [bootReady, setBootReady] = useState(false); // данные загружены и кэшированы
   const [uiWarmed, setUiWarmed] = useState(false);   // профиль смонтирован
@@ -182,7 +186,7 @@ export default function AppLayout() {
   }, [bootReady, prewarmFriendsDone]);
 
   return (
-    <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
+    <div className={`h-full ${isBattle ? '' : 'safe-bottom'} overflow-hidden`}>
       {/* Сплэш поверх всего до загрузки */}
       {!splashDone && (
         <Splash
@@ -237,31 +241,31 @@ export default function AppLayout() {
         <HUD />
       </div>
 
-      <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
+      <div id="app-container" className={((isAI || isProfile || isBattle || isHome || isSubs) ? 'w-full' : 'max-w-xl mx-auto p-5') + ' h-full overflow-hidden'}>
         {bootReady && (
           <>
             {/* Home */}
-            <div key="home" ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
+            <div key="home" ref={homeRef} className={'main-scroll safe-top ' + (pathname === '/' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/' ? undefined : true}>
               <Home />
             </div>
             {/* AI */}
-            <div key="ai" ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
+            <div key="ai" ref={aiRef} className={'main-scroll safe-top ai-top ' + (pathname === '/ai' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/ai' ? undefined : true}>
               <AI />
             </div>
             {/* Battle */}
-            <div key="battle" ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
+            <div key="battle" ref={battleRef} className={(pathname === '/battle' ? 'h-full overflow-hidden' : 'prewarm-mount')} aria-hidden={pathname === '/battle' ? undefined : true}>
               <Battle />
             </div>
             {/* Quests */}
-            <div key="quests" ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
+            <div key="quests" ref={questsRef} className={'main-scroll safe-top ' + (pathname === '/quests' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/quests' ? undefined : true}>
               <Quests />
             </div>
             {/* Subscription */}
-            <div key="subscription" ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
+            <div key="subscription" ref={subsRef} className={'main-scroll safe-top ' + (pathname === '/subscription' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/subscription' ? undefined : true}>
               <Subscription />
             </div>
             {/* Profile */}
-            <div key="profile" ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
+            <div key="profile" ref={profileRef} className={'main-scroll safe-top ' + (pathname === '/profile' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/profile' ? undefined : true}>
               <Profile />
             </div>
           </>
@@ -269,7 +273,9 @@ export default function AppLayout() {
 
         {/* Другие неизвестные маршруты — через Outlet, чтобы не дублировать наши страницы */}
         {!['/', '/ai', '/battle', '/quests', '/subscription', '/profile'].includes(pathname) && (
-          <Outlet context={{ bootData }} />
+          <div className="main-scroll safe-top">
+            <Outlet context={{ bootData }} />
+          </div>
         )}
       </div>
 

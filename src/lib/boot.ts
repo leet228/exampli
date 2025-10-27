@@ -67,6 +67,12 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       document.head.appendChild(l);
     }
   } catch {}
+  // На мобильных Telegram WebView иногда initData заполняется с задержкой → дождёмся цикла
+  try {
+    if (!(window as any)?.Telegram?.WebApp?.initDataUnsafe?.user) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  } catch {}
   const tg = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null;
   let activeCodeHint: string | null = null;
   try { activeCodeHint = localStorage.getItem('exampli:activeSubjectCode'); } catch {}
@@ -508,24 +514,37 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     const uid = (step1?.user?.id as any) || '';
     if (uid) {
       (async () => {
-        try {
-          const r = await fetch('/api/daily_quests_today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
-          if (r.ok) {
-            const js = await r.json();
-            try {
-              cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] });
-              // уведомим UI, что сами метаданные квестов обновились (даже без прогресса)
-              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: [] } } as any)); } catch {}
-            } catch {}
-            try {
-              const progRec = {} as Record<string, any>;
-              (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });
-              cacheSet(CACHE_KEYS.dailyQuestsProgress, progRec);
-              // уведомим UI об обновлении прогресса из boot2
-              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: Object.values(progRec) } } as any)); } catch {}
-            } catch {}
-          }
-        } catch {}
+        const doFetch = async (): Promise<any | null> => {
+          try {
+            const r = await fetch('/api/daily_quests_today', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: uid }),
+              cache: 'no-store',
+              keepalive: true,
+              credentials: 'same-origin',
+            } as RequestInit);
+            if (!r.ok) return null;
+            return await r.json();
+          } catch { return null; }
+        };
+        let js: any | null = null;
+        for (let attempt = 0; attempt < 2 && !js; attempt++) {
+          js = await doFetch();
+          if (!js && attempt === 0) await new Promise((r) => setTimeout(r, 250));
+        }
+        if (js) {
+          try {
+            cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] });
+            try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: [] } } as any)); } catch {}
+          } catch {}
+          try {
+            const progRec = {} as Record<string, any>;
+            (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });
+            cacheSet(CACHE_KEYS.dailyQuestsProgress, progRec);
+            try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: Object.values(progRec) } } as any)); } catch {}
+          } catch {}
+        }
       })();
     }
   } catch {}
@@ -576,13 +595,44 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
 // ШАГ 2 — один запрос к нашему агрегирующему API /api/boot2 (фон, после возврата boot)
 export async function bootPreloadBackground(userId: string, activeId: number | null) {
   try {
-    const r2 = await fetch('/api/boot2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, active_id: activeId })
-    });
-    if (!r2.ok) return;
-    const data = await r2.json();
+    // Глобальный предохранитель от повторного конкурентного запуска на мобильных
+    try {
+      const st = ((window as any).__exampliBoot2State ||= { running: false, done: false, tries: 0 });
+      if (st.running || st.done) return;
+      st.running = true;
+    } catch {}
+
+    const fetchOnce = async (): Promise<any | null> => {
+      const r = await fetch('/api/boot2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, active_id: activeId }),
+        cache: 'no-store',
+        // На мобильных WebView запрос мог отменяться — keepalive повышает надёжность
+        keepalive: true,
+        credentials: 'same-origin',
+      } as RequestInit);
+      if (!r.ok) return null;
+      try { return await r.json(); } catch { return null; }
+    };
+
+    // Простая стратегия повторов: 1 немедленно + до 2 повторов с небольшим бэкоффом
+    let data: any | null = null;
+    for (let attempt = 0; attempt < 3 && !data; attempt++) {
+      try {
+        data = await fetchOnce();
+      } catch { data = null; }
+      if (!data) {
+        try { ((window as any).__exampliBoot2State.tries as number)++; } catch {}
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 200 + attempt * 400));
+      }
+    }
+    if (!data) {
+      try { (window as any).__exampliBoot2State.running = false; } catch {}
+      // Отложенный повтор: дадим сети стабилизироваться (мобильные кейсы)
+      setTimeout(() => { try { (window as any).__exampliBoot2State && ((window as any).__exampliBoot2State.running = false); } catch {}; try { bootPreloadBackground(userId, activeId); } catch {} }, 1500);
+      return;
+    }
     try { cacheSet(CACHE_KEYS.friendsList, data.friends || []); try { window.dispatchEvent(new CustomEvent('exampli:friendsUpdated')); } catch {} } catch {}
     try { cacheSet(CACHE_KEYS.friendsCount, Array.isArray(data.friends) ? data.friends.length : 0); } catch {}
     try { cacheSet(CACHE_KEYS.invitesIncomingList, data.invites || []); cacheSet(CACHE_KEYS.invitesIncomingCount, (data.invites || []).length); } catch {}
@@ -658,6 +708,7 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
       // параллельно — загрузка в Supabase Storage и кэш public URL'ов
       preuploadAchievementPNGs(u || {}, bot);
     } catch {}
+    try { (window as any).__exampliBoot2State = { running: false, done: true, tries: ((window as any).__exampliBoot2State?.tries || 0) }; } catch {}
   } catch {}
 }
 

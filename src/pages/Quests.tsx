@@ -34,7 +34,7 @@ export default function Quests() {
       }
       const e = done.easy, m = done.medium, h = done.hard;
       // Комбинации
-      if (e && m && h) return '/quests/quest_cat3.svg'; // нет отдельной 123, покажем «3» как максимально редкую
+      if (e && m && h) return '/quests/quest_cat123.svg';
       if (e && m) return '/quests/quest_cat12.svg';
       if (m && h) return '/quests/quest_cat23.svg';
       if (e && h) return '/quests/quest_cat13.svg';
