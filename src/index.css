@@ -21,9 +21,26 @@
     --ai-greet-h: 56px;
 }
 
+/* Отключаем zoom на двойной тап в iOS Safari для всего приложения */
 html,
 body {
-    touch-action: pan-x pan-y;
+    touch-action: manipulation;
+    /* Отключаем лупу iOS при длительном нажатии */
+    -webkit-tap-highlight-color: transparent;
+}
+
+* {
+    touch-action: manipulation;
+    /* Отключаем подсказки лупы при длительном нажатии в iOS */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Но разрешаем нормальный тач для полей ввода и текстовых областей */
+input,
+textarea,
+[contenteditable],
+.allow-select {
+    touch-action: pan-x pan-y !important;
 }
 
 html,
@@ -166,7 +183,6 @@ body,
 .main-scroll {
     height: 100%;
     overflow-y: auto;
-    touch-action: pan-y;
     overscroll-behavior-x: none;
     /* скрыть вертикальную полосу прокрутки, сохранив скролл */
     -ms-overflow-style: none; /* IE/Edge */

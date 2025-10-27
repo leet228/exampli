@@ -140,6 +140,16 @@ export default function AppLayout() {
       const el = ref.current;
       const hidden = pathname !== path;
       try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
+      // Сбрасываем скролл при смене страницы, чтобы каждая страница начинала с верха
+      if (el && !hidden) {
+        try {
+          // Находим первый скроллируемый контейнер внутри страницы
+          const scrollable = el.querySelector('.main-scroll') as HTMLElement || el;
+          if (scrollable && 'scrollTop' in scrollable) {
+            scrollable.scrollTop = 0;
+          }
+        } catch {}
+      }
     });
   }, [pathname]);
 
@@ -231,27 +241,27 @@ export default function AppLayout() {
         {bootReady && (
           <>
             {/* Home */}
-            <div ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
+            <div key="home" ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
               <Home />
             </div>
             {/* AI */}
-            <div ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
+            <div key="ai" ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
               <AI />
             </div>
             {/* Battle */}
-            <div ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
+            <div key="battle" ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
               <Battle />
             </div>
             {/* Quests */}
-            <div ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
+            <div key="quests" ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
               <Quests />
             </div>
             {/* Subscription */}
-            <div ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
+            <div key="subscription" ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
               <Subscription />
             </div>
             {/* Profile */}
-            <div ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
+            <div key="profile" ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
               <Profile />
             </div>
           </>
