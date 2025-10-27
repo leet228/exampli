@@ -186,7 +186,7 @@ export default function AppLayout() {
   }, [bootReady, prewarmFriendsDone]);
 
   return (
-    <div className={`h-full ${isBattle ? '' : 'safe-bottom'} overflow-hidden`}>
+    <div className={`h-full overflow-hidden`}>
       {/* Сплэш поверх всего до загрузки */}
       {!splashDone && (
         <Splash
@@ -245,11 +245,23 @@ export default function AppLayout() {
         {bootReady && (
           <>
             {/* Home */}
-            <div key="home" ref={homeRef} className={'main-scroll safe-top ' + (pathname === '/' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/' ? undefined : true}>
+            <div
+              key="home"
+              ref={homeRef}
+              className={'main-scroll safe-top safe-bottom ' + (pathname === '/' ? '' : 'prewarm-mount')}
+              style={{ paddingTop: 'calc(var(--hud-top) + var(--hud-h) + 20px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
+              aria-hidden={pathname === '/' ? undefined : true}
+            >
               <Home />
             </div>
             {/* AI */}
-            <div key="ai" ref={aiRef} className={'main-scroll safe-top ai-top ' + (pathname === '/ai' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/ai' ? undefined : true}>
+            <div
+              key="ai"
+              ref={aiRef}
+              className={'main-scroll safe-top safe-bottom ' + (pathname === '/ai' ? '' : 'prewarm-mount')}
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
+              aria-hidden={pathname === '/ai' ? undefined : true}
+            >
               <AI />
             </div>
             {/* Battle */}
@@ -257,15 +269,33 @@ export default function AppLayout() {
               <Battle />
             </div>
             {/* Quests */}
-            <div key="quests" ref={questsRef} className={'main-scroll safe-top ' + (pathname === '/quests' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/quests' ? undefined : true}>
+            <div
+              key="quests"
+              ref={questsRef}
+              className={'main-scroll safe-top safe-bottom ' + (pathname === '/quests' ? '' : 'prewarm-mount')}
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
+              aria-hidden={pathname === '/quests' ? undefined : true}
+            >
               <Quests />
             </div>
             {/* Subscription */}
-            <div key="subscription" ref={subsRef} className={'main-scroll safe-top ' + (pathname === '/subscription' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/subscription' ? undefined : true}>
+            <div
+              key="subscription"
+              ref={subsRef}
+              className={'main-scroll safe-bottom ' + (pathname === '/subscription' ? '' : 'prewarm-mount')}
+              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 160px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
+              aria-hidden={pathname === '/subscription' ? undefined : true}
+            >
               <Subscription />
             </div>
             {/* Profile */}
-            <div key="profile" ref={profileRef} className={'main-scroll safe-top ' + (pathname === '/profile' ? '' : 'prewarm-mount')} aria-hidden={pathname === '/profile' ? undefined : true}>
+            <div
+              key="profile"
+              ref={profileRef}
+              className={'main-scroll safe-bottom ' + (pathname === '/profile' ? '' : 'prewarm-mount')}
+              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 160px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
+              aria-hidden={pathname === '/profile' ? undefined : true}
+            >
               <Profile />
             </div>
           </>
@@ -273,7 +303,7 @@ export default function AppLayout() {
 
         {/* Другие неизвестные маршруты — через Outlet, чтобы не дублировать наши страницы */}
         {!['/', '/ai', '/battle', '/quests', '/subscription', '/profile'].includes(pathname) && (
-          <div className="main-scroll safe-top">
+          <div className="main-scroll safe-top safe-bottom">
             <Outlet context={{ bootData }} />
           </div>
         )}
