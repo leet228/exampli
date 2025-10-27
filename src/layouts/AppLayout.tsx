@@ -241,7 +241,7 @@ export default function AppLayout() {
         <HUD />
       </div>
 
-      <div id="app-container" className={((isAI || isProfile || isBattle || isHome || isSubs) ? 'w-full' : 'max-w-xl mx-auto p-5') + ' h-full overflow-hidden'}>
+      <div id="app-container" className={((isAI || isProfile || isBattle || isHome) ? 'w-full' : 'max-w-xl mx-auto p-5') + ' h-full overflow-hidden'}>
         {bootReady && (
           <>
             {/* Home */}
@@ -282,7 +282,7 @@ export default function AppLayout() {
             <div
               key="subscription"
               ref={subsRef}
-              className={'main-scroll safe-bottom ' + (pathname === '/subscription' ? '' : 'prewarm-mount')}
+              className={'main-scroll safe-bottom px-0 ' + (pathname === '/subscription' ? '' : 'prewarm-mount')}
               style={{ paddingTop: 'calc(env(safe-area-inset-top) + 160px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
               aria-hidden={pathname === '/subscription' ? undefined : true}
             >
