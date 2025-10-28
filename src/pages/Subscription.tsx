@@ -310,18 +310,8 @@ export default function Subscription() {
 
   async function refreshCoinsFromServer() {
     const boot: any = (window as any).__exampliBoot || {};
-    let userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
-    // На мобильных могло не быть userId в ранний момент — дотягиваем через tg_id
+    const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
     const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
-    if (!userId && tgId) {
-      try {
-        const { data: urow } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).maybeSingle();
-        if (urow?.id) {
-          userId = String(urow.id);
-          try { const cu = cacheGet<any>(CACHE_KEYS.user) || {}; cacheSet(CACHE_KEYS.user, { ...cu, id: userId, tg_id: String(tgId) }); } catch {}
-        }
-      } catch {}
-    }
     let row: any = null;
     if (userId) {
       const { data } = await supabase.from('users').select('id, coins').eq('id', userId).maybeSingle();
@@ -343,13 +333,7 @@ export default function Subscription() {
 
   async function refreshPlusUntilFromServer() {
     const boot: any = (window as any).__exampliBoot || {};
-    let userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
-    if (!userId) {
-      const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.tg_id) || null;
-      if (tgId) {
-        try { const { data } = await supabase.from('users').select('id').eq('tg_id', String(tgId)).maybeSingle(); userId = (data as any)?.id || null; } catch {}
-      }
-    }
+    const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
     if (!userId) return;
     const { data } = await supabase.from('users').select('id, plus_until').eq('id', userId).maybeSingle();
     const val = (data as any)?.plus_until || null;
@@ -759,26 +743,15 @@ function FreezeSheet({ open, onClose, coins, days, price, icon }: { open: boolea
       try { window.dispatchEvent(new CustomEvent('exampli:frostsPulse')); } catch {}
       // БД
       const boot: any = (window as any).__exampliBoot || {};
-      let userId = boot?.user?.id || (cacheGet as any)(CACHE_KEYS.user)?.id || null;
-      if (!userId) {
-        const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || (cacheGet as any)(CACHE_KEYS.user)?.tg_id || null;
-        if (tgId) {
-          try { const { data: urow } = await (supabase as any).from('users').select('id').eq('tg_id', String(tgId)).maybeSingle(); if (urow?.id) { userId = String(urow.id); const cu = (cacheGet as any)(CACHE_KEYS.user) || {}; (cacheSet as any)(CACHE_KEYS.user, { ...cu, id: userId, tg_id: String(tgId) }); } } catch {}
-        }
-      }
+      const userId = boot?.user?.id || (cacheGet as any)(CACHE_KEYS.user)?.id || null;
       if (userId) {
-        // 2 попытки апдейта БД из-за возможных transient сетевых ошибок на мобилках
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const { data } = await (supabase as any).from('users').select('coins, frosts').eq('id', userId).maybeSingle();
-            const dbCoins = Number((data as any)?.coins ?? currentCoins);
-            const dbFrosts = Number((data as any)?.frosts ?? 0);
-            const upd = { coins: Math.max(0, dbCoins - price), frosts: Math.max(0, dbFrosts + (days as number)) };
-            const { error: updErr } = await (supabase as any).from('users').update(upd).eq('id', userId);
-            if (!updErr) break;
-          } catch {}
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 250));
-        }
+        try {
+          const { data } = await (supabase as any).from('users').select('coins, frosts').eq('id', userId).maybeSingle();
+          const dbCoins = Number((data as any)?.coins ?? currentCoins);
+          const dbFrosts = Number((data as any)?.frosts ?? 0);
+          const upd = { coins: Math.max(0, dbCoins - price), frosts: Math.max(0, dbFrosts + (days as number)) };
+          await (supabase as any).from('users').update(upd).eq('id', userId);
+        } catch {}
       }
     } catch {}
   }

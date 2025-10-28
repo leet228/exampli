@@ -1,10 +1,11 @@
 // src/components/panels/TopicsPanel.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { motion } from 'framer-motion';
 import { hapticTiny } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
+import { precacheTopicsForSubject } from '../../lib/boot';
 
 type Subject = { id: number; code: string; title: string; level: string };
 
@@ -26,6 +27,7 @@ export default function CoursesPanel(props: Props) {
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [activeCode, setActiveCode] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   // полностью отказались от загрузки при открытии — всё берём из boot/cache
 
   // --- helpers ---
@@ -41,14 +43,32 @@ export default function CoursesPanel(props: Props) {
   const loadFromBoot = useCallback(() => {
     try {
       const boot: any = (window as any).__exampliBoot;
-      let list: Subject[] = (boot?.subjects || []) as Subject[];
-      if (!list || !list.length) {
-        const user = cacheGet<any>(CACHE_KEYS.user);
-        const addedId = user?.added_course;
-        const all: Subject[] = (boot?.subjectsAll || []) as Subject[];
-        if (addedId && Array.isArray(all) && all.length) {
-          const found = all.find((s) => s.id === addedId);
-          list = found ? [found] : [];
+      const all: Subject[] = (boot?.subjectsAll || []) as Subject[];
+      const user = cacheGet<any>(CACHE_KEYS.user) || boot?.user || {};
+      const plusActive = Boolean(user?.plus_until && new Date(String(user.plus_until)).getTime() > Date.now());
+      let list: Subject[] = [];
+      if (plusActive) {
+        list = (boot?.subjects || []) as Subject[];
+        if (!list || !list.length) {
+          const addedId = user?.added_course;
+          if (addedId && Array.isArray(all) && all.length) {
+            const found = all.find((s) => String(s.id) === String(addedId));
+            list = found ? [found] : [];
+          }
+        }
+      } else {
+        // Без подписки — показываем только активный курс
+        const activeCodeBoot = boot?.active_code || null;
+        if (activeCodeBoot && Array.isArray(all) && all.length) {
+          const foundByCode = all.find((s) => s.code === activeCodeBoot);
+          if (foundByCode) list = [foundByCode];
+        }
+        if (!list.length) {
+          const addedId = user?.added_course;
+          if (addedId && Array.isArray(all) && all.length) {
+            const found = all.find((s) => String(s.id) === String(addedId));
+            if (found) list = [found];
+          }
         }
       }
       setSubjects(list || []);
@@ -90,17 +110,6 @@ export default function CoursesPanel(props: Props) {
       if (e.detail?.code) {
         setActiveCode(e.detail.code);
         writeActiveToStorage(e.detail.code);
-        // Обновляем локальный список предметов под выбранный курс, чтобы плитка обновилась без перезагрузки
-        try {
-          const boot: any = (window as any).__exampliBoot || {};
-          const all: Subject[] = (boot?.subjectsAll || []) as Subject[];
-          const found = all.find((s) => s.code === e.detail?.code);
-          if (found) {
-            setSubjects([found]);
-            // поддержим глобальный снапшот, чтобы другие места видели новый курс
-            try { (window as any).__exampliBoot = { ...boot, subjects: [found] }; } catch {}
-          }
-        } catch {}
       }
     };
     window.addEventListener('exampli:subjectsChanged', onSubjectsChanged);
@@ -112,6 +121,17 @@ export default function CoursesPanel(props: Props) {
   }, [loadFromBoot, writeActiveToStorage]);
 
   // --- UI блоки ---
+  const onWheelHoriz = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Преобразуем вертикальную прокрутку колёсиком мыши в горизонтальную
+    try {
+      const el = listRef.current;
+      if (!el) return;
+      if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    } catch {}
+  }, []);
   const grid = useMemo(() => {
     if (!subjects.length) {
       return (
@@ -122,7 +142,12 @@ export default function CoursesPanel(props: Props) {
     }
 
     return (
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        ref={listRef}
+        onWheel={onWheelHoriz}
+        className="flex items-stretch gap-3 overflow-x-auto overflow-y-hidden no-scrollbar px-1"
+        style={{ touchAction: 'pan-x' }}
+      >
         {subjects.map((s) => {
           const active = s.code === activeCode;
           return (
@@ -133,16 +158,56 @@ export default function CoursesPanel(props: Props) {
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 hapticTiny();
-                try { (window as any).__exampliLoadingSubject = { code: s.code, title: s.title }; } catch {}
-                try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
-                setActiveCode(s.code);
-                writeActiveToStorage(s.code);
-                if (typeof onPicked === 'function') onPicked(s);
-                storeSetActiveCourse({ code: s.code, title: s.title });
-                const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-                if (tgId) {
-                  void supabase.from('users').update({ added_course: s.id }).eq('tg_id', String(tgId));
+                // если нажали на уже активный курс — просто закрыть шторку
+                if (s.code === activeCode) {
+                  try { window.dispatchEvent(new Event('exampli:closeCourseSheet')); } catch {}
+                  return;
                 }
+                // как при добавлении: закрываем шторку и показываем сплэш без полного boot
+                try { window.dispatchEvent(new Event('exampli:closeCourseSheet')); } catch {}
+                try { (window as any).__exampliLoadingSubject = { code: String(s.code || '').replace(/^(oge_|ege_)/,'').toLowerCase(), title: s.title }; } catch {}
+                try { (window as any).__exampliBootLocked = true; } catch {}
+                try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
+                ;(async () => {
+                  try {
+                    // Прогрев тем
+                    try { await precacheTopicsForSubject(s.id); } catch {}
+                    // Обновим активный курс и тему
+                    const tgId = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+                    if (tgId) {
+                      try {
+                        const { data: topics } = await supabase
+                          .from('topics')
+                          .select('id,title')
+                          .eq('subject_id', s.id)
+                          .order('order_index', { ascending: true })
+                          .limit(1);
+                        const firstTopic: any = (topics as any[])?.[0] || null;
+                        await supabase.from('users').update({ added_course: s.id, current_topic: firstTopic?.id ?? null }).eq('tg_id', String(tgId));
+                        // локально — сразу подменим текущую тему, чтобы UI не мигал старой
+                        try {
+                          if (firstTopic?.id) {
+                            localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
+                            localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
+                            window.dispatchEvent(new Event('exampli:lessonsChanged'));
+                          } else {
+                            localStorage.removeItem('exampli:currentTopicId');
+                            localStorage.removeItem('exampli:currentTopicTitle');
+                          }
+                        } catch {}
+                      } catch {}
+                    }
+                    // Локально отметим активный курс
+                    setActiveCode(s.code);
+                    writeActiveToStorage(s.code);
+                    storeSetActiveCourse({ code: s.code, title: s.title });
+                    // Запускаем управляемый boot, чтобы гарантированно получить темы/уроки нового курса
+                    try { window.dispatchEvent(new Event('exampli:startBoot')); } catch {}
+                  } finally {
+                    // Ничего не делаем — Splash сам закроется после boot
+                    try { (window as any).__exampliBootLocked = false; } catch {}
+                  }
+                })();
               }}
               className="relative flex flex-col items-center text-center px-1"
             >
@@ -150,7 +215,7 @@ export default function CoursesPanel(props: Props) {
                 <div
                   className={[
                     'grid place-items-center rounded-2xl border bg-transparent',
-                    active ? 'border-[2px] border-[#3c73ff]' : 'border-white/12',
+                    active ? 'border-[2px] border-[#3c73ff]' : 'border-transparent',
                   ].join(' ')}
                   style={{ width: 78, height: 56 }}
                 >

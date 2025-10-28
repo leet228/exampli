@@ -10,34 +10,6 @@ import 'highlight.js/styles/github-dark.css';
 applyTelegramTheme();
 setupViewportMode();
 
-// Глобально блокируем системный зум/лупу по двойному тапу и dblclick (iOS/Android WebView)
-try {
-  let lastTouch = 0;
-  document.addEventListener('touchend', (e) => {
-    const now = Date.now();
-    if (now - lastTouch < 350) {
-      e.preventDefault();
-    }
-    lastTouch = now;
-  }, { passive: false, capture: true });
-  document.addEventListener('dblclick', (e) => {
-    e.preventDefault();
-  }, { passive: false, capture: true });
-  // Блок «нажатие, затем второе нажатие с удержанием»: гасим второе удержание
-  let pressTimer: any = null;
-  document.addEventListener('touchstart', () => {
-    if (pressTimer) {
-      // второе нажатие — не даём удержанию запуститься
-      clearTimeout(pressTimer);
-      pressTimer = setTimeout(() => {}, 600); // перехватываем длительное удержание
-    } else {
-      pressTimer = setTimeout(() => {}, 600);
-    }
-  }, { passive: true, capture: true });
-  document.addEventListener('touchmove', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }, { passive: true, capture: true });
-  document.addEventListener('touchend', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }, { passive: true, capture: true });
-} catch {}
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppRouter />

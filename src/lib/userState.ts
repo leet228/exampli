@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { cacheGet, cacheSet, CACHE_KEYS } from './cache';
-import { precomputeAchievementPNGs, preuploadAchievementPNGs } from './achievements';
+import { precomputeAchievementPNGs } from './achievements';
 
 export type UserStats = {
   id: string;
@@ -303,7 +303,6 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
                 const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
                 const uFor = cacheGet<any>(CACHE_KEYS.user) || {};
                 setTimeout(() => { try { precomputeAchievementPNGs(uFor || {}, bot); } catch {} }, 0);
-                setTimeout(() => { try { preuploadAchievementPNGs(uFor || {}, bot); } catch {} }, 0);
               }
             } catch {}
             // сервер теперь сам пишет perfect_lessons/max_streak, клиент не дублирует

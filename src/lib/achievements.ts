@@ -99,18 +99,11 @@ async function renderStreak(user: UserForAch, botUsername: string): Promise<Blob
   const numX = width / 2; const numY = badgeY + badgeSize + 64;
   ctx.lineWidth = 24; ctx.strokeStyle = '#612300'; ctx.miterLimit = 2; ctx.strokeText(String(n), numX, numY);
   ctx.fillStyle = '#9d4106'; ctx.fillText(String(n), numX, numY);
-  const dateStr = formatDate(new Date());
-  ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-  const dateW = ctx.measureText(dateStr).width; const pillW = dateW + 56; const pillH = 38 + 28;
-  const pillX = (width - pillW) / 2; const pillY = badgeY + badgeSize + 140;
-  roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-  ctx.fillStyle = '#ffd08a'; ctx.fillText(dateStr, width / 2, pillY + pillH - 14 - 6);
-  const name = (user?.first_name ? String(user.first_name).trim() : '');
-  const title = `${name || 'Ты'} достиг стрика на ${n} ${pluralDays(n)}!`;
+  const title = `Ты достиг стрика на ${n} ${pluralDays(n)}!`;
   ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
   ctx.fillStyle = '#ffb74d';
   const lines = breakLine(ctx, title, width - 160);
-  let ty = (pillY + pillH + 140);
+  let ty = (badgeY + badgeSize + 220);
   for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
   if (botUsername) { ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`; ctx.fillStyle = '#ffd08a'; ctx.fillText(String(botUsername), width / 2, height - 40); }
   return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
@@ -128,18 +121,11 @@ async function renderPerfect(user: UserForAch, botUsername: string): Promise<Blo
   const numX = width / 2; const numY = badgeY + badgeSize + 64;
   ctx.lineWidth = 24; ctx.strokeStyle = '#066629'; ctx.strokeText(String(n), numX, numY);
   ctx.fillStyle = '#1fb75b'; ctx.fillText(String(n), numX, numY);
-  const dateStr = formatDate(new Date());
-  ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-  const dateW = ctx.measureText(dateStr).width; const pillW = dateW + 56; const pillH = 38 + 28;
-  const pillX = (width - pillW) / 2; const pillY = badgeY + badgeSize + 140;
-  roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-  ctx.fillStyle = '#b3f5c7'; ctx.fillText(dateStr, width / 2, pillY + pillH - 14 - 6);
-  const name = (user?.first_name ? String(user.first_name).trim() : '');
-  const title = `${name || 'Ты'} прошёл без ошибок ${n} ${pluralLessons(n)}!`;
+  const title = `Ты прошёл без ошибок ${n} ${pluralLessons(n)}!`;
   ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
   ctx.fillStyle = '#6cf087';
   const lines = breakLine(ctx, title, width - 160);
-  let ty = (pillY + pillH + 140);
+  let ty = (badgeY + badgeSize + 220);
   for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
   if (botUsername) { ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`; ctx.fillStyle = '#b3f5c7'; ctx.fillText(String(botUsername), width / 2, height - 40); }
   return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));
@@ -157,18 +143,11 @@ async function renderDuel(user: UserForAch, botUsername: string): Promise<Blob> 
   const numX = width / 2; const numY = badgeY + badgeSize + 64;
   ctx.lineWidth = 24; ctx.strokeStyle = '#ff9803'; ctx.strokeText(String(n), numX, numY);
   ctx.fillStyle = '#b35102'; ctx.fillText(String(n), numX, numY);
-  const dateStr = formatDate(new Date());
-  ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-  const dateW = ctx.measureText(dateStr).width; const pillW = dateW + 56; const pillH = 38 + 28;
-  const pillX = (width - pillW) / 2; const pillY = badgeY + badgeSize + 140;
-  roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-  ctx.fillStyle = '#ffd08a'; ctx.fillText(dateStr, width / 2, pillY + pillH - 14 - 6);
-  const name = (user?.first_name ? String(user.first_name).trim() : '');
-  const title = `${name || 'Ты'} одержал победу ${n} раз в дуэли`;
+  const title = `Ты одержал победу ${n} раз в дуэли`;
   ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
   ctx.fillStyle = '#ffc159';
   const lines = breakLine(ctx, title, width - 160);
-  let ty = (pillY + pillH + 140);
+  let ty = (badgeY + badgeSize + 220);
   for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
   if (botUsername) { ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`; ctx.fillStyle = '#ffd08a'; ctx.fillText(String(botUsername), width / 2, height - 40); }
   return await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/png'));

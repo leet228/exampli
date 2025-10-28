@@ -94,6 +94,7 @@ export default async function handler(req, res) {
     let profData = null;
     let friendsCnt = 0;
     let subjectAndLessons = { active_id: null, active_code: null, subject: null, lessons: [] };
+    let chosenSubjects = [];
     try {
       const rpc = await supabase.rpc('rpc_boot1', {
         p_user_id: userRow.id,
@@ -109,6 +110,28 @@ export default async function handler(req, res) {
         subject: pack.subject || null,
         lessons: pack.lessons || [],
       };
+      // Если активна подписка — читаем выбранные курсы (до 4); иначе игнорируем chosen_courses
+      const plusActive = (() => {
+        try { return Boolean(userRow?.plus_until && new Date(String(userRow.plus_until)).getTime() > Date.now()); } catch { return false; }
+      })();
+      if (plusActive) {
+        try {
+          const { data: chosen } = await supabase
+            .from('chosen_courses')
+            .select('subject_id')
+            .eq('user_id', userRow.id)
+            .limit(4);
+          const ids = Array.isArray(chosen) ? chosen.map(r => r.subject_id).filter(Boolean) : [];
+          if (ids.length) {
+            const { data: subs } = await supabase
+              .from('subjects')
+              .select('id,code,title,level')
+              .in('id', ids);
+            const byId = new Map((subs || []).map(s => [String(s.id), s]));
+            chosenSubjects = ids.map(id => byId.get(String(id))).filter(Boolean);
+          }
+        } catch {}
+      }
     } catch (e) {
       // Fallback: previous 3 queries if RPC is unavailable
       const arr = await Promise.all([
@@ -119,6 +142,28 @@ export default async function handler(req, res) {
       profData = arr[0]?.data || null;
       friendsCnt = Number(arr[1]?.data || 0);
       subjectAndLessons = arr[2] || { active_id: null, active_code: null, subject: null, lessons: [] };
+      // fallback: выбранные курсы из таблицы chosen_courses (если есть и если активен PLUS)
+      const plusActiveFallback = (() => {
+        try { return Boolean(userRow?.plus_until && new Date(String(userRow.plus_until)).getTime() > Date.now()); } catch { return false; }
+      })();
+      if (plusActiveFallback) {
+        try {
+          const { data: chosen } = await supabase
+            .from('chosen_courses')
+            .select('subject_id')
+            .eq('user_id', userRow.id)
+            .limit(4);
+          const ids = Array.isArray(chosen) ? chosen.map(r => r.subject_id).filter(Boolean) : [];
+          if (ids.length) {
+            const { data: subs } = await supabase
+              .from('subjects')
+              .select('id,code,title,level')
+              .in('id', ids);
+            const byId = new Map((subs || []).map(s => [String(s.id), s]));
+            chosenSubjects = ids.map(id => byId.get(String(id))).filter(Boolean);
+          }
+        } catch {}
+      }
     }
 
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
@@ -166,7 +211,7 @@ export default async function handler(req, res) {
       userProfile,
       friendsCount: friendsCnt ?? 0,
       avatar_url: userRow.avatar_url ?? null,
-      subjects: subjectAndLessons.subject ? [subjectAndLessons.subject] : [],
+      subjects: (chosenSubjects && chosenSubjects.length) ? chosenSubjects : (subjectAndLessons.subject ? [subjectAndLessons.subject] : []),
       lessons: subjectAndLessons.lessons || [],
       active_code: subjectAndLessons.active_code || null,
       active_id: subjectAndLessons.active_id || null,

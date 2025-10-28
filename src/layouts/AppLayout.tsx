@@ -38,18 +38,13 @@ export default function AppLayout() {
 
   // HUD всегда смонтирован, но скрывается вне «Дороги»
   const showHUD = true;
-  // нижняя навигация на этих маршрутах (Battle снова включён)
+  // нижняя навигация на этих маршрутах
   const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
   const isAI = pathname === '/ai';
-  const isBattle = pathname === '/battle';
-  const isProfile = pathname === '/profile';
-  const isHome = pathname === '/';
-  const isSubs = pathname === '/subscription';
 
   const [bootReady, setBootReady] = useState(false); // данные загружены и кэшированы
   const [uiWarmed, setUiWarmed] = useState(false);   // профиль смонтирован
   const [bootData, setBootData] = useState<BootData | null>(null);
-  const [splashDone, setSplashDone] = useState(false); // сплэш скрыт
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
@@ -61,7 +56,7 @@ export default function AppLayout() {
   const addCourseRootRef = useRef<HTMLDivElement | null>(null);
   const [prewarmACDone, setPrewarmACDone] = useState(false);
   const [prewarmFriendsDone, setPrewarmFriendsDone] = useState(false);
-  const appReady = bootReady && uiWarmed;
+  const bootDone = bootReady && uiWarmed;
 
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
@@ -83,7 +78,7 @@ export default function AppLayout() {
     const ready = (e: Event) => {
       const ce = e as CustomEvent<BootData>;
       setBootData(ce.detail);
-      // не меняем splashDone здесь; bootReady управляется через onReady Splash
+      setBootReady(true);
       // Проверяем телефон из users, а если пуст — берём из userProfile (чтобы не зависеть от рассинхрона)
       const userHasPhone = Boolean((ce.detail?.user as any)?.phone_number || ce.detail?.userProfile?.phone_number);
       const userHasCourse = !!(ce.detail?.user as any)?.added_course;
@@ -99,14 +94,14 @@ export default function AppLayout() {
       }
     };
     window.addEventListener('exampli:bootData', ready as EventListener);
-    const reboot = () => { setBootReady(false); setUiWarmed(false); setSplashDone(false); };
+    const reboot = () => { setBootReady(false); setUiWarmed(false); };
     window.addEventListener('exampli:reboot', reboot as EventListener);
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
 
   // После ухода сплэша подсказать оверлеям пересчитать позицию
   useEffect(() => {
-    if (splashDone) {
+    if (bootDone) {
       window.dispatchEvent(new Event('exampli:overlayToggled'));
       // Фоновый прогрев для мгновенных панелей: если есть список всех предметов — прогреем ещё 1-2 помимо активного
       try {
@@ -120,7 +115,7 @@ export default function AppLayout() {
         });
       } catch {}
     }
-  }, [splashDone]);
+  }, [bootDone]);
 
   // как только данные готовы и профиль будет смонтирован, подтверждаем прогрев UI
   useEffect(() => {
@@ -144,16 +139,6 @@ export default function AppLayout() {
       const el = ref.current;
       const hidden = pathname !== path;
       try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
-      // Сбрасываем скролл при смене страницы, чтобы каждая страница начинала с верха
-      if (el && !hidden) {
-        try {
-          // Находим первый скроллируемый контейнер внутри страницы
-          const scrollable = el.querySelector('.main-scroll') as HTMLElement || el;
-          if (scrollable && 'scrollTop' in scrollable) {
-            scrollable.scrollTop = 0;
-          }
-        } catch {}
-      }
     });
   }, [pathname]);
 
@@ -186,29 +171,26 @@ export default function AppLayout() {
   }, [bootReady, prewarmFriendsDone]);
 
   return (
-    <div className={`h-full overflow-hidden`}>
+    <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
       {/* Сплэш поверх всего до загрузки */}
-      {!splashDone && (
+      {!bootDone && (
         <Splash
           onReady={(data) => {
             setBootData(data);
             setBootReady(true);
           }}
-          onFinish={() => {
-            setSplashDone(true);
-          }}
         />
       )}
 
       {/* Прогрев TopicsPanel после готовности данных, но до скрытия сплэша */}
-      {bootReady && !splashDone && (
+      {bootReady && !bootDone && (
         <div className="prewarm-mount" aria-hidden="true">
           <TopicsPanel open onClose={() => {}} />
         </div>
       )}
 
       {/* Прогрев BottomNav (невидимый), HUD монтируется постоянно ниже */}
-      {bootReady && !splashDone && (
+      {bootReady && !bootDone && (
         <div className="prewarm-mount" aria-hidden="true">
           <BottomNav />
         </div>
@@ -241,61 +223,31 @@ export default function AppLayout() {
         <HUD />
       </div>
 
-      <div id="app-container" className={((isAI || isProfile || isBattle || isHome) ? 'w-full' : 'max-w-xl mx-auto p-5') + ' h-full overflow-hidden'}>
+      <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
         {bootReady && (
           <>
             {/* Home */}
-            <div
-              key="home"
-              ref={homeRef}
-              className={'main-scroll safe-top safe-bottom ' + (pathname === '/' ? '' : 'prewarm-mount')}
-              style={{ paddingTop: 'calc(var(--hud-top) + var(--hud-h) + 20px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
-              aria-hidden={pathname === '/' ? undefined : true}
-            >
+            <div ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
               <Home />
             </div>
             {/* AI */}
-            <div
-              key="ai"
-              ref={aiRef}
-              className={'main-scroll safe-top safe-bottom ' + (pathname === '/ai' ? '' : 'prewarm-mount')}
-              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
-              aria-hidden={pathname === '/ai' ? undefined : true}
-            >
+            <div ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
               <AI />
             </div>
             {/* Battle */}
-            <div key="battle" ref={battleRef} className={(pathname === '/battle' ? 'h-full overflow-hidden' : 'prewarm-mount')} aria-hidden={pathname === '/battle' ? undefined : true}>
+            <div ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
               <Battle />
             </div>
             {/* Quests */}
-            <div
-              key="quests"
-              ref={questsRef}
-              className={'main-scroll safe-top safe-bottom ' + (pathname === '/quests' ? '' : 'prewarm-mount')}
-              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
-              aria-hidden={pathname === '/quests' ? undefined : true}
-            >
+            <div ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
               <Quests />
             </div>
             {/* Subscription */}
-            <div
-              key="subscription"
-              ref={subsRef}
-              className={'main-scroll safe-bottom px-0 ' + (pathname === '/subscription' ? '' : 'prewarm-mount')}
-              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 160px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
-              aria-hidden={pathname === '/subscription' ? undefined : true}
-            >
+            <div ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
               <Subscription />
             </div>
             {/* Profile */}
-            <div
-              key="profile"
-              ref={profileRef}
-              className={'main-scroll safe-bottom ' + (pathname === '/profile' ? '' : 'prewarm-mount')}
-              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 160px)', paddingBottom: 'max(env(safe-area-inset-bottom), 120px)' }}
-              aria-hidden={pathname === '/profile' ? undefined : true}
-            >
+            <div ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
               <Profile />
             </div>
           </>
@@ -303,14 +255,12 @@ export default function AppLayout() {
 
         {/* Другие неизвестные маршруты — через Outlet, чтобы не дублировать наши страницы */}
         {!['/', '/ai', '/battle', '/quests', '/subscription', '/profile'].includes(pathname) && (
-          <div className="main-scroll safe-top safe-bottom">
-            <Outlet context={{ bootData }} />
-          </div>
+          <Outlet context={{ bootData }} />
         )}
       </div>
 
       {/* Onboarding поверх после boot */}
-      {splashDone && (
+      {bootDone && (
         <Onboarding
           open={showOnboarding}
           onDone={() => {
@@ -335,7 +285,7 @@ export default function AppLayout() {
       />
 
       {/* Нижняя навигация (после загрузки, чтобы не мигала под сплэшем) */}
-      {showBottom && splashDone && <BottomNav />}
+      {showBottom && bootDone && <BottomNav />}
 
       {/* Vercel Speed Insights */}
       <SpeedInsights />

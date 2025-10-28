@@ -103,10 +103,17 @@ export default function AddCourseSheet({
     if (tgId) {
       const { data: user } = await supabase
         .from('users')
-        .select('id')
+        .select('id, plus_until')
         .eq('tg_id', String(tgId))
         .single();
       if (user?.id) {
+        // Управление списком выбранных курсов: если есть PLUS — добавляем через RPC; без подписки не трогаем chosen
+        try {
+          const plusActive = Boolean(user?.plus_until && new Date(String(user.plus_until)).getTime() > Date.now());
+          if (plusActive) {
+            await supabase.rpc('rpc_chosen_add', { p_user_id: user.id, p_subject_id: picked.id });
+          }
+        } catch {}
         // first topic of this subject
         const { data: topics } = await supabase
           .from('topics')
@@ -156,7 +163,20 @@ export default function AddCourseSheet({
       const hasInAll = Array.isArray(listAll) && listAll.some((s) => s.id === picked.id);
       (window as any).__exampliBoot = {
         ...boot,
-        subjects: [picked],
+        subjects: (() => {
+          try {
+            const current: any[] = Array.isArray(boot?.subjects) ? [...boot.subjects] : [];
+            const idx = current.findIndex((s: any) => String(s.id) === String(picked.id));
+            if (idx >= 0) {
+              const ex = current.splice(idx, 1)[0];
+              current.push(ex);
+            } else {
+              current.push(picked);
+              if (current.length > 4) current.splice(0, current.length - 4);
+            }
+            return current;
+          } catch { return [picked]; }
+        })(),
         subjectsAll: hasInAll ? listAll : [...(listAll || []), picked],
       };
     } catch {}
@@ -276,8 +296,8 @@ export default function AddCourseSheet({
               hapticSelect();
               // показываем сплэш на «отпускание» и блокируем автобут
             try { (window as any).__exampliLoadingSubject = { code: String(picked.code || '').replace(/^(oge_|ege_)/,'').toLowerCase(), title: picked.title }; } catch {}
-              try { (window as any).__exampliBootLocked = true; } catch {}
-              try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
+            try { (window as any).__exampliBootLocked = true; } catch {}
+            try { window.dispatchEvent(new Event('exampli:reboot')); } catch {}
               // параллельно: кэш тем/иконок и запись нового курса в БД/лок кэши
               try {
                 await Promise.all([
@@ -285,8 +305,8 @@ export default function AddCourseSheet({
                   save(),
                 ]);
               } finally {
-                // закрыть сплэш без boot
-                try { (window as any).__exampliBootLocked = false; window.dispatchEvent(new Event('exampli:finishSplash')); } catch {}
+                // запускаем управляемый boot — Splash закроется сам
+                try { window.dispatchEvent(new Event('exampli:startBoot')); } catch {}
               }
             }}
             className="w-full rounded-2xl py-4 font-semibold text-white"

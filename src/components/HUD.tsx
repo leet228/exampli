@@ -332,6 +332,13 @@ export default function HUD() {
     window.dispatchEvent(new Event('exampli:overlayToggled'));
   }, [addOpen, open]);
 
+  // Закрыть CourseSheet по внутреннему событию (клик по уже активному курсу)
+  useEffect(() => {
+    const close = () => setOpen((prev) => (prev === 'course' ? null : prev));
+    window.addEventListener('exampli:closeCourseSheet', close);
+    return () => window.removeEventListener('exampli:closeCourseSheet', close);
+  }, []);
+
   // Слушаем глобальное событие, чтобы открыть AddCourseSheet после онбординга
   useEffect(() => {
     const handler = () => {

@@ -282,7 +282,7 @@ export default function Home() {
 
   // ======== рендер =========
   return (
-    <div ref={scrollRef} className="overflow-x-hidden" style={{ overflowX: 'hidden' }}>
+    <div ref={scrollRef} className="main-scroll overflow-x-hidden" style={{ overflowX: 'hidden' }}>
       {/* плавающая кнопка «Темы» и левая панель */}
       <TopicsButton onOpen={() => setOpenTopics(true)} />
 

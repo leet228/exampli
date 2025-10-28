@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 import { ensureUser } from './userState';
 import { cacheSet, cacheGet, CACHE_KEYS } from './cache';
-import { precomputeAchievementPNGs, preuploadAchievementPNGs } from './achievements';
+import { precomputeAchievementPNGs } from './achievements';
 
 export type SubjectRow = {
   id: number;
@@ -65,12 +65,6 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     if (url) {
       const l = document.createElement('link'); l.rel = 'preconnect'; l.href = url; l.crossOrigin = 'anonymous';
       document.head.appendChild(l);
-    }
-  } catch {}
-  // На мобильных Telegram WebView иногда initData заполняется с задержкой → дождёмся цикла
-  try {
-    if (!(window as any)?.Telegram?.WebApp?.initDataUnsafe?.user) {
-      await new Promise((r) => setTimeout(r, 50));
     }
   } catch {}
   const tg = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user || null;
@@ -514,37 +508,24 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     const uid = (step1?.user?.id as any) || '';
     if (uid) {
       (async () => {
-        const doFetch = async (): Promise<any | null> => {
-          try {
-            const r = await fetch('/api/daily_quests_today', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: uid }),
-              cache: 'no-store',
-              keepalive: true,
-              credentials: 'same-origin',
-            } as RequestInit);
-            if (!r.ok) return null;
-            return await r.json();
-          } catch { return null; }
-        };
-        let js: any | null = null;
-        for (let attempt = 0; attempt < 2 && !js; attempt++) {
-          js = await doFetch();
-          if (!js && attempt === 0) await new Promise((r) => setTimeout(r, 250));
-        }
-        if (js) {
-          try {
-            cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] });
-            try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: [] } } as any)); } catch {}
-          } catch {}
-          try {
-            const progRec = {} as Record<string, any>;
-            (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });
-            cacheSet(CACHE_KEYS.dailyQuestsProgress, progRec);
-            try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: Object.values(progRec) } } as any)); } catch {}
-          } catch {}
-        }
+        try {
+          const r = await fetch('/api/daily_quests_today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
+          if (r.ok) {
+            const js = await r.json();
+            try {
+              cacheSet(CACHE_KEYS.dailyQuests, { day: js?.day, quests: js?.quests || [] });
+              // уведомим UI, что сами метаданные квестов обновились (даже без прогресса)
+              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: [] } } as any)); } catch {}
+            } catch {}
+            try {
+              const progRec = {} as Record<string, any>;
+              (Array.isArray(js?.progress) ? js.progress : []).forEach((p: any) => { progRec[String(p.code)] = p; });
+              cacheSet(CACHE_KEYS.dailyQuestsProgress, progRec);
+              // уведомим UI об обновлении прогресса из boot2
+              try { window.dispatchEvent(new CustomEvent('exampli:dailyQuestsProgress', { detail: { updated: Object.values(progRec) } } as any)); } catch {}
+            } catch {}
+          }
+        } catch {}
       })();
     }
   } catch {}
@@ -595,67 +576,13 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
 // ШАГ 2 — один запрос к нашему агрегирующему API /api/boot2 (фон, после возврата boot)
 export async function bootPreloadBackground(userId: string, activeId: number | null) {
   try {
-    // Глобальный предохранитель от повторного конкурентного запуска на мобильных
-    try {
-      const st = ((window as any).__exampliBoot2State ||= { running: false, done: false, tries: 0 });
-      if (st.running || st.done) return;
-      st.running = true;
-    } catch {}
-
-    const fetchOnce = async (): Promise<Response | null> => {
-      const r = await fetch('/api/boot2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, active_id: activeId }),
-        cache: 'no-store',
-        // На мобильных WebView запрос мог отменяться — keepalive повышает надёжность
-        keepalive: true,
-        credentials: 'same-origin',
-      } as RequestInit);
-      if (!r.ok) return null;
-      return r;
-    };
-
-    // Простая стратегия повторов: 1 немедленно + до 2 повторов с небольшим бэкоффом
-    let resp: Response | null = null;
-    for (let attempt = 0; attempt < 3 && !resp; attempt++) {
-      try {
-        resp = await fetchOnce();
-      } catch { resp = null; }
-      if (!resp) {
-        try { ((window as any).__exampliBoot2State.tries as number)++; } catch {}
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 200 + attempt * 400));
-      }
-    }
-    if (!resp) {
-      try { (window as any).__exampliBoot2State.running = false; } catch {}
-      // Отложенный повтор: дадим сети стабилизироваться (мобильные кейсы)
-      setTimeout(() => { try { (window as any).__exampliBoot2State && ((window as any).__exampliBoot2State.running = false); } catch {}; try { bootPreloadBackground(userId, activeId); } catch {} }, 1500);
-      return;
-    }
-    // Переносим тяжёлую работу (parse+обработку) в Web Worker
-    let parsed: any = null;
-    try {
-      const text = await resp.text();
-      // @ts-ignore — динамический импорт воркера
-      const worker = new Worker(new URL('./boot2.worker.ts', import.meta.url), { type: 'module' });
-      parsed = await new Promise((resolve, reject) => {
-        const onMsg = (e: MessageEvent) => { cleanup(); resolve(e.data); };
-        const onErr = (e: ErrorEvent) => { cleanup(); reject(e); };
-        const cleanup = () => { try { worker.removeEventListener('message', onMsg as any); worker.removeEventListener('error', onErr as any); worker.terminate(); } catch {} };
-        worker.addEventListener('message', onMsg as any);
-        worker.addEventListener('error', onErr as any);
-        worker.postMessage(text);
-      });
-    } catch {}
-
-    const data = parsed && !parsed.error ? parsed : null;
-    if (!data) {
-      try { (window as any).__exampliBoot2State.running = false; } catch {}
-      return;
-    }
-
-    // Быстрые негрузящие операции: кэш и одно событие
+    const r2 = await fetch('/api/boot2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, active_id: activeId })
+    });
+    if (!r2.ok) return;
+    const data = await r2.json();
     try { cacheSet(CACHE_KEYS.friendsList, data.friends || []); try { window.dispatchEvent(new CustomEvent('exampli:friendsUpdated')); } catch {} } catch {}
     try { cacheSet(CACHE_KEYS.friendsCount, Array.isArray(data.friends) ? data.friends.length : 0); } catch {}
     try { cacheSet(CACHE_KEYS.invitesIncomingList, data.invites || []); cacheSet(CACHE_KEYS.invitesIncomingCount, (data.invites || []).length); } catch {}
@@ -666,90 +593,69 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
       cacheSet(CACHE_KEYS.streakDaysAll, allDays);
       // Обновим last_streak_day и уведомим UI
       try {
-        const last = data?.meta?.lastStreakDay as string | null | undefined;
-        if (last) {
-          cacheSet(CACHE_KEYS.lastStreakDay, last);
-          try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { last_streak_day: last } } as any)); } catch {}
+        // today/yesterday строго по МСК
+        const tz = 'Europe/Moscow';
+        const now = new Date();
+        const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const parts = fmt.formatToParts(now);
+        const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
+        const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
+        const d = Number(parts.find(p => p.type === 'day')?.value || NaN);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const todayIso = `${y}-${pad(m)}-${pad(d)}`;
+        const yesterday = new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000);
+        const yParts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(yesterday);
+        const yy = Number(yParts.find(p => p.type === 'year')?.value || NaN);
+        const ym = Number(yParts.find(p => p.type === 'month')?.value || NaN);
+        const yd = Number(yParts.find(p => p.type === 'day')?.value || NaN);
+        const yesterdayIso = `${yy}-${pad(ym)}-${pad(yd)}`;
+
+        // last_streak_day — последний день <= сегодня
+        let lastDay: string | null = null;
+        for (const r of allDays) {
+          const di = String((r as any)?.day || '');
+          if (!di || di > todayIso) continue;
+          if (!lastDay || di > lastDay) lastDay = di;
         }
-        const yFrozen = Boolean(data?.meta?.yesterdayFrozen);
+        if (lastDay) {
+          cacheSet(CACHE_KEYS.lastStreakDay, lastDay);
+          try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { last_streak_day: lastDay } } as any)); } catch {}
+        }
+        // Сообщим о статусе «вчера: freeze?» чтобы HUD/шторка могли обновить иконку без доп. запросов
+        const yRec = (allDays || []).find((r: any) => String(r?.day || '') === yesterdayIso);
+        const yFrozen = String(yRec?.kind || '') === 'freeze';
         try { window.dispatchEvent(new CustomEvent('exampli:streakDaysLoaded', { detail: { yesterday_frozen: yFrozen } } as any)); } catch {}
       } catch {}
     } catch {}
     try {
       const topicsBySubject = data.topicsBySubject || {};
-      const entries = Object.entries(topicsBySubject);
-      const chunk = 50;
-      let idx = 0;
-      const step = () => {
-        const end = Math.min(entries.length, idx + chunk);
-        for (let i = idx; i < end; i++) {
-          const [sid, arr] = entries[i] as [string, any[]];
-          try { cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any); } catch {}
-        }
-        idx = end;
-        if (idx < entries.length) {
-          try { (window as any).requestIdleCallback ? (window as any).requestIdleCallback(step, { timeout: 500 }) : setTimeout(step, 0); } catch { setTimeout(step, 0); }
-        }
-      };
-      // начать после кадра
-      requestAnimationFrame(() => step());
+      Object.entries(topicsBySubject).forEach(([sid, arr]) => cacheSet(CACHE_KEYS.topicsBySubject(sid), arr as any));
     } catch {}
     // Новое: предзагрузим уроки для тем активного курса, если сервер их вернул
     try {
       const lessonsByTopic = data.lessonsByTopic || {};
-      const entriesL = Object.entries(lessonsByTopic);
-      const chunkL = 30;
-      let iL = 0;
-      const writeLessons = () => {
-        const end = Math.min(entriesL.length, iL + chunkL);
-        for (let i = iL; i < end; i++) {
-          const [tid, arr] = entriesL[i] as [string, any[]];
-          try { cacheSet(CACHE_KEYS.lessonsByTopic(tid), (arr as any[]) || []); } catch {}
-        }
-        iL = end;
-        if (iL < entriesL.length) {
-          try { (window as any).requestIdleCallback ? (window as any).requestIdleCallback(writeLessons, { timeout: 500 }) : setTimeout(writeLessons, 0); } catch { setTimeout(writeLessons, 0); }
-        }
-      };
-      requestAnimationFrame(() => writeLessons());
-
-      // Альтернатива: если пришли только counts — тоже порциями
+      Object.entries(lessonsByTopic).forEach(([tid, arr]) => {
+        cacheSet(CACHE_KEYS.lessonsByTopic(tid), (arr as any[]) || []);
+      });
+      // Альтернатива: если пришли только counts
       const lessonCounts = data.lessonCountsByTopic || {};
-      const entriesC = Object.entries(lessonCounts);
-      let iC = 0;
-      const writeCounts = () => {
-        const end = Math.min(entriesC.length, iC + chunkL);
-        for (let i = iC; i < end; i++) {
-          const [tid, count] = entriesC[i] as [string, any];
-          try {
-            const key = CACHE_KEYS.lessonsByTopic(tid);
-            const existing = cacheGet<any[]>(key);
-            if (!existing || !Array.isArray(existing) || existing.length !== Number(count)) {
-              const fake = Array.from({ length: Number(count || 0) }).map((_, j) => ({ id: `fake-${tid}-${j+1}`, topic_id: tid, order_index: j+1 }));
-              cacheSet(key, fake as any);
-            }
-          } catch {}
-        }
-        iC = end;
-        if (iC < entriesC.length) {
-          try { (window as any).requestIdleCallback ? (window as any).requestIdleCallback(writeCounts, { timeout: 500 }) : setTimeout(writeCounts, 0); } catch { setTimeout(writeCounts, 0); }
-        }
-      };
-      requestAnimationFrame(() => writeCounts());
-    } catch {}
-    // Пререндер PNG ачивок — после кадра/idle, чтобы не блокировать Splash
-    try {
-      const defer = () => {
+      Object.entries(lessonCounts).forEach(([tid, count]) => {
         try {
-          const u: any = (window as any)?.__exampliBoot?.user || (cacheGet<any>(CACHE_KEYS.user) || {});
-          const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
-          precomputeAchievementPNGs(u || {}, bot).then(() => preuploadAchievementPNGs(u || {}, bot));
+          const key = CACHE_KEYS.lessonsByTopic(tid);
+          const existing = cacheGet<any[]>(key);
+          if (!existing || !Array.isArray(existing) || existing.length !== Number(count)) {
+            const fake = Array.from({ length: Number(count || 0) }).map((_, i) => ({ id: `fake-${tid}-${i+1}`, topic_id: tid, order_index: i+1 }));
+            cacheSet(key, fake as any);
+          }
         } catch {}
-      };
-      // сначала отдаём управление кадру, затем — в idle
-      requestAnimationFrame(() => { try { (window as any).requestIdleCallback ? (window as any).requestIdleCallback(defer, { timeout: 800 }) : setTimeout(defer, 0); } catch { setTimeout(defer, 0); } });
+      });
     } catch {}
-    try { (window as any).__exampliBoot2State = { running: false, done: true, tries: ((window as any).__exampliBoot2State?.tries || 0) }; } catch {}
+    // Пререндер PNG ачивок в фоне (без загрузки в CDN)
+    try {
+      const u: any = (window as any)?.__exampliBoot?.user || (cacheGet<any>(CACHE_KEYS.user) || {});
+      const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
+      await precomputeAchievementPNGs(u || {}, bot);
+    } catch {}
   } catch {}
 }
 

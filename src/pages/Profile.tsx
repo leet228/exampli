@@ -492,9 +492,6 @@ export default function Profile() {
   async function shareStreak() {
     try {
       const n = Math.max(0, Number(u?.max_streak ?? u?.streak ?? 0));
-      const pre = getPrecomputedAchievement('streak');
-      if (pre && pre.value === n) { await shareAchievementBlob(pre.blob, 'streak.png', 'Моё достижение'); return; }
-      if (streakBlobRef.current && streakBlobRef.current.value === n) { await shareAchievementBlob(streakBlobRef.current.blob, 'streak.png', 'Моё достижение'); return; }
       const blob = await renderStreakAchievmentImage();
       streakBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'streak.png', 'Моё достижение');
@@ -504,9 +501,6 @@ export default function Profile() {
   async function sharePerfect() {
     try {
       const n = Math.max(0, Number(u?.perfect_lessons ?? 0));
-      const pre = getPrecomputedAchievement('perfect');
-      if (pre && pre.value === n) { await shareAchievementBlob(pre.blob, 'perfect.png', 'Моё достижение'); return; }
-      if (perfectBlobRef.current && perfectBlobRef.current.value === n) { await shareAchievementBlob(perfectBlobRef.current.blob, 'perfect.png', 'Моё достижение'); return; }
       const blob = await renderPerfectAchievementImage();
       perfectBlobRef.current = { value: n, blob };
       await shareAchievementBlob(blob, 'perfect.png', 'Моё достижение');
@@ -520,10 +514,10 @@ export default function Profile() {
     } catch {}
   }
 
-  // Унифицированная отправка изображения достижения: Telegram share link → Web Share → Download
+  // Унифицированная отправка изображения достижения: мгновенно через Web Share (файл);
+  // при недоступности — пробуем Telegram share ссылкой только если есть кэшированный public URL.
   async function shareAchievementBlob(blob: Blob, filename: string, text: string) {
     const tg = (window as any)?.Telegram?.WebApp;
-    const isIOS = (() => { try { return /iPad|iPhone|iPod/i.test(navigator.userAgent) || String((tg as any)?.platform || '').toLowerCase() === 'ios'; } catch { return false; } })();
     const isAbort = (e: any) => {
       try {
         const name = String(e?.name || '');
@@ -531,9 +525,16 @@ export default function Profile() {
         return /Abort/i.test(name) || /abort|cancel/i.test(msg);
       } catch { return false; }
     };
-    // 1) Загружаем PNG и открываем окно «Поделиться» в Telegram (как в AddFriendsPanel)
+    // 1) Мгновенный Web Share с файлом (без загрузки/скачивания)
     try {
-      // Если уже есть заранее загруженный public URL (из boot2), используем его
+      const file = new File([blob], filename, { type: 'image/png' });
+      const nav: any = navigator as any;
+      if (nav?.share && nav?.canShare?.({ files: [file] })) { await nav.share({ files: [file], title: text }); return; }
+    } catch (e) {
+      if (isAbort(e)) return; // отмена — не открываем ничего
+    }
+    // 2) Если есть кэшированный public URL (из прошлого), поделимся ссылкой через Telegram
+    try {
       const cachedUrl = (() => {
         try {
           const kind = filename.includes('streak') ? 'streak' : (filename.includes('perfect') ? 'perfect' : (filename.includes('duel') ? 'duel' : ''));
@@ -543,56 +544,14 @@ export default function Profile() {
           return entry?.url || null;
         } catch { return null; }
       })();
-      const publicUrl = cachedUrl || await uploadAchievementBlob(blob, filename);
-      if (publicUrl) {
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent(text || '')}`;
+      if (cachedUrl) {
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(cachedUrl)}&text=${encodeURIComponent(text || '')}`;
         try { if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; } } catch {}
-        try {
-          if ((navigator as any)?.share) { await (navigator as any).share({ title: text, text, url: publicUrl }); return; }
-        } catch (e) {
-          if (isAbort(e)) return; // пользователь отменил — ничего не открываем
-        }
         try { window.open(shareUrl, '_blank'); return; } catch {}
       }
     } catch {}
-    // 2) Fallback: если не смогли загрузить — попробуем Web Share с файлом, затем скачивание
-    try {
-      const file = new File([blob], filename, { type: 'image/png' });
-      const nav: any = navigator as any;
-      if (nav?.share && nav?.canShare?.({ files: [file] })) { await nav.share({ files: [file], title: text }); return; }
-    } catch (e) {
-      if (isAbort(e)) return; // отмена — не открываем ничего
-    }
-    try {
-      // На iOS избегаем открытия PNG-viewer: не делаем download-фолбэк
-      if (isIOS) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 3000);
-    } catch {}
   }
 
-  async function uploadAchievementBlob(blob: Blob, filename: string): Promise<string | null> {
-    try {
-      const bucket = (import.meta as any)?.env?.VITE_SUPABASE_BUCKET || 'ai-uploads';
-      const u = (cacheGet as any)(CACHE_KEYS.user) || (window as any)?.__exampliBoot?.user || {};
-      const uid = u?.id ? String(u.id) : 'anon';
-      const path = `achievements/${uid}/${Date.now()}_${Math.random().toString(36).slice(2)}_${filename}`;
-      const { error: upErr } = await supabase.storage.from(bucket).upload(path, blob, {
-        cacheControl: '3600',
-        contentType: 'image/png',
-        upsert: false,
-      });
-      if (upErr) return null;
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return data?.publicUrl || null;
-    } catch { return null; }
-  }
 
   // Render the opened streak achievement card to PNG blob (no external libs)
   async function renderStreakAchievmentImage(): Promise<Blob> {
@@ -636,34 +595,18 @@ export default function Profile() {
     ctx.fillStyle = '#9d4106';
     ctx.fillText(String(n), numX, numY);
 
-    // date pill
-    const dateStr = formatDate(getCreatedAt() || new Date());
-    const pillPadX = 28;
-    const pillPadY = 14;
-    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-    const dateW = ctx.measureText(dateStr).width;
-    const pillW = dateW + pillPadX * 2;
-    const pillH = 38 + pillPadY * 2;
-    const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
-    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-    ctx.fillStyle = '#ffd08a';
-    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
-
-    // title text multiline (с именем вместо «Ты», если есть)
-    const name = (u?.first_name ? String(u.first_name).trim() : '');
-    const title = `${name || 'Ты'} достиг стрика на ${n} ${pluralDays(n)}!`;
+    // title text multiline (overlay style, no date/name)
+    const title = `Ты достиг стрика на ${n} ${pluralDays(n)}!`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffb74d';
     const lines = breakLine(ctx, title, width - 160);
-    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    const textStart = (badgeY + badgeSize + 220);
     let ty = textStart;
     for (const line of lines) {
       ctx.fillText(line, width / 2, ty);
       ty += 76;
     }
-
-    // bot username at bottom for streak
+    // bot username at bottom
     if (botUsername) {
       ctx.font = `700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
       ctx.fillStyle = '#ffd08a';
@@ -783,27 +726,12 @@ export default function Profile() {
     ctx.fillStyle = '#1fb75b';
     ctx.fillText(String(n), numX, numY);
 
-    // date pill (first visit)
-    const dateStr = formatDate(getCreatedAt() || new Date());
-    const pillPadX = 28;
-    const pillPadY = 14;
-    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-    const dateW = ctx.measureText(dateStr).width;
-    const pillW = dateW + pillPadX * 2;
-    const pillH = 38 + pillPadY * 2;
-    const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
-    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-    ctx.fillStyle = '#b3f5c7';
-    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
-
-    // title (с именем вместо «Ты», если есть)
-    const name = (u?.first_name ? String(u.first_name).trim() : '');
-    const title = `${name || 'Ты'} прошёл без ошибок ${n} ${pluralLessons(n)}!`;
+    // title (overlay style, no date/name)
+    const title = `Ты прошёл без ошибок ${n} ${pluralLessons(n)}!`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#6cf087';
     const lines = breakLine(ctx, title, width - 160);
-    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    const textStart = (badgeY + badgeSize + 220);
     let ty = textStart;
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
     if (botUsername) {
@@ -860,24 +788,11 @@ export default function Profile() {
     ctx.fillStyle = '#b35102';
     ctx.fillText(String(n), numX, numY);
 
-    const dateStr = formatDate(getCreatedAt() || new Date());
-    const pillPadX = 28, pillPadY = 14;
-    ctx.font = `600 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
-    const dateW = ctx.measureText(dateStr).width;
-    const pillW = dateW + pillPadX * 2;
-    const pillH = 38 + pillPadY * 2;
-    const pillX = (width - pillW) / 2;
-    const pillY = badgeY + badgeSize + 140; // опускаем только дату ещё ниже
-    roundRect(ctx, pillX, pillY, pillW, pillH, 18, 'rgba(255,255,255,0.08)');
-    ctx.fillStyle = '#ffd08a';
-    ctx.fillText(dateStr, width / 2, pillY + pillH - pillPadY - 6);
-
-    const name = (u?.first_name ? String(u.first_name).trim() : '');
-    const title = `${name || 'Ты'} одержал победу ${n} ${pluralTimes(n)} в дуэли`;
+    const title = `Ты одержал победу ${n} ${pluralTimes(n)} в дуэли`;
     ctx.font = `800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
     ctx.fillStyle = '#ffc159';
     const lines = breakLine(ctx, title, width - 160);
-    const textStart = (badgeY + badgeSize + 96) + pillH + 140; // фиксируем прежний уровень текста
+    const textStart = (badgeY + badgeSize + 220);
     let ty = textStart;
     for (const line of lines) { ctx.fillText(line, width / 2, ty); ty += 76; }
     if (botUsername) {
