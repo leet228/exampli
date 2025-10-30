@@ -51,6 +51,8 @@ export default async function handler(req, res) {
       return;
     }
 
+    
+
     const human = type === 'plan' ? `${product.months} мес.` : `${product.coins} монет`;
     const description = type === 'plan'
       ? `${product.title} — ${human}`

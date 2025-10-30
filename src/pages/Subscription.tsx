@@ -3,10 +3,12 @@ import { motion, useAnimation, useMotionValue } from 'framer-motion';
 import { hapticSelect, hapticTiny } from '../lib/haptics';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 type Plan = { id: string; months: number; price: number; title: string };
 
 export default function Subscription() {
+  const navigate = useNavigate();
   // Общие утилиты для кнопок с «нижней полоской»
   const accentColor = '#3c73ff';
   const shadowHeight = 6;
@@ -273,6 +275,9 @@ export default function Subscription() {
                 try { await refreshPlusUntilFromServer(); } catch {}
               })();
               try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата успешно завершена' } } as any)); } catch {}
+              if (kind === 'plan') {
+                try { navigate('/subscription-opening'); } catch {}
+              }
             } else if (status === 'cancelled') {
               try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'warn', text: 'Оплата отменена' } } as any)); } catch {}
             }
