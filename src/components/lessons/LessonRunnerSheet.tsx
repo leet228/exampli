@@ -48,7 +48,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
   const [rewardBonus, setRewardBonus] = useState<0 | 2 | 5>(0);
-  const [isPlus, setIsPlus] = useState<boolean>(() => { try { return Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus)); } catch { return false; } });
+  const [isPlus, setIsPlus] = useState<boolean>(() => {
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
+    } catch { return false; }
+  });
   const rewardKeyRef = useRef<number>(0);
   const solvedRef = useRef<Set<string | number>>(new Set());
   const [viewKey, setViewKey] = useState<number>(0);
@@ -126,18 +131,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     })();
   }, [open, lessonId]);
 
-  // Следим за признаком подписки
+  // Следим за признаком подписки: только по plus_until (никаких boolean-кэшей)
   useEffect(() => {
-    try { setIsPlus(Boolean(cacheGet<boolean>(CACHE_KEYS.isPlus))); } catch {}
+    try {
+      const pu0 = (window as any)?.__exampliBoot?.user?.plus_until || (cacheGet<any>(CACHE_KEYS.user)?.plus_until);
+      if (pu0 !== undefined) setIsPlus(Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now()));
+    } catch {}
     const onPlus = (evt: Event) => {
       const e = evt as CustomEvent<{ plus_until?: string } & any>;
-      const pu = e.detail?.plus_until;
-      if (pu) {
-        try {
-          const active = new Date(pu).getTime() > Date.now();
-          setIsPlus(active);
-          cacheSet(CACHE_KEYS.isPlus, active);
-        } catch {}
+      if (e.detail?.plus_until !== undefined) {
+        try { setIsPlus(Boolean(e.detail.plus_until && new Date(String(e.detail.plus_until)).getTime() > Date.now())); } catch {}
       }
     };
     window.addEventListener('exampli:statsChanged', onPlus as EventListener);
