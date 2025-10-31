@@ -23,7 +23,7 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
         aria-hidden
         className="active-ring pointer-events-none absolute border-2 border-[#3BC4FF]"
       />
-      <span className="w-[38px] h-[38px] inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90">
+      <span className="w-[32px] h-[32px] inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90">
         <img
           src={iconSrc}
           alt=""
@@ -58,7 +58,7 @@ export default function BottomNav() {
     <nav className={`bottomnav fixed left-0 right-0 z-[45] !bottom-0 pb-0 ${whiteOnAiNoPlus ? 'bottomnav-white' : ''}`}>
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
-        <div className="hud-bar mx-3.5 flex items-center justify-center gap-2 py-2 pb-5">
+        <div className="hud-bar mx-3.5 flex items-center justify-evenly gap-2 py-2 pb-5">
           <Item to="/"             iconSrc="/stickers/home2.svg" currentPath={pathname} />
           <Item to="/quests"       iconSrc="/stickers/quests2.svg" currentPath={pathname} />
           <Item to="/battle"       iconSrc="/stickers/battle2.svg" currentPath={pathname} />
