@@ -64,7 +64,7 @@ export default function BottomNav() {
           <Item to="/battle"       iconSrc="/stickers/battle2.svg" currentPath={pathname} />
           <Item to="/ai"           iconSrc="/stickers/ai2.svg" currentPath={pathname} />
           <Item to="/subscription" iconSrc="/stickers/diamond2.svg" currentPath={pathname} />
-          <Item to="/profile"      iconSrc="/stickers/profile3.svg" currentPath={pathname} />
+          <Item to="/profile"      iconSrc="/stickers/profile4.svg" currentPath={pathname} />
         </div>
       </div>
     </nav>
