@@ -23,7 +23,7 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
         aria-hidden
         className="active-ring pointer-events-none absolute border-2 border-[#3BC4FF]"
       />
-      <span className={`${iconSrc.includes('/ai.svg') ? 'w-[50px] h-[50px]' : (iconSrc.includes('/home.svg') ? 'w-[40px] h-[40px]' : (iconSrc.includes('/profile2.svg') ? 'w-[30px] h-[30px]' : 'w-[38px] h-[38px]'))} inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90`}>
+      <span className="w-[38px] h-[38px] inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90">
         <img
           src={iconSrc}
           alt=""
