@@ -60,9 +60,9 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
         const codeRaw = String(over.code).toLowerCase();
         const code = codeRaw.replace(/^(oge_|ege_)/, '');
         const map: Record<string, string> = {};
-        // код курсов у нас как в /subjects/<code>.svg, для загрузчика — <code>_load.svg с тем же кодом
-        const warmed = getWarmedSvg(`/loads/${code}_load.svg`);
-        const src = warmed || `/loads/${code}_load.svg`;
+        // код курсов у нас как в /subjects/<code>.svg, для загрузчика — <code>_load1.svg с тем же кодом
+        const warmed = getWarmedSvg(`/loads/${code}_load1.svg`);
+        const src = warmed || `/loads/${code}_load1.svg`;
         const bg = '#0a111d';
         setOverride({ src, bg, title: over.title || 'КУРС' });
         // очистим флаг, чтобы не оставался на следующий раз

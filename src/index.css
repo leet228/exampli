@@ -746,46 +746,19 @@ body.profile-overscroll::before {
 /* базовое состояние — скрыта */
 
 
-/* рамка активного — меньше по габаритам */
+/* унифицированная рамка активного таба для всех иконок */
 
 .bottomnav a .active-ring {
     opacity: 0;
-    top: 6px;
-    /* чуть меньше по высоте */
-    bottom: 6px;
-    /* чуть меньше по высоте */
-    left: 8px;
-    right: 8px;
-    border-radius: 10px;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    right: 3px;
+    border-radius: 12px;
 }
 
 .bottomnav a[aria-current="page"] .active-ring {
     opacity: 1;
-}
-
-
-/* уменьшенная рамка только для ai.svg (крупная иконка) */
-
-.bottomnav a[data-icon="ai"] .active-ring {
-    /* ~13px и ~17px в ремах (1rem = 16px) */
-    top: 0.8125rem;
-    /* ≈ 13px */
-    bottom: 0.8125rem;
-    /* ≈ 13px */
-    left: 0.9875rem;
-    /* ≈ 15.8px */
-    right: 0.9875rem;
-    /* ≈ 15.8px */
-}
-
-
-/* компактнее рамка только для home */
-
-.bottomnav a[data-icon="home"] .active-ring {
-    top: 8px;
-    bottom: 8px;
-    left: 10px;
-    right: 10px;
 }
 
 

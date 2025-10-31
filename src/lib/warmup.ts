@@ -36,21 +36,21 @@ export function warmupLoadSvgs(): void {
   if (started) return; started = true;
   try {
     const urls: string[] = [
-      '/loads/biology_load.svg',
-      '/loads/chemistry_load.svg',
-      '/loads/english_load.svg',
-      '/loads/french_load.svg',
-      '/loads/geography_load.svg',
-      '/loads/german_load.svg',
-      '/loads/history_load.svg',
-      '/loads/it_load.svg',
-      '/loads/literature_load.svg',
-      '/loads/math_basic_load.svg',
-      '/loads/math_profile_load.svg',
-      '/loads/physics_load.svg',
-      '/loads/rus_load.svg',
-      '/loads/social_science_load.svg',
-      '/loads/spanish_load.svg',
+      '/loads/biology_load1.svg',
+      '/loads/chemistry_load1.svg',
+      '/loads/english_load1.svg',
+      '/loads/french_load1.svg',
+      '/loads/geography_load1.svg',
+      '/loads/german_load1.svg',
+      '/loads/history_load1.svg',
+      '/loads/it_load1.svg',
+      '/loads/literature_load1.svg',
+      '/loads/math_basic_load1.svg',
+      '/loads/math_profile_load1.svg',
+      '/loads/physics_load1.svg',
+      '/loads/rus_load1.svg',
+      '/loads/social_science_load1.svg',
+      '/loads/spanish_load1.svg',
     ];
 
     let index = 0;

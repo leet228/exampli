@@ -16,15 +16,14 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
           try { window.dispatchEvent(new Event('exampli:homeReselect')); } catch {}
         }
       }}
-      className="group relative flex flex-col items-center justify-center px-2 py-2 overflow-visible min-h-[56px]"
-      data-icon={iconSrc.includes('/ai.svg') ? 'ai' : (iconSrc.includes('/home.svg') ? 'home' : undefined)}
+      className="group relative flex flex-col items-center justify-center px-2 py-2 overflow-visible min-h-[54px]"
     >
       {/* рамка активного таба — всегда в DOM, видимость через CSS по aria-current */}
       <span
         aria-hidden
-        className="active-ring pointer-events-none absolute inset-1 border-2 border-[#3BC4FF] rounded-md"
+        className="active-ring pointer-events-none absolute border-2 border-[#3BC4FF]"
       />
-      <span className={`${iconSrc.includes('/ai.svg') ? 'w-[56px] h-[56px]' : (iconSrc.includes('/home.svg') ? 'w-[44px] h-[44px]' : (iconSrc.includes('/profile2.svg') ? 'w-[32px] h-[32px]' : 'w-[40px] h-[40px]'))} inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90`}>
+      <span className={`${iconSrc.includes('/ai.svg') ? 'w-[50px] h-[50px]' : (iconSrc.includes('/home.svg') ? 'w-[40px] h-[40px]' : (iconSrc.includes('/profile2.svg') ? 'w-[30px] h-[30px]' : 'w-[38px] h-[38px]'))} inline-flex items-center justify-center shrink-0 transition-transform duration-150 group-active:scale-90`}>
         <img
           src={iconSrc}
           alt=""
@@ -60,12 +59,12 @@ export default function BottomNav() {
       <div className="mx-auto max-w-xl">
         {/* узкий бар: немного не до краёв экрана */}
         <div className="hud-bar mx-3.5 flex items-center justify-center gap-2 py-2 pb-5">
-          <Item to="/"             iconSrc="/stickers/home.svg" currentPath={pathname} />
-          <Item to="/quests"       iconSrc="/stickers/quests.svg" currentPath={pathname} />
-          <Item to="/battle"       iconSrc="/stickers/battle.svg" currentPath={pathname} />
-          <Item to="/ai"           iconSrc="/stickers/ai.svg" currentPath={pathname} />
-          <Item to="/subscription" iconSrc="/stickers/diamond.svg" currentPath={pathname} />
-          <Item to="/profile"      iconSrc="/stickers/profile2.svg" currentPath={pathname} />
+          <Item to="/"             iconSrc="/stickers/home2.svg" currentPath={pathname} />
+          <Item to="/quests"       iconSrc="/stickers/quests2.svg" currentPath={pathname} />
+          <Item to="/battle"       iconSrc="/stickers/battle2.svg" currentPath={pathname} />
+          <Item to="/ai"           iconSrc="/stickers/ai2.svg" currentPath={pathname} />
+          <Item to="/subscription" iconSrc="/stickers/diamond2.svg" currentPath={pathname} />
+          <Item to="/profile"      iconSrc="/stickers/profile3.svg" currentPath={pathname} />
         </div>
       </div>
     </nav>
