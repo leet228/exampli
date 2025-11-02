@@ -227,8 +227,8 @@ export default function CoursesPanel(props: Props) {
                   />
                 </div>
               </div>
-              <div className="text-[10px] text-muted uppercase tracking-wide mt-1">{s.level}</div>
-              <div className="text-sm font-semibold leading-tight line-clamp-2 mt-[2px] max-w-[110px]">{s.title}</div>
+              <div className="text-[8px] text-muted uppercase tracking-wide mt-1">{s.level}</div>
+              <div className="text-[11px] font-semibold leading-tight line-clamp-2 mt-[2px] max-w-[110px]">{s.title}</div>
             </motion.button>
           );
         })}

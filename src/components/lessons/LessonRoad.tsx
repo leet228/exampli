@@ -21,9 +21,49 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
   const big = 58;
   const pattern = useMemo(() => {
     // Центр → влево(мал) → влево(больш) → влево(мал) → центр → вправо(мал) → вправо(больш) → вправо(мал) → центр …
-    return [0, -small, -big, -small, 0, small, big, small, 0];
+    // Убрали последний 0, чтобы паттерн повторялся корректно (урок 9 и 10 не будут оба в центре)
+    return [0, -small, -big, -small, 0, small, big, small];
   }, []);
   const getOffsetX = (idx: number): number => pattern[idx % pattern.length];
+
+  // Получаем код активного курса для картинок
+  const courseCode = useMemo(() => {
+    try {
+      const code = localStorage.getItem('exampli:activeSubjectCode') || cacheGet<string>(CACHE_KEYS.activeCourseCode) || '';
+      // Преобразуем код курса в имя файла (убираем префиксы ege_, oge_ и делаем lowercase)
+      return code.replace(/^(oge_|ege_)/, '').toLowerCase();
+    } catch {
+      return '';
+    }
+  }, [lessons?.length]);
+
+  // Функция для определения, нужно ли показывать картинку после урока
+  const shouldShowImage = (lessonIdx: number): { show: boolean; imageNum: number; side: 'right' | 'left' } => {
+    // Картинка 1 вправо: после уроков 2 (3-й), 10 (11-й), 18 (19-й), 26 (27-й)... (idx = 2 + 8*n)
+    // Картинка 2 влево: после уроков 6 (7-й), 14 (15-й), 22 (23-й), 30 (31-й)... (idx = 6 + 8*n)
+    // Паттерн повторяется каждые 8 уроков
+    const cyclePos = lessonIdx % 8;
+    
+    if (cyclePos === 2) {
+      // Картинка 1 вправо: нужна после урока 2, 10, 18... (т.е. после урока idx = 2 + 8*n)
+      // Минимум уроков: если это урок idx=2, нужно 5+; если idx=10, нужно 13+; если idx=18, нужно 21+
+      const cycleNum = Math.floor(lessonIdx / 8);
+      const minLessons = 5 + 8 * cycleNum;
+      if (lessons.length >= minLessons) {
+        return { show: true, imageNum: 1, side: 'right' };
+      }
+    } else if (cyclePos === 6) {
+      // Картинка 2 влево: нужна после урока 6, 14, 22... (т.е. после урока idx = 6 + 8*n)
+      // Минимум уроков: если это урок idx=6, нужно 9+; если idx=14, нужно 17+; если idx=22, нужно 25+
+      const cycleNum = Math.floor(lessonIdx / 8);
+      const minLessons = 9 + 8 * cycleNum;
+      if (lessons.length >= minLessons) {
+        return { show: true, imageNum: 2, side: 'left' };
+      }
+    }
+    
+    return { show: false, imageNum: 0, side: 'right' };
+  };
 
   // линия будет локальной (в ширину контейнера) с «размытием» по краям через градиент
 
@@ -95,8 +135,9 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                 : (absPrev === big && absCurr === small
                     ? 18 // big → small = 4.5
                     : 8)); // остальные = 2
+          const imageInfo = shouldShowImage(idx);
           return (
-            <li key={l.id} style={{ marginTop: gapPx }}>
+            <li key={l.id} style={{ marginTop: gapPx, position: 'relative' }}>
               <div className={`flex justify-center`} style={{ overflow: 'visible' }}>
                 <motion.div
                   initial={{ opacity: 0, y: 12, x: 0 }}
@@ -115,6 +156,33 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   />
                 </motion.div>
               </div>
+              {/* Картинка после урока */}
+              {imageInfo.show && courseCode && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.06 + 0.3 }}
+                  className="absolute"
+                  style={{
+                    top: '-85%',
+                    left: imageInfo.side === 'right' ? 'calc(50% + 20px)' : 'auto',
+                    right: imageInfo.side === 'left' ? 'calc(50% + 20px)' : 'auto',
+                    transform: 'translateY(-50%)',
+                    zIndex: 1,
+                  }}
+                >
+                  <img
+                    src={`/road_pic/${courseCode}${imageInfo.imageNum}.svg`}
+                    alt=""
+                    className="h-auto object-contain pointer-events-none select-none"
+                    style={{ width: '160px', maxWidth: '180px' }}
+                    onError={(e) => {
+                      // Скрываем картинку, если файл не найден
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </motion.div>
+              )}
             </li>
           );
         })}

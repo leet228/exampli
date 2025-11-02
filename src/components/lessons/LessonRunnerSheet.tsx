@@ -416,9 +416,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     <motion.div
                       key={`streak-${streakFlash.key}`}
                       initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
-                      animate={{ opacity: 1, y: -2, scale: 1.0, rotate: 0 }}
+                      animate={{ opacity: 1, y: 6, scale: 1.0, rotate: 0 }}
                       exit={{ opacity: 0, y: -8 }}
-                      className="absolute top-0 font-extrabold text-xs"
+                      className="absolute top-1 font-extrabold text-xs"
                       style={{ color: ((streakFlash?.v ?? 0) >= 10 ? '#123ba3' : ((streakFlash?.v ?? 0) >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
                     >
                       <motion.span initial={{ scale: 1, rotate: 0, y: 0 }} animate={streakCtrl}>
@@ -535,8 +535,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                               <button
                                 key={`cb-sel-${i}`}
                                 type="button"
-                                onClick={() => { try { hapticTiny(); } catch {} setSelectedCard(null); }}
-                                className={`rounded-lg px-2 py-1 text-sm font-semibold border ${stateClass}`}
+                                onClick={() => { if (status === 'idle') { try { hapticTiny(); } catch {} setSelectedCard(null); } }}
+                                disabled={status !== 'idle'}
+                                className={`rounded-lg px-2 py-1 text-sm font-semibold border ${stateClass} ${status !== 'idle' ? 'opacity-60 cursor-not-allowed' : ''}`}
                               >
                                 {txt}
                               </button>
@@ -565,7 +566,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
-                          <PressOption key={opt} active={active} onClick={() => { setChoice(opt); }}>
+                          <PressOption key={opt} active={active} onClick={() => { setChoice(opt); }} disabled={status !== 'idle'}>
                             {opt}
                           </PressOption>
                         );
@@ -663,7 +664,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       placeholder="Ответ"
-                      className="w-full rounded-2xl px-4 py-3 bg-white/5 border border-white/10 outline-none"
+                      disabled={status !== 'idle'}
+                      className="w-full rounded-2xl px-4 py-3 bg-white/5 border border-white/10 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                   )}
 
@@ -719,7 +721,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
 
 
-function PressOption({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+function PressOption({ active, children, onClick, disabled }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
   const [pressed, setPressed] = useState(false);
   const base = active ? '#3c73ff' : '#2a3944';
   const shadowHeight = 6;
@@ -734,13 +736,14 @@ function PressOption({ active, children, onClick }: { active: boolean; children:
   return (
     <motion.button
       type="button"
-      onPointerDown={(e) => { setPressed(true); /* дергаем хаптик только один раз */ try { hapticSelect(); } catch {} }}
+      disabled={disabled}
+      onPointerDown={(e) => { if (!disabled) { setPressed(true); /* дергаем хаптик только один раз */ try { hapticSelect(); } catch {} } }}
       onMouseDown={(e) => { e.preventDefault(); }}
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
-      onClick={onClick}
-      className={`w-full rounded-2xl px-4 py-3 border ${active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'}`}
-      animate={{ y: pressed ? shadowHeight : 0, boxShadow: pressed ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
+      onClick={() => { if (!disabled) onClick(); }}
+      className={`w-full rounded-2xl px-4 py-3 border ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'}`}
+      animate={{ y: (disabled ? false : pressed) ? shadowHeight : 0, boxShadow: (disabled ? false : pressed) ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
       transition={{ duration: 0 }}
       style={{ background: active ? 'rgba(60,115,255,0.10)' : 'rgba(255,255,255,0.05)' }}
     >
@@ -843,8 +846,8 @@ function LetterBox({ value, editable, lettersSel, options, onRemove, status }: {
           <motion.button
             key={`${ch}-${idx}`}
             type="button"
-            className={`w-7 h-7 grid place-items-center rounded-lg border ${editable ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold text-sm`}
-            onClick={() => { if (editable) { try { hapticSelect(); } catch {} onRemove(idx); } }}
+            className={`w-7 h-7 grid place-items-center rounded-lg border ${editable && !isResolved ? 'border-white/15 bg-white/10' : 'border-transparent bg-transparent'} font-extrabold text-sm`}
+            onClick={() => { if (editable && !isResolved) { try { hapticSelect(); } catch {} onRemove(idx); } }}
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.85, opacity: 0 }}
@@ -896,7 +899,8 @@ function InputBox({ value, editable, onChange, status }: { value: string; editab
           value={value}
           onChange={onInput}
           placeholder=""
-          className="bg-transparent outline-none border-0 px-1.5 py-0.5 font-extrabold w-full caret-transparent text-center text-sm"
+          disabled={isResolved}
+          className="bg-transparent outline-none border-0 px-1.5 py-0.5 font-extrabold w-full caret-transparent text-center text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           inputMode="text"
           autoCapitalize="none"
           autoCorrect="off"
@@ -931,7 +935,7 @@ function CardBox({ cardText, onRemove, setRect, status }: { cardText: string; on
   return (
     <div ref={ref} className={`inline-flex items-center justify-center align-middle rounded-xl border ${resolvedClass}`} style={{ minWidth: 96, minHeight: 56, padding: 6 }}>
       {hasCard ? (
-        <button type="button" onClick={onRemove} className={`rounded-lg px-2 py-1 text-sm font-semibold border ${status === 'idle' ? 'bg-white/10 border-white/15' : (status === 'correct' ? 'text-green-400 bg-green-600/10 border-green-500/60' : 'text-red-400 bg-red-600/10 border-red-500/60')}`}>
+        <button type="button" onClick={() => { if (status === 'idle') onRemove(); }} disabled={status !== 'idle'} className={`rounded-lg px-2 py-1 text-sm font-semibold border ${status === 'idle' ? 'bg-white/10 border-white/15' : (status === 'correct' ? 'text-green-400 bg-green-600/10 border-green-500/60' : 'text-red-400 bg-red-600/10 border-red-500/60')} ${status !== 'idle' ? 'opacity-60 cursor-not-allowed' : ''}`}>
           {cardText}
         </button>
       ) : (

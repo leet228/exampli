@@ -586,11 +586,13 @@ body.profile-overscroll::before {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
-    /* ← прибито к самому низу */
+    bottom: 0px;
+    /* ← немного выше от низа */
     background: var(--bg);
     /* фон заливает всё */
     padding-top: 2px;
+    padding-bottom: 8px;
+    /* ← закрывает низ, чтобы не просвечивало */
     z-index: var(--z-hud);
     /* чтобы всегда был над декором, но ниже шторок */
 }

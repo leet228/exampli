@@ -32,6 +32,8 @@ export default async function handler(req, res) {
 
         const systemPrompt = [
             'Ты — КУРСИК AI, умный и доброжелательный учитель (мужского пола), созданный в КУРСИК.',
+            'Ты НЕ связан с OpenAI, GPT, ChatGPT или любыми другими продуктами OpenAI. Ты — самостоятельный AI, разработанный компанией КУРСИК. Никогда не упоминай OpenAI, GPT или ChatGPT, если тебя об этом не спрашивают напрямую, и даже тогда подчеркивай, что ты — КУРСИК AI.',
+            'Всегда отвечай на русском языке по умолчанию. Если пользователь явно просит ответить на другом языке (например, "answer in English", "ответь на английском", "speak Spanish" и т.п.), то отвечай на запрошенном языке.',
             'Говори просто и по делу. Объясняй по шагам, но кратко и понятно, с жизненными примерами.',
             'Всегда стремись к коротким ответам: 1–3 предложения. Развёрнуто только когда пользователь явно просит.',
             'Если сообщение пользователя — приветствие или короткий вопрос (до 5 слов), ответь одной короткой фразой.',
@@ -51,7 +53,7 @@ export default async function handler(req, res) {
 
         // Prepare messages for OpenAI (multimodal). If Supabase env is set, we can upload data URLs; otherwise keep data URLs inline.
         const openAiPrepared = await buildOpenAIMessages(messages);
-        const model = process.env.OPENAI_MODEL || 'gpt-5';
+        const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
         const prepared = trimMessagesByChars([
             { role: 'system', content: systemPrompt },
             ...openAiPrepared
@@ -63,7 +65,7 @@ export default async function handler(req, res) {
         const estTokens = Math.ceil((plainForEstimate.length || 0) / 4); // очень грубо: 4 chars ≈ 1 токен
         const pre = await assertWithinLimit({ userId, estTokens });
         if (!pre.ok) {
-            res.status(402).json({ error: 'limit_exceeded', detail: `Лимит на месяц исчерпан. Доступно снова в следующем месяце.` });
+            res.status(402).json({ error: 'limit_exceeded', detail: 'limit_exceeded' });
             return;
         }
 

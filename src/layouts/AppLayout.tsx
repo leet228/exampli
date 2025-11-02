@@ -99,6 +99,39 @@ export default function AppLayout() {
     return () => window.removeEventListener('exampli:bootData', ready as EventListener);
   }, []);
 
+  // Автоматическая прокрутка вверх при переключении между страницами bottom nav
+  useEffect(() => {
+    if (showBottom) {
+      // Небольшая задержка, чтобы страница успела отрендериться
+      const timeoutId = setTimeout(() => {
+        try {
+          // Прокручиваем все .main-scroll контейнеры (для Home, AI и других страниц)
+          const scrollContainers = document.querySelectorAll('.main-scroll');
+          scrollContainers.forEach((container) => {
+            if (container instanceof HTMLElement) {
+              container.scrollTop = 0;
+            }
+          });
+          // Прокручиваем контейнеры страниц через ref'ы
+          [homeRef, profileRef, aiRef, battleRef, questsRef, subsRef].forEach((ref) => {
+            if (ref.current) {
+              const el = ref.current as HTMLElement;
+              el.scrollTop = 0;
+              // Также ищем скролл-контейнеры внутри
+              const innerScroll = el.querySelector('.main-scroll') as HTMLElement;
+              if (innerScroll) innerScroll.scrollTop = 0;
+            }
+          });
+          // Также прокручиваем window и document (для Profile и других страниц без .main-scroll)
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch {}
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [pathname, showBottom]);
+
   // После ухода сплэша подсказать оверлеям пересчитать позицию
   useEffect(() => {
     if (bootDone) {

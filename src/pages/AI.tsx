@@ -206,6 +206,23 @@ export default function AI() {
       });
 
       if (!response.ok) {
+        if (response.status === 402) {
+          try {
+            const clonedResponse = response.clone();
+            const json = await clonedResponse.json();
+            if (json?.error === 'limit_exceeded' || json?.detail === 'limit_exceeded') {
+              // Превышен лимит - показываем сообщение от AI с кнопкой
+              const limitMessage = 'Извините, вы исчерпали месячный лимит. Чтобы продолжить использование, вы можете купить КУРСИК AI +.';
+              setMessages((prev) => [...prev, { 
+                role: 'assistant', 
+                content: limitMessage 
+              }]);
+              try { hapticSelect(); } catch {}
+              setIsLoading(false);
+              return;
+            }
+          } catch {}
+        }
         const detail = await safeText(response as any);
         throw new Error(detail || `Request failed with ${response.status}`);
       }
@@ -237,11 +254,11 @@ export default function AI() {
     const allowed = files.filter((f) => f.type.startsWith('image/'));
     if (!allowed.length) { setError('Пожалуйста, выберите изображение.'); return; }
     try {
-      const remain = Math.max(0, 3 - pendingImages.length);
+      const remain = Math.max(0, 1 - pendingImages.length);
       if (remain <= 0) return;
       const picked = allowed.slice(0, remain);
       const urls = await Promise.all(picked.map((f) => readFileAsDataUrl(f)));
-      setPendingImages((prev) => [...prev, ...urls].slice(0, 3));
+      setPendingImages((prev) => [...prev, ...urls].slice(0, 1));
     } catch (_err: any) {
       setError('Не удалось прочитать файл изображения.');
     } finally {
@@ -294,7 +311,7 @@ export default function AI() {
           aria-live="polite"
         >
           {messages.slice(1).map((m, idx) => (
-            <ChatBubble key={idx + 1} role={m.role} content={m.content} />
+            <ChatBubble key={idx + 1} role={m.role} content={m.content} navigate={navigate} />
           ))}
 
           {isLoading && (
@@ -351,7 +368,6 @@ export default function AI() {
               type="file"
               accept="image/*"
               className="hidden"
-              multiple
               onChange={onFileChange}
             />
 
@@ -420,7 +436,7 @@ function SubscribeCtaButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function ChatBubble({ role, content }: ChatMessage) {
+function ChatBubble({ role, content, navigate }: ChatMessage & { navigate?: (path: string) => void }) {
   const isUser = role === 'user';
   return (
     <div className={`w-full flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-2 px-1`}>
@@ -432,21 +448,31 @@ function ChatBubble({ role, content }: ChatMessage) {
             : 'max-w-full inline-block px-1 py-1 text-[var(--text)] allow-select'
         }
       >
-        <RenderMessageContent content={content} role={role} />
+        <RenderMessageContent content={content} role={role} navigate={navigate} />
       </div>
     </div>
   );
 }
 
-function RenderMessageContent({ content, role }: { content: MessageContent; role: ChatRole }) {
+function RenderMessageContent({ content, role, navigate }: { content: MessageContent; role: ChatRole; navigate?: (path: string) => void }) {
   const common = 'prose prose-invert max-w-none prose-p:my-0 prose-li:my-0 prose-pre:bg-white/10';
+  const isLimitMessage = typeof content === 'string' && content.includes('исчерпали месячный лимит');
+  
   if (typeof content === 'string') {
     return role === 'assistant' ? (
-      <MarkdownRenderer className={`${common} text-base leading-relaxed`} content={content} />
+      <div className="space-y-3">
+        <MarkdownRenderer className={`${common} text-base leading-relaxed`} content={content} />
+        {isLimitMessage && navigate && (
+          <LimitButton onClick={() => { try { hapticSelect(); } catch {} navigate('/subscription'); }} />
+        )}
+      </div>
     ) : (
       <div className="whitespace-pre-wrap break-normal text-base leading-relaxed">{content}</div>
     );
   }
+  const textParts = content.filter((p) => p.type === 'text').map((p) => (p as any).text || '').join('');
+  const isLimitMessageInParts = textParts.includes('исчерпали месячный лимит');
+  
   return (
     <div className="space-y-2">
       {content.map((part, idx) => {
@@ -471,7 +497,32 @@ function RenderMessageContent({ content, role }: { content: MessageContent; role
         }
         return null;
       })}
+      {isLimitMessageInParts && role === 'assistant' && navigate && (
+        <LimitButton onClick={() => { try { hapticSelect(); } catch {} navigate('/subscription'); }} />
+      )}
     </div>
+  );
+}
+
+function LimitButton({ onClick }: { onClick: () => void }) {
+  const base = '#3c73ff';
+  const dark = darken(base, 18);
+  const press = 6;
+  const [pressed, setPressed] = React.useState(false);
+  return (
+    <motion.button
+      type="button"
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onClick={() => { setPressed(false); onClick(); }}
+      animate={{ y: pressed ? press : 0, boxShadow: pressed ? `0px 0px 0px ${dark}` : `0px ${press}px 0px ${dark}` }}
+      transition={{ duration: 0 }}
+      className="w-full rounded-full text-white font-extrabold tracking-wider py-3 px-6 text-center"
+      style={{ background: base }}
+    >
+      КУПИТЬ КУРСИК AI +
+    </motion.button>
   );
 }
 
