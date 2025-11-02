@@ -289,6 +289,51 @@ export default function Subscription() {
         try {
           const ok = tg?.openInvoice?.(link, (status: any) => {
             if (status === 'paid') {
+              // Оптимистичное обновление для всех покупок
+              if (kind === 'plan') {
+                // Определяем количество месяцев из productId (m1 = 1, m6 = 6, m12 = 12)
+                const monthsMatch = id.match(/^m(\d+)$/);
+                const months = monthsMatch ? Number(monthsMatch[1]) : 1;
+                const now = new Date();
+                const plusUntil = new Date(now.getTime());
+                plusUntil.setMonth(plusUntil.getMonth() + months);
+                const plusUntilIso = plusUntil.toISOString();
+                try {
+                  const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                  cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntilIso });
+                  const boot: any = (window as any).__exampliBoot || {};
+                  (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), plus_until: plusUntilIso } };
+                  window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntilIso } } as any));
+                } catch {}
+              } else if (kind === 'gems') {
+                // Определяем количество монет из productId (g1 = 1200, g2 = 3000, g3 = 6500)
+                const coinsMap: Record<string, number> = { g1: 1200, g2: 3000, g3: 6500 };
+                const addCoins = coinsMap[id] || 0;
+                if (addCoins > 0) {
+                  try {
+                    const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                    const currentCoins = Number(cu?.coins || 0);
+                    const newCoins = currentCoins + addCoins;
+                    cacheSet(CACHE_KEYS.user, { ...cu, coins: newCoins });
+                    const boot: any = (window as any).__exampliBoot || {};
+                    (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), coins: newCoins } };
+                    window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: newCoins } } as any));
+                  } catch {}
+                }
+              } else if (kind === 'ai_tokens') {
+                const months = 1; // AI+ всегда на 1 месяц
+                const now = new Date();
+                const aiPlusUntil = new Date(now.getTime());
+                aiPlusUntil.setMonth(aiPlusUntil.getMonth() + months);
+                const aiPlusUntilIso = aiPlusUntil.toISOString();
+                try {
+                  const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                  cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: aiPlusUntilIso });
+                  const boot: any = (window as any).__exampliBoot || {};
+                  (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), ai_plus_until: aiPlusUntilIso } };
+                  window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: aiPlusUntilIso } } as any));
+                } catch {}
+              }
               // мгновенный апдейт без ожидания вебхука
               void (async () => {
                 try { await refreshCoinsFromServer(); } catch {}
