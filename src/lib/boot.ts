@@ -111,6 +111,14 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntil });
     } catch {}
   } catch {}
+  // Отметим признак активной подписки AI+ локально (по ai_plus_until > now)
+  try {
+    const aiPlusUntil = (step1?.user?.ai_plus_until as string) || null;
+    try {
+      const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+      cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: aiPlusUntil });
+    } catch {}
+  } catch {}
   report(33);
 
   // 2a) Обработка ИНВАЙТА ПО ССЫЛКЕ (friend_invites) — отдельная ветка от обычных pending

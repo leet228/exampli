@@ -57,6 +57,7 @@ export default async function handler(req, res) {
         timezone,
         energy: 25,
         coins: 500,
+        ai_plus_until: null,
       }, { onConflict: 'tg_id' }).select('*').single();
       userRow = created;
       if (userRow?.id) {

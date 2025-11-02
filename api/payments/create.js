@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     }
 
     const body = await safeJson(req);
-    const type = body?.type === 'plan' ? 'plan' : (body?.type === 'gems' ? 'gems' : null);
+    const type = body?.type === 'plan' ? 'plan' : (body?.type === 'gems' ? 'gems' : (body?.type === 'ai_tokens' ? 'ai_tokens' : null));
     const productId = String(body?.id || body?.product_id || '').trim();
     if (!type || !productId) {
       res.status(400).json({ error: 'invalid_request', details: { type, productId } });
@@ -42,6 +42,9 @@ export default async function handler(req, res) {
         g1: { stars: toStars(499),  coins: 1200, title: 'Монеты' },
         g2: { stars: toStars(999),  coins: 3000, title: 'Монеты' },
         g3: { stars: toStars(1999), coins: 6500, title: 'Монеты' },
+      },
+      ai_tokens: {
+        ai_plus: { stars: toStars(500), rub: 500, title: 'КУРСИК AI +', months: 1 },
       }
     };
 
@@ -53,9 +56,15 @@ export default async function handler(req, res) {
 
     
 
-    const human = type === 'plan' ? `${product.months} мес.` : `${product.coins} монет`;
+    const human = type === 'plan' 
+      ? `${product.months} мес.` 
+      : type === 'ai_tokens'
+      ? `${product.months || 1} мес.`
+      : `${product.coins} монет`;
     const description = type === 'plan'
       ? `${product.title} — ${human}`
+      : type === 'ai_tokens'
+      ? `${product.title} — ${human} (+250₽ токенов в месяц)`
       : `${product.title}: ${human}`;
 
     // Payload will be echoed back in successful_payment.invoice_payload

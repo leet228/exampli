@@ -34,6 +34,9 @@ export default function Subscription() {
     { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 999 },
     { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1999 },
   ];
+  const aiTokens = [
+    { id: 'ai_plus', icon: '/ai/ai_www.svg', rub: 500, tokens: 0, label: 'КУРСИК AI +', description: 'Месячная подписка!\n+500000 токенов на месяц' },
+  ];
   const freezes = [
     { id: 's1', icon: '/shop/streak_1.svg', label: '1 день', coins: 425 },
     { id: 's2', icon: '/shop/streak_2.svg', label: '2 дня',  coins: 850 },
@@ -148,6 +151,7 @@ export default function Subscription() {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isPlus, setIsPlus] = useState<boolean>(false);
   const [plusUntil, setPlusUntil] = useState<string | null>(null);
+  const [isAiPlus, setIsAiPlus] = useState<boolean>(false);
   // Автопродление отключено при оплате через Telegram Stars
   const [_autoRenew, _setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: false, loading: false });
 
@@ -241,6 +245,22 @@ export default function Subscription() {
     return () => window.removeEventListener('exampli:statsChanged', onPlusUntil as EventListener);
   }, []);
 
+  // Признак активной подписки AI+: вычисляем ТОЛЬКО от ai_plus_until
+  useEffect(() => {
+    try {
+      const apu0 = (window as any)?.__exampliBoot?.user?.ai_plus_until || (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until);
+      if (apu0 !== undefined) setIsAiPlus(Boolean(apu0 && new Date(String(apu0)).getTime() > Date.now()));
+    } catch {}
+    const onStatsAiPlus = (evt: Event) => {
+      const e = evt as CustomEvent<{ ai_plus_until?: string } & any>;
+      if (e.detail?.ai_plus_until !== undefined) {
+        try { setIsAiPlus(Boolean(e.detail.ai_plus_until && new Date(e.detail.ai_plus_until).getTime() > Date.now())); } catch {}
+      }
+    };
+    window.addEventListener('exampli:statsChanged', onStatsAiPlus as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStatsAiPlus as EventListener);
+  }, []);
+
   const formatPlusDate = (iso: string | null) => {
     if (!iso) return '—';
     try {
@@ -249,7 +269,7 @@ export default function Subscription() {
     } catch { return String(iso); }
   };
 
-  async function createPaymentAndRedirect(kind: 'plan' | 'gems', id: string) {
+  async function createPaymentAndRedirect(kind: 'plan' | 'gems' | 'ai_tokens', id: string) {
     if (loadingId) return;
     setLoadingId(`${kind}:${id}`);
     try {
@@ -307,7 +327,7 @@ export default function Subscription() {
         window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
       } catch {}
       // Обновим баланс монет и статус подписки
-      void (async () => { try { await refreshCoinsFromServer(); } catch {} try { await refreshPlusUntilFromServer(); } catch {} })();
+      void (async () => { try { await refreshCoinsFromServer(); } catch {} try { await refreshPlusUntilFromServer(); } catch {} try { await refreshAiPlusUntilFromServer(); } catch {} })();
     };
     try { tg?.onEvent?.('invoiceClosed', handler); } catch {}
     return () => { try { tg?.offEvent?.('invoiceClosed', handler); } catch {} };
@@ -350,6 +370,24 @@ export default function Subscription() {
         window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: val } } as any));
       } catch {}
     }
+  }
+
+  async function refreshAiPlusUntilFromServer() {
+    const boot: any = (window as any).__exampliBoot || {};
+    const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
+    if (!userId) return;
+    const { data } = await supabase.from('users').select('id, ai_plus_until, metadata').eq('id', userId).maybeSingle();
+    let val = (data as any)?.ai_plus_until || null;
+    // Если поля нет, проверяем metadata
+    if (!val && (data as any)?.metadata && typeof (data as any).metadata === 'object') {
+      val = (data as any).metadata.ai_plus_until || null;
+    }
+    try {
+      const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+      cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: val });
+      (window as any).__exampliBoot = { ...(window as any).__exampliBoot, user: { ...(boot?.user || {}), ai_plus_until: val } };
+      window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: val } } as any));
+    } catch {}
   }
 
   // Убрали сохранение и поллинг yk:lastPaymentId — Stars не требует поллинга
@@ -584,6 +622,48 @@ export default function Subscription() {
           ))}
         </div>
       </div>
+
+      {/* КУРСИК AI + - показываем только если подписка не активна или истекла */}
+      {!isAiPlus && (
+        <div className="relative mt-2 px-1">
+          <div className="text-3xl font-extrabold">
+            <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span> <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>+</span>
+          </div>
+          <div className="mt-2 grid gap-4">
+            {aiTokens.map((ai) => {
+              const stars = toStars(ai.rub);
+              return (
+                <PressButton
+                  key={ai.id}
+                  className="w-full rounded-3xl px-4 py-4 text-left text-white"
+                  baseColor={accentColor}
+                  shadowHeight={shadowHeight}
+                  darken={darken}
+                  onSelectHaptic={hapticSelect}
+                  onClick={() => createPaymentAndRedirect('ai_tokens', ai.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <div className="text-xl font-bold">{ai.label}</div>
+                        <div className="text-sm text-white/70 mt-0.5 whitespace-pre-line">{ai.description}</div>
+                      </div>
+                    </div>
+                    <div className="text-white font-extrabold tabular-nums">
+                      {loadingId === `ai_tokens:${ai.id}` ? '...' : (
+                        <span className="inline-flex items-center gap-2">
+                          <span>{stars}</span>
+                          <TelegramStarsIcon size={22} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </PressButton>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Gems (монеты) */}
       <div ref={coinsRef} className="relative mt-2 px-1">

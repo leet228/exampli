@@ -160,6 +160,64 @@ export default async function handler(req, res) {
             until.setMonth(until.getMonth() + months);
             await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
           }
+        } else if (metadata?.type === 'ai_tokens') {
+          // Обработка покупки КУРСИК AI + (месячная подписка на токены)
+          const months = Number(metadata?.months || 1);
+          const pcode = String(metadata?.product_id || '').trim() || 'ai_plus';
+          
+          // Сохраняем платеж
+          try {
+            const { data: payIns3, error: payErr3 } = await supabase.from('payments').upsert({
+              id: paymentId,
+              user_id: userRow.id,
+              type: 'ai_tokens',
+              product_id: pcode,
+              amount_rub: amountRub,
+              currency: 'XTR',
+              status: 'succeeded',
+              test: false,
+              payment_method: null,
+              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
+              captured_at: new Date().toISOString(),
+            });
+            if (payErr3) { try { console.error('[payments upsert ai_tokens] error:', payErr3); } catch {} }
+          } catch (e) { try { console.error('payments upsert (ai_tokens) failed', e); } catch {} }
+
+          // Устанавливаем дату окончания подписки на AI токены
+          const now = new Date();
+          const aiPlusUntil = new Date(now.getTime());
+          aiPlusUntil.setMonth(aiPlusUntil.getMonth() + months);
+          
+          // Пытаемся обновить ai_plus_until напрямую
+          // Если поле не существует, сохраняем в metadata как fallback
+          const updateResult = await supabase
+            .from('users')
+            .update({ ai_plus_until: aiPlusUntil.toISOString() })
+            .eq('id', userRow.id);
+          
+          // Если обновление не удалось (поле не существует), используем metadata
+          if (updateResult.error) {
+            try {
+              // Получаем текущие данные пользователя
+              const { data: currentUser } = await supabase
+                .from('users')
+                .select('metadata')
+                .eq('id', userRow.id)
+                .single();
+              
+              const currentMeta = (currentUser?.metadata && typeof currentUser.metadata === 'object') 
+                ? currentUser.metadata 
+                : {};
+              const newMeta = { ...currentMeta, ai_plus_until: aiPlusUntil.toISOString() };
+              
+              await supabase
+                .from('users')
+                .update({ metadata: newMeta })
+                .eq('id', userRow.id);
+            } catch (e2) {
+              try { console.error('[ai_tokens] failed to set ai_plus_until in metadata', e2); } catch {}
+            }
+          }
         }
       }
     }

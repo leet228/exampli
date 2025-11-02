@@ -56,6 +56,7 @@ export async function ensureUser(): Promise<UserStats | null> {
         // дефолты при первом создании
         energy: 25,
         coins: 500,
+        ai_plus_until: null,
       }, { onConflict: 'tg_id' })
       .select('*')
       .single();

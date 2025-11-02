@@ -31,21 +31,40 @@ export default function AI() {
     } catch { return false; }
   });
 
+  const [isAiPlus, setIsAiPlus] = React.useState<boolean>(() => {
+    try {
+      const apu0 = (window as any)?.__exampliBoot?.user?.ai_plus_until || (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until);
+      if (apu0) return Boolean(new Date(String(apu0)).getTime() > Date.now());
+      // Проверяем в metadata если поля нет
+      const meta = (window as any)?.__exampliBoot?.user?.metadata || (cacheGet<any>(CACHE_KEYS.user)?.metadata);
+      if (meta && typeof meta === 'object' && meta.ai_plus_until) {
+        return Boolean(new Date(String(meta.ai_plus_until)).getTime() > Date.now());
+      }
+      return false;
+    } catch { return false; }
+  });
+
+  // Показываем если есть ЛЮБАЯ подписка (PLUS или AI+)
+  const hasAccess = isPlus || isAiPlus;
+
   // React to subscription status updates (e.g., after purchase)
   React.useEffect(() => {
-    const onPlus = (evt: Event) => {
-      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+    const onStats = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string; ai_plus_until?: string } & any>;
       if (e.detail?.plus_until !== undefined) {
         try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
       }
+      if (e.detail?.ai_plus_until !== undefined) {
+        try { setIsAiPlus(Boolean(e.detail.ai_plus_until && new Date(e.detail.ai_plus_until).getTime() > Date.now())); } catch {}
+      }
     };
-    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
-    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+    window.addEventListener('exampli:statsChanged', onStats as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
 
-  // При отсутствии подписки блокируем скролл всей страницы
+  // При отсутствии ЛЮБОЙ подписки блокируем скролл всей страницы
   React.useEffect(() => {
-    if (!isPlus) {
+    if (!hasAccess) {
       const prevOverflow = document.body.style.overflow;
       const prevOverscroll = document.documentElement.style.overscrollBehavior as string;
       document.body.style.overflow = 'hidden';
@@ -55,7 +74,7 @@ export default function AI() {
         document.documentElement.style.overscrollBehavior = prevOverscroll || '';
       };
     }
-  }, [isPlus]);
+  }, [hasAccess]);
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -211,8 +230,11 @@ export default function AI() {
             const clonedResponse = response.clone();
             const json = await clonedResponse.json();
             if (json?.error === 'limit_exceeded' || json?.detail === 'limit_exceeded') {
-              // Превышен лимит - показываем сообщение от AI с кнопкой
-              const limitMessage = 'Извините, вы исчерпали месячный лимит. Чтобы продолжить использование, вы можете купить КУРСИК AI +.';
+              // Превышен лимит - показываем сообщение от AI
+              // Если у пользователя есть AI+ подписка, показываем простое сообщение без кнопки
+              const limitMessage = isAiPlus 
+                ? 'Извините, вы исчерпали месячный лимит.' 
+                : 'Извините, вы исчерпали месячный лимит. Чтобы продолжить использование, вы можете купить КУРСИК AI +.';
               setMessages((prev) => [...prev, { 
                 role: 'assistant', 
                 content: limitMessage 
@@ -266,7 +288,7 @@ export default function AI() {
     }
   }
 
-  if (!isPlus) {
+  if (!hasAccess) {
     return (
       <div className="fixed inset-0 z-[40] pointer-events-none" style={{ background: '#01347a' }}>
         {/* Картинка на весь экран */}
@@ -298,11 +320,18 @@ export default function AI() {
         )}
         {/* Фиксированный HUD приветствия поверх ленты */}
         <div className="ai-greet-hud">
-          <div className="inline-block text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
-            {messages.length && messages[0]?.role === 'assistant' && typeof messages[0].content === 'string'
-              ? messages[0].content
-              : 'КУРСИК AI'}
-          </div>
+          {/* Показываем КУРСИК AI + если есть подписка AI+, иначе обычный заголовок */}
+          {isAiPlus ? (
+            <div className="text-center w-full">
+              <span className="font-extrabold text-xl tracking-wide" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span> <span className="font-extrabold text-xl tracking-wide" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>+</span>
+            </div>
+          ) : (
+            <div className="inline-block text-3xl font-extrabold tracking-wide text-[#e5edff] opacity-95">
+              {messages.length && messages[0]?.role === 'assistant' && typeof messages[0].content === 'string'
+                ? messages[0].content
+                : 'КУРСИК AI'}
+            </div>
+          )}
         </div>
 
         <div
@@ -456,13 +485,27 @@ function ChatBubble({ role, content, navigate }: ChatMessage & { navigate?: (pat
 
 function RenderMessageContent({ content, role, navigate }: { content: MessageContent; role: ChatRole; navigate?: (path: string) => void }) {
   const common = 'prose prose-invert max-w-none prose-p:my-0 prose-li:my-0 prose-pre:bg-white/10';
+  // Проверяем наличие AI+ подписки
+  const isAiPlus = (() => {
+    try {
+      const apu0 = (window as any)?.__exampliBoot?.user?.ai_plus_until || (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until);
+      if (apu0) return Boolean(new Date(String(apu0)).getTime() > Date.now());
+      const meta = (window as any)?.__exampliBoot?.user?.metadata || (cacheGet<any>(CACHE_KEYS.user)?.metadata);
+      if (meta && typeof meta === 'object' && meta.ai_plus_until) {
+        return Boolean(new Date(String(meta.ai_plus_until)).getTime() > Date.now());
+      }
+      return false;
+    } catch { return false; }
+  })();
   const isLimitMessage = typeof content === 'string' && content.includes('исчерпали месячный лимит');
+  // Кнопка показывается только если нет подписки AI+ и есть упоминание о покупке
+  const showLimitButton = isLimitMessage && !isAiPlus && typeof content === 'string' && content.includes('купить КУРСИК AI +');
   
   if (typeof content === 'string') {
     return role === 'assistant' ? (
       <div className="space-y-3">
         <MarkdownRenderer className={`${common} text-base leading-relaxed`} content={content} />
-        {isLimitMessage && navigate && (
+        {showLimitButton && navigate && (
           <LimitButton onClick={() => { try { hapticSelect(); } catch {} navigate('/subscription'); }} />
         )}
       </div>
@@ -472,6 +515,7 @@ function RenderMessageContent({ content, role, navigate }: { content: MessageCon
   }
   const textParts = content.filter((p) => p.type === 'text').map((p) => (p as any).text || '').join('');
   const isLimitMessageInParts = textParts.includes('исчерпали месячный лимит');
+  const showLimitButtonInParts = isLimitMessageInParts && !isAiPlus && textParts.includes('купить КУРСИК AI +');
   
   return (
     <div className="space-y-2">
@@ -497,7 +541,7 @@ function RenderMessageContent({ content, role, navigate }: { content: MessageCon
         }
         return null;
       })}
-      {isLimitMessageInParts && role === 'assistant' && navigate && (
+      {showLimitButtonInParts && role === 'assistant' && navigate && (
         <LimitButton onClick={() => { try { hapticSelect(); } catch {} navigate('/subscription'); }} />
       )}
     </div>

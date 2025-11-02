@@ -418,7 +418,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       initial={{ opacity: 0, y: -8, scale: 0.96, rotate: 0 }}
                       animate={{ opacity: 1, y: 6, scale: 1.0, rotate: 0 }}
                       exit={{ opacity: 0, y: -8 }}
-                      className="absolute top-1 font-extrabold text-xs"
+                      className="absolute top-0 font-extrabold text-xs"
                       style={{ color: ((streakFlash?.v ?? 0) >= 10 ? '#123ba3' : ((streakFlash?.v ?? 0) >= 5 ? '#2c58c7' : '#3c73ff')), left: streakLeft }}
                     >
                       <motion.span initial={{ scale: 1, rotate: 0, y: 0 }} animate={streakCtrl}>

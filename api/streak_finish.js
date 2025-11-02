@@ -62,12 +62,21 @@ export default async function handler(req, res) {
     const hasToday = activeDays.has(todayIso);
 
     // Вычисляем длину цепочки подряд идущих дней, заканчивающейся baseDay
+    // Учитывает заморозки как продолжение стрика
     const computeChainLen = (baseIso) => {
       let len = 0;
       let cur = baseIso;
-      while (activeDays.has(cur)) {
-        len += 1;
-        cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+      while (true) {
+        if (activeDays.has(cur)) {
+          len += 1;
+          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        } else if (freezeDays.has(cur)) {
+          // Заморозка не прерывает стрик, но и не считается
+          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        } else {
+          // Наткнулись на пропуск - стрик прерывается
+          break;
+        }
       }
       return len;
     };
@@ -106,46 +115,67 @@ export default async function handler(req, res) {
     }
 
     // Нет записи за сегодня — определим, можно ли инкрементить
-    // Найдём последний активный день (<= сегодня)
-    const latestActiveIso = (() => {
-      for (const r of daysRaw) { const di = String(r.day); if (String(r.kind || 'active') === 'active') return di; }
-      return null;
-    })();
+    // Новая логика: считаем стрик от сегодня назад, учитывая все активные дни
+    // и заморозки между ними (заморозки не прерывают стрик)
     const hasYesterdayActive = activeDays.has(yesterdayIso);
     const hasYesterdayFreeze = freezeDays.has(yesterdayIso);
     // Backward-compatible aliases for debug payload
     const hasYesterday = hasYesterdayActive;
-    const latestIso = latestActiveIso;
     let newStreak = 1;
-    if (hasYesterdayActive) {
-      // Вчера был активный день — обычная логика
-      const chainYesterday = computeChainLen(yesterdayIso);
-      newStreak = chainYesterday + 1;
-    } else if (latestActiveIso) {
-      // Есть последний активный день: проверим, полностью ли промежуток между ним и сегодня закрыт freeze-днями
-      // Если да — стрик продолжается (+1 к последнему активному); если нет — сбрасывается
-      const coveredByFreeze = (() => {
-        let cur = new Date(Date.parse(latestActiveIso + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
-        // Проверяем все дни от следующего после последнего активного до вчера включительно
-        // (сегодня еще не записан в activeDays, поэтому проверяем до yesterdayIso включительно)
-        while (cur <= yesterdayIso) {
-          // Если день не freeze и не active — это разрыв
-          if (!freezeDays.has(cur) && !activeDays.has(cur)) return false;
-          cur = new Date(Date.parse(cur + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+    
+    // Проверяем вчера: если вчера был активный или заморозка, можем продолжить стрик
+    if (hasYesterdayActive || hasYesterdayFreeze) {
+      // Вчера был активный день или заморозка - можем продолжить стрик
+      // Считаем цепочку от вчера назад
+      let chainFromYesterday = 0;
+      let cur = yesterdayIso;
+      while (true) {
+        if (activeDays.has(cur)) {
+          chainFromYesterday += 1;
+          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        } else if (freezeDays.has(cur)) {
+          // Заморозка не прерывает стрик, продолжаем искать активные дни
+          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        } else {
+          // Наткнулись на пропуск - стрик прерывается
+          break;
         }
-        return true;
+      }
+      newStreak = chainFromYesterday + 1; // +1 за сегодня
+    } else {
+      // Вчера не было ни активности, ни заморозки - проверяем, есть ли вообще история
+      // Найдём последний активный день (<= сегодня)
+      const latestActiveIso = (() => {
+        for (const r of daysRaw) { const di = String(r.day); if (String(r.kind || 'active') === 'active') return di; }
+        return null;
       })();
-      if (coveredByFreeze) {
-        // Промежуток полностью покрыт freeze-днями (или их нет вообще) — стрик продолжается
-        const chainLastActive = computeChainLen(latestActiveIso);
-        newStreak = chainLastActive + 1;
+      const latestIso = latestActiveIso;
+      
+      if (latestActiveIso) {
+        // Есть последний активный день: проверим, полностью ли промежуток между ним и сегодня закрыт freeze-днями
+        // Если да — стрик продолжается (+1 к последнему активному); если нет — сбрасывается
+        const coveredByFreeze = (() => {
+          let cur = new Date(Date.parse(latestActiveIso + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+          // Проверяем все дни от следующего после последнего активного до вчера включительно
+          while (cur <= yesterdayIso) {
+            // Если день не freeze и не active — это разрыв
+            if (!freezeDays.has(cur) && !activeDays.has(cur)) return false;
+            cur = new Date(Date.parse(cur + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+          }
+          return true;
+        })();
+        if (coveredByFreeze) {
+          // Промежуток полностью покрыт freeze-днями (или их нет вообще) — стрик продолжается
+          const chainLastActive = computeChainLen(latestActiveIso);
+          newStreak = chainLastActive + 1;
+        } else {
+          // Есть разрыв — сброс стрика
+          newStreak = 1;
+        }
       } else {
-        // Есть разрыв — сброс стрика
+        // Истории нет — первая активность
         newStreak = 1;
       }
-    } else {
-      // Истории нет — первая активность
-      newStreak = 1;
     }
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null, max_streak: userRow.max_streak ?? null, perfect_lessons: userRow.perfect_lessons ?? null };

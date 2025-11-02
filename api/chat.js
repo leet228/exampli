@@ -335,9 +335,50 @@ async function assertWithinLimit({ userId, estTokens }) {
         if (!url || !key) return { ok: true, remain: Infinity };
         const supabase = createClient(url, key);
         const month = new Date().toISOString().slice(0,7);
-        const RUB_LIMIT = Number(process.env.AI_MONTHLY_RUB_LIMIT || 750);
-        const RUB_PER_1K = Number(process.env.AI_COST_RUB_PER_1K || 3); // примерная цена за 1K токенов
-        const tokenCap = Math.max(1000, Math.floor((RUB_LIMIT / Math.max(0.01, RUB_PER_1K)) * 1000));
+        
+        // Базовый лимит без покупки: 400,000 токенов в месяц
+        const BASE_TOKEN_LIMIT = 400000;
+        let tokenCap = BASE_TOKEN_LIMIT;
+        
+        // Проверяем активную подписку на AI токены (КУРСИК AI +)
+        // Проверяем ai_plus_until в users или в metadata
+        let hasAiPlusSubscription = false;
+        try {
+            const { data: userRow } = await supabase
+                .from('users')
+                .select('ai_plus_until, metadata')
+                .eq('id', userId)
+                .maybeSingle();
+            
+            if (userRow) {
+                // Проверяем поле ai_plus_until если оно существует
+                if (userRow.ai_plus_until) {
+                    const untilDate = new Date(userRow.ai_plus_until);
+                    if (untilDate.getTime() > Date.now()) {
+                        hasAiPlusSubscription = true;
+                    }
+                } else if (userRow.metadata && typeof userRow.metadata === 'object') {
+                    // Проверяем в metadata
+                    const metaUntil = userRow.metadata.ai_plus_until;
+                    if (metaUntil) {
+                        const untilDate = new Date(metaUntil);
+                        if (untilDate.getTime() > Date.now()) {
+                            hasAiPlusSubscription = true;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Если поле не существует, просто пропускаем проверку подписки
+            try { console.warn('[assertWithinLimit] error checking ai_plus_until', e); } catch {}
+        }
+        
+        // Если есть активная подписка, добавляем +250,000 токенов
+        if (hasAiPlusSubscription) {
+            const AI_PLUS_TOKENS = 250000; // Дополнительные 250,000 токенов при подписке
+            tokenCap += AI_PLUS_TOKENS;
+        }
+        
         const { data: row } = await supabase
             .from('ai_usage')
             .select('tokens')
