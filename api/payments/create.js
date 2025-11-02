@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     const description = type === 'plan'
       ? `${product.title} — ${human}`
       : type === 'ai_tokens'
-      ? `${product.title} — ${human} (+250₽ токенов в месяц)`
+      ? `AI+ токены: ${human}`
       : `${product.title}: ${human}`;
 
     // Payload will be echoed back in successful_payment.invoice_payload
@@ -88,8 +88,13 @@ export default async function handler(req, res) {
     const payload = rawPayload.slice(0, 120);
 
     // Для XTR (Telegram Stars) используем количество звёзд напрямую
+    const priceLabel = type === 'plan' 
+      ? `${human}`.slice(0, 32)
+      : type === 'ai_tokens'
+      ? `AI+ токены: ${human}`.slice(0, 32)
+      : `${human}`.slice(0, 32);
     const prices = [
-      { label: `${human}`.slice(0, 32) || 'Покупка', amount: Number(product.stars) }
+      { label: priceLabel || 'Покупка', amount: Number(product.stars) }
     ];
 
     const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/createInvoiceLink`;
@@ -97,7 +102,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: (type === 'plan' ? `Подписка: ${human}` : `Монеты: ${human}`),
+        title: (type === 'plan' ? `Подписка: ${human}` : type === 'ai_tokens' ? `AI+ токены: ${human}` : `Монеты: ${human}`),
         description: `${description} • ${product.stars} ⭐`,
         payload,
         currency: 'XTR',

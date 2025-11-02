@@ -327,7 +327,14 @@ export default function Subscription() {
         window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
       } catch {}
       // Обновим баланс монет и статус подписки
-      void (async () => { try { await refreshCoinsFromServer(); } catch {} try { await refreshPlusUntilFromServer(); } catch {} try { await refreshAiPlusUntilFromServer(); } catch {} })();
+      // Даем webhook время обработать платеж, затем обновляем статистику
+      setTimeout(() => {
+        void (async () => { 
+          try { await refreshCoinsFromServer(); } catch {} 
+          try { await refreshPlusUntilFromServer(); } catch {} 
+          try { await refreshAiPlusUntilFromServer(); } catch {} 
+        })();
+      }, 500); // 500ms задержка для обработки webhook
     };
     try { tg?.onEvent?.('invoiceClosed', handler); } catch {}
     return () => { try { tg?.offEvent?.('invoiceClosed', handler); } catch {} };

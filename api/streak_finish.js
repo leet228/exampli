@@ -43,140 +43,67 @@ export default async function handler(req, res) {
     const todayIso = localNow.toISOString().slice(0, 10); // YYYY-MM-DD в выбранной TZ
     const todayStart = Date.parse(`${todayIso}T00:00:00.000Z`) - offsetMs; // UTC-начало локального дня
 
-    // Считываем последние до 60 дней streak_days с kind, разделяем на active/freeze
-    let daysRaw = [];
+    // Простая логика: проверяем только сегодня и вчера
+    const yesterdayIso = new Date(Date.parse(todayIso + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+    
+    // Проверяем, есть ли уже запись на сегодня
+    let hasToday = false;
+    let hasYesterdayActive = false;
+    let hasYesterdayFreeze = false;
     try {
-      const { data } = await supabase
+      const { data: todayRow } = await supabase
         .from('streak_days')
         .select('day, kind')
         .eq('user_id', userRow.id)
-        .lte('day', todayIso)
-        .order('day', { ascending: false })
-        .limit(90);
-      daysRaw = Array.isArray(data) ? data : [];
+        .eq('day', todayIso)
+        .maybeSingle();
+      hasToday = Boolean(todayRow && String(todayRow.kind || 'active') === 'active');
+    } catch {}
+    
+    try {
+      const { data: yesterdayRow } = await supabase
+        .from('streak_days')
+        .select('day, kind')
+        .eq('user_id', userRow.id)
+        .eq('day', yesterdayIso)
+        .maybeSingle();
+      if (yesterdayRow) {
+        const kind = String(yesterdayRow.kind || 'active');
+        hasYesterdayActive = kind === 'active';
+        hasYesterdayFreeze = kind === 'freeze';
+      }
     } catch {}
 
-    const activeDays = new Set(daysRaw.filter(r => String(r.kind || 'active') === 'active').map(r => String(r.day)));
-    const freezeDays = new Set(daysRaw.filter(r => String(r.kind || '') === 'freeze').map(r => String(r.day)));
-    const yesterdayIso = new Date(Date.parse(todayIso + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-    const hasToday = activeDays.has(todayIso);
-
-    // Вычисляем длину цепочки подряд идущих дней, заканчивающейся baseDay
-    // Учитывает заморозки как продолжение стрика
-    const computeChainLen = (baseIso) => {
-      let len = 0;
-      let cur = baseIso;
-      while (true) {
-        if (activeDays.has(cur)) {
-          len += 1;
-          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-        } else if (freezeDays.has(cur)) {
-          // Заморозка не прерывает стрик, но и не считается
-          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-        } else {
-          // Наткнулись на пропуск - стрик прерывается
-          break;
-        }
-      }
-      return len;
-    };
-
+    // Если сегодня уже был активный день - ничего не делаем
     if (hasToday) {
-      // Уже есть запись на сегодня: актуализируем стрик и при необходимости max_streak/perfect_lessons
-      const chain = computeChainLen(todayIso);
-      // Прочитаем текущие значения max_streak и perfect_lessons
-      let prevMax = 0, prevPerfect = 0;
-      try {
-        const { data: prev } = await supabase
-          .from('users')
-          .select('id, max_streak, perfect_lessons')
-          .eq('id', userRow.id)
-          .maybeSingle();
-        prevMax = Number(prev && prev.max_streak != null ? prev.max_streak : 0);
-        prevPerfect = Number(prev && prev.perfect_lessons != null ? prev.perfect_lessons : 0);
-      } catch {}
+      // Только обновляем max_streak/perfect_lessons если нужно
+      let prevMax = Number(userRow.max_streak || 0);
+      let prevPerfect = Number(userRow.perfect_lessons || 0);
       const perfectInc = (() => { try { const v = body?.perfect || body?.perfect_inc || 0; return Number(v) ? 1 : 0; } catch { return 0; } })();
-      // max_streak обновляем только если новый стрик побил рекорд
-      const nextMax = chain > prevMax ? chain : prevMax;
+      const currentStreak = Number(userRow.streak || 0);
+      const nextMax = currentStreak > prevMax ? currentStreak : prevMax;
       const nextPerfect = prevPerfect + (perfectInc ? 1 : 0);
-      try {
-        const upd = await supabase
-          .from('users')
-          .update({ max_streak: nextMax, ...(perfectInc ? { perfect_lessons: nextPerfect } : {}) })
-          .eq('id', userRow.id)
-          .select('id, streak, last_active_at, max_streak, perfect_lessons')
-          .single();
-        const row = upd && upd.data ? upd.data : { streak: chain, last_active_at: userRow.last_active_at, max_streak: nextMax, perfect_lessons: nextPerfect };
-        res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(row.streak || chain), last_active_at: row.last_active_at || null, max_streak: Number(row.max_streak || nextMax), perfect_lessons: Number(row.perfect_lessons != null ? row.perfect_lessons : nextPerfect), timezone: tz, debug: { todayIso, hasToday: true } });
-      } catch (e) {
-        res.status(200).json({ ok: true, user_id: userRow.id, streak: chain, last_active_at: new Date(todayStart).toISOString(), max_streak: nextMax, perfect_lessons: nextPerfect, timezone: tz, debug: { todayIso, hasToday: true } });
+      if (nextMax !== prevMax || perfectInc) {
+        try {
+          await supabase
+            .from('users')
+            .update({ max_streak: nextMax, ...(perfectInc ? { perfect_lessons: nextPerfect } : {}) })
+            .eq('id', userRow.id);
+        } catch {}
       }
+      res.status(200).json({ ok: true, user_id: userRow.id, streak: currentStreak, last_active_at: userRow.last_active_at || null, max_streak: nextMax, perfect_lessons: nextPerfect, timezone: tz, debug: { todayIso, hasToday: true } });
       return;
     }
 
-    // Нет записи за сегодня — определим, можно ли инкрементить
-    // Новая логика: считаем стрик от сегодня назад, учитывая все активные дни
-    // и заморозки между ними (заморозки не прерывают стрик)
-    const hasYesterdayActive = activeDays.has(yesterdayIso);
-    const hasYesterdayFreeze = freezeDays.has(yesterdayIso);
-    // Backward-compatible aliases for debug payload
-    const hasYesterday = hasYesterdayActive;
+    // Нет записи на сегодня - вычисляем новый стрик
+    const currentStreak = Number(userRow.streak || 0);
     let newStreak = 1;
     
-    // Проверяем вчера: если вчера был активный или заморозка, можем продолжить стрик
+    // Если вчера был активный день или заморозка - продолжаем стрик
     if (hasYesterdayActive || hasYesterdayFreeze) {
-      // Вчера был активный день или заморозка - можем продолжить стрик
-      // Считаем цепочку от вчера назад
-      let chainFromYesterday = 0;
-      let cur = yesterdayIso;
-      while (true) {
-        if (activeDays.has(cur)) {
-          chainFromYesterday += 1;
-          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-        } else if (freezeDays.has(cur)) {
-          // Заморозка не прерывает стрик, продолжаем искать активные дни
-          cur = new Date(Date.parse(cur + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
-        } else {
-          // Наткнулись на пропуск - стрик прерывается
-          break;
-        }
-      }
-      newStreak = chainFromYesterday + 1; // +1 за сегодня
-    } else {
-      // Вчера не было ни активности, ни заморозки - проверяем, есть ли вообще история
-      // Найдём последний активный день (<= сегодня)
-      const latestActiveIso = (() => {
-        for (const r of daysRaw) { const di = String(r.day); if (String(r.kind || 'active') === 'active') return di; }
-        return null;
-      })();
-      const latestIso = latestActiveIso;
-      
-      if (latestActiveIso) {
-        // Есть последний активный день: проверим, полностью ли промежуток между ним и сегодня закрыт freeze-днями
-        // Если да — стрик продолжается (+1 к последнему активному); если нет — сбрасывается
-        const coveredByFreeze = (() => {
-          let cur = new Date(Date.parse(latestActiveIso + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
-          // Проверяем все дни от следующего после последнего активного до вчера включительно
-          while (cur <= yesterdayIso) {
-            // Если день не freeze и не active — это разрыв
-            if (!freezeDays.has(cur) && !activeDays.has(cur)) return false;
-            cur = new Date(Date.parse(cur + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
-          }
-          return true;
-        })();
-        if (coveredByFreeze) {
-          // Промежуток полностью покрыт freeze-днями (или их нет вообще) — стрик продолжается
-          const chainLastActive = computeChainLen(latestActiveIso);
-          newStreak = chainLastActive + 1;
-        } else {
-          // Есть разрыв — сброс стрика
-          newStreak = 1;
-        }
-      } else {
-        // Истории нет — первая активность
-        newStreak = 1;
-      }
+      newStreak = currentStreak + 1;
     }
+    // Иначе сброс до 1 (новыйStreak уже = 1)
 
     let updated = { id: userRow.id, streak: userRow.streak ?? 0, last_active_at: userRow.last_active_at ?? null, max_streak: userRow.max_streak ?? null, perfect_lessons: userRow.perfect_lessons ?? null };
     // Прочитаем текущие значения max_streak и perfect_lessons
@@ -228,7 +155,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, max_streak: Number(updated && updated.max_streak != null ? updated.max_streak : nextMax), perfect_lessons: Number(updated && updated.perfect_lessons != null ? updated.perfect_lessons : (perfectInc ? nextPerfect : prevPerfect)), timezone: tz, debug: { todayIso, hasToday: false, hasYesterday, latestIso, computed: newStreak } });
+    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, max_streak: Number(updated && updated.max_streak != null ? updated.max_streak : nextMax), perfect_lessons: Number(updated && updated.perfect_lessons != null ? updated.perfect_lessons : (perfectInc ? nextPerfect : prevPerfect)), timezone: tz, debug: { todayIso, hasToday: false, hasYesterdayActive, hasYesterdayFreeze, currentStreak, computed: newStreak } });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
     res.status(500).json({ ok: false, code: 'internal', error: 'Internal error' });

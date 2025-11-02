@@ -165,22 +165,48 @@ export default async function handler(req, res) {
           const months = Number(metadata?.months || 1);
           const pcode = String(metadata?.product_id || '').trim() || 'ai_plus';
           
-          // Сохраняем платеж
+          // Сохраняем платеж (ВНИМАНИЕ: нужно добавить 'ai_tokens' в CHECK constraint payments_type_check в Supabase!)
+          // Временно используем 'plan' если 'ai_tokens' не поддерживается
+          let paymentType = 'ai_tokens';
           try {
             const { data: payIns3, error: payErr3 } = await supabase.from('payments').upsert({
               id: paymentId,
               user_id: userRow.id,
-              type: 'ai_tokens',
+              type: paymentType,
               product_id: pcode,
               amount_rub: amountRub,
               currency: 'XTR',
               status: 'succeeded',
               test: false,
               payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
+              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid, original_type: 'ai_tokens' },
               captured_at: new Date().toISOString(),
             });
-            if (payErr3) { try { console.error('[payments upsert ai_tokens] error:', payErr3); } catch {} }
+            if (payErr3) {
+              // Если constraint не позволяет 'ai_tokens', пробуем 'plan' как fallback
+              if (payErr3.code === '23514' && payErr3.message && payErr3.message.includes('payments_type_check')) {
+                try {
+                  console.warn('[payments] ai_tokens type not allowed, using plan as fallback. Please add ai_tokens to payments_type_check constraint in Supabase!');
+                  await supabase.from('payments').upsert({
+                    id: paymentId,
+                    user_id: userRow.id,
+                    type: 'plan',
+                    product_id: pcode,
+                    amount_rub: amountRub,
+                    currency: 'XTR',
+                    status: 'succeeded',
+                    test: false,
+                    payment_method: null,
+                    metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid, original_type: 'ai_tokens' },
+                    captured_at: new Date().toISOString(),
+                  });
+                } catch (e2) {
+                  try { console.error('[payments upsert ai_tokens fallback] error:', e2); } catch {}
+                }
+              } else {
+                try { console.error('[payments upsert ai_tokens] error:', payErr3); } catch {}
+              }
+            }
           } catch (e) { try { console.error('payments upsert (ai_tokens) failed', e); } catch {} }
 
           // Устанавливаем дату окончания подписки на AI токены
