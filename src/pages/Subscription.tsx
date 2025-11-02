@@ -311,13 +311,33 @@ export default function Subscription() {
                 const addCoins = coinsMap[id] || 0;
                 if (addCoins > 0) {
                   try {
-                    const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-                    const currentCoins = Number(cu?.coins || 0);
-                    const newCoins = currentCoins + addCoins;
-                    cacheSet(CACHE_KEYS.user, { ...cu, coins: newCoins });
-                    const boot: any = (window as any).__exampliBoot || {};
-                    (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), coins: newCoins } };
-                    window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: newCoins } } as any));
+                    // Плавная анимация прибавления монет
+                    const start = Number(coins || 0);
+                    const end = start + addCoins;
+                    let frame = 0;
+                    const frames = 24; // ~24 шага
+                    const step = (end - start) / frames;
+                    // Остановим предыдущую анимацию, если есть
+                    try { if ((window as any).__exampliCoinsAnim) clearInterval((window as any).__exampliCoinsAnim); } catch {}
+                    (window as any).__exampliCoinsAnim = setInterval(() => {
+                      frame += 1;
+                      const val = frame >= frames ? end : Math.round(start + step * frame);
+                      // Локально
+                      setCoins(val);
+                      // Глобально — чтобы HUD/профиль тоже росли
+                      try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: val } } as any)); } catch {}
+                      if (frame >= frames) {
+                        try { clearInterval((window as any).__exampliCoinsAnim); } catch {}
+                        try { (window as any).__exampliCoinsAnim = null; } catch {}
+                        // Зафиксируем итог в кешах
+                        try {
+                          const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+                          cacheSet(CACHE_KEYS.stats, { ...cs, coins: end });
+                          const boot: any = (window as any).__exampliBoot || {};
+                          (window as any).__exampliBoot = { ...boot, stats: { ...(boot?.stats || {}), coins: end } };
+                        } catch {}
+                      }
+                    }, 20);
                   } catch {}
                 }
               } else if (kind === 'ai_tokens') {
