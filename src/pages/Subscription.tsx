@@ -293,6 +293,7 @@ export default function Subscription() {
               void (async () => {
                 try { await refreshCoinsFromServer(); } catch {}
                 try { await refreshPlusUntilFromServer(); } catch {}
+                try { await refreshAiPlusUntilFromServer(); } catch {}
               })();
               try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата успешно завершена' } } as any)); } catch {}
               if (kind === 'plan') {

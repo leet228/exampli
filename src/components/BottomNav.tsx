@@ -43,17 +43,32 @@ export default function BottomNav() {
       return Boolean(pu0 && new Date(String(pu0)).getTime() > Date.now());
     } catch { return false; }
   });
+  const [isAiPlus, setIsAiPlus] = useState<boolean>(() => {
+    try {
+      const apu0 = (window as any)?.__exampliBoot?.user?.ai_plus_until || (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until);
+      if (apu0) return Boolean(new Date(String(apu0)).getTime() > Date.now());
+      const meta = (window as any)?.__exampliBoot?.user?.metadata || (cacheGet<any>(CACHE_KEYS.user)?.metadata);
+      if (meta && typeof meta === 'object' && meta.ai_plus_until) {
+        return Boolean(new Date(String(meta.ai_plus_until)).getTime() > Date.now());
+      }
+      return false;
+    } catch { return false; }
+  });
   useEffect(() => {
-    const onPlus = (evt: Event) => {
-      const e = evt as CustomEvent<{ plus_until?: string } & any>;
+    const onStats = (evt: Event) => {
+      const e = evt as CustomEvent<{ plus_until?: string; ai_plus_until?: string } & any>;
       if (e.detail?.plus_until !== undefined) {
         try { setIsPlus(Boolean(e.detail.plus_until && new Date(e.detail.plus_until).getTime() > Date.now())); } catch {}
       }
+      if (e.detail?.ai_plus_until !== undefined) {
+        try { setIsAiPlus(Boolean(e.detail.ai_plus_until && new Date(e.detail.ai_plus_until).getTime() > Date.now())); } catch {}
+      }
     };
-    window.addEventListener('exampli:statsChanged', onPlus as EventListener);
-    return () => window.removeEventListener('exampli:statsChanged', onPlus as EventListener);
+    window.addEventListener('exampli:statsChanged', onStats as EventListener);
+    return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
-  const whiteOnAiNoPlus = isAI && !isPlus;
+  // Белый bottom nav только если на странице AI и нет ни PLUS, ни AI+ подписки
+  const whiteOnAiNoPlus = isAI && !isPlus && !isAiPlus;
   return (
     <nav className={`bottomnav fixed left-0 right-0 z-[45] pb-0 ${whiteOnAiNoPlus ? 'bottomnav-white' : ''}`}>
       <div className="mx-auto max-w-xl">
