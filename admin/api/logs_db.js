@@ -29,7 +29,16 @@ export default async function handler(req, res) {
     const { data, error } = await q
     if (error) { res.status(500).json({ error: error.message }); return }
 
-    const rows = (data || []).map(r => ({ ts: r.ts, level: String(r.level||'info'), message: r.message || '', source: r.source || 'log', path: r.path || null, status: r.status != null ? Number(r.status) : null }))
+    const rows = (data || []).map(r => {
+      let st = r.status != null ? Number(r.status) : NaN
+      if (!Number.isFinite(st) || st === 0) {
+        try {
+          const m = String(r.message || '').match(/status\s*=\s*(\d{3})/i)
+          if (m) st = Number(m[1])
+        } catch {}
+      }
+      return { ts: r.ts, level: String(r.level||'info'), message: r.message || '', source: r.source || 'log', path: r.path || null, status: Number.isFinite(st) ? st : null }
+    })
 
     const wantSummary = String(req.query?.summary || '').toLowerCase() === '1' || String(req.query?.summary || '').toLowerCase() === 'true'
     const summary = wantSummary ? computeSummary(rows) : undefined

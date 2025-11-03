@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     try {
       const { data, error } = await supabase
         .from('vercel_logs')
-        .select('id, level, status, ts, source, path')
+        .select('id, level, status, ts, source, path, message')
         .gte('ts', todayIsoMsk)
         .neq('source', 'external')
         .not('path', 'ilike', '/_vercel/%')
@@ -60,7 +60,10 @@ export default async function handler(req, res) {
       if (!error) {
         for (const r of (data||[])) {
           const lvl = String(r.level||'').toLowerCase()
-          const st = Number(r.status||0)
+          let st = Number(r.status||0)
+          if (!Number.isFinite(st) || st === 0) {
+            try { const m = String(r.message||'').match(/status\s*=\s*(\d{3})/i); if (m) st = Number(m[1]) } catch {}
+          }
           if (lvl.includes('error') || lvl.includes('critical') || st >= 500) errorsToday += 1
         }
       }

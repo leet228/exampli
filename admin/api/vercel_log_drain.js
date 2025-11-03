@@ -65,8 +65,21 @@ function normalize(r) {
   const ts = r.timestamp || r.time || r.ts || Date.now()
   const level = (r.level || r.severity || 'info').toString()
   const msg = r.message || r.text || (r.payload && (r.payload.text || r.payload.message)) || ''
-  const status = Number(r.status || r.code || (r.payload && (r.payload.statusCode || r.payload.status)) || null)
-  const path = r.path || r.url || (r.payload && (r.payload.path || r.payload.url)) || null
+  let status = Number(r.status || r.code || (r.payload && (r.payload.statusCode || r.payload.status)) || NaN)
+  let path = r.path || r.url || (r.payload && (r.payload.path || r.payload.url)) || null
+  // Try to derive from message text like: "[POST] /api/boot1 status=200"
+  try {
+    const text = String(msg || '')
+    if (!Number.isFinite(status) || status === 0) {
+      const m = text.match(/status\s*=\s*(\d{3})/i)
+      if (m) status = Number(m[1])
+    }
+    if (!path) {
+      const p = text.match(/\[\w+\]\s+([^\s]+)\s+status=/) || text.match(/\s(\/[^\s]+)\sstatus=/)
+      if (p && p[1]) path = p[1]
+    }
+  } catch {}
+  if (!Number.isFinite(status)) status = null
   const source = r.source || r.type || 'log'
   const dep = r.deploymentId || r.deployment_id || null
   const proj = r.projectId || r.project_id || null
