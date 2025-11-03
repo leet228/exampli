@@ -172,7 +172,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   }}
                 >
                   <img
-                    src={`/road_pic/${courseCode}${imageInfo.imageNum}.svg`}
+                    src={`/road_pic/${courseCode}${imageInfo.imageNum}0.svg`}
                     alt=""
                     className="h-auto object-contain pointer-events-none select-none"
                     style={{ width: '160px', maxWidth: '180px' }}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { hapticSelect, hapticTiny, hapticSuccess, hapticError, hapticStreakMilestone } from '../../lib/haptics';
@@ -19,6 +20,7 @@ type TaskRow = {
 };
 
 export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: boolean; onClose: () => void; lessonId: string | number }) {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [idx, setIdx] = useState<number>(0);
   const [progress, setProgress] = useState<number>(0);
@@ -67,6 +69,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [finishReady, setFinishReady] = useState<boolean>(false); // все карточки показаны
   const [finishMs, setFinishMs] = useState<number>(0);
   const finishSavedRef = useRef<boolean>(false);
+  // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
+  const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -128,6 +132,27 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setFinishReady(false);
       setFinishMs(0);
       finishSavedRef.current = false;
+      // Снимок ДО урока для пост-экрана (стрик/дневные задания/монеты)
+      try {
+        const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+        // вчера freeze?
+        let yFrozen = false;
+        try {
+          const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+          const tz = 'Europe/Moscow';
+          const now = new Date();
+          const ref = new Date(now.getTime() - 86400000);
+          const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+          const p = fmt.formatToParts(ref);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const yIso = `${Number(p.find(x=>x.type==='year')?.value||0)}-${pad(Number(p.find(x=>x.type==='month')?.value||0))}-${pad(Number(p.find(x=>x.type==='day')?.value||0))}`;
+          yFrozen = (all || []).some(r => String(r?.day || '') === yIso && String(r?.kind || '') === 'freeze');
+        } catch {}
+        const questsMeta = cacheGet<Record<string, any>>(CACHE_KEYS.dailyQuestsProgress) || {};
+        const coins0 = Number(cs?.coins ?? 0);
+        beforeRef.current = { streak: Number(cs?.streak ?? 0), last_active_at: (cu?.last_active_at ?? null) as any, timezone: (cu?.timezone ?? null) as any, yesterdayFrozen: yFrozen, quests: questsMeta, coins: coins0 };
+      } catch {}
     })();
   }, [open, lessonId]);
 
@@ -467,7 +492,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   answersCorrect={answersCorrect}
                   hadAnyMistakes={hadAnyMistakes}
                   elapsedMs={finishMs}
-                  onDone={() => { setShowFinish(false); onClose(); }}
+                  onDone={() => {
+                    setShowFinish(false);
+                    const beforeSnap = beforeRef.current;
+                    try { onClose(); } catch {}
+                    try { navigate('/post-lesson', { state: { before: beforeSnap } }); } catch {}
+                  }}
                   onReady={() => setFinishReady(true)}
                   canProceed={finishReady}
                 />
