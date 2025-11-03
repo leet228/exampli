@@ -131,6 +131,15 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
     return () => clearTimeout(t);
   }, [before, onContinue]);
 
+  // Во время стадии 1 (0.5с) — тряска и частые tiny-хаптики (~50 за 0.5с)
+  React.useEffect(() => {
+    if (stage !== 1) return;
+    const pulses = 50; const step = Math.max(5, Math.floor(500 / pulses));
+    let sent = 0;
+    const id = setInterval(() => { try { hapticTiny(); } catch {} sent += 1; if (sent >= pulses) clearInterval(id as any); }, step);
+    return () => clearInterval(id as any);
+  }, [stage]);
+
   // Стадия 2: трансформация (огонь + инкремент), затем 0.5с пауза → стадия 3
   React.useEffect(() => {
     if (stage !== 2) return;
@@ -176,8 +185,14 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
       {/* Стрик: показываем и уводим вверх, если не пропускаем */}
       {!skip && (
         <motion.div initial={false} animate={{ y: stage >= 3 ? -140 : 0 }} transition={{ duration: 0.5, ease: 'easeInOut' }} className="flex flex-col items-center gap-6">
-          <img src={icon} alt="streak" className="w-40 h-40 select-none" />
-          <div className="text-[96px] leading-none font-extrabold tabular-nums" style={{ color: '#fbbf24', textShadow: '0 8px 0 rgba(0,0,0,0.18)' }}>{num}</div>
+          <motion.div
+            animate={stage === 1 ? { rotate: [0,-1.5,1.5,-1.5,1.5,0], x: [0,-2,2,-2,2,0], y: [0,1,-1,1,-1,0] } : { rotate: 0, x: 0, y: 0 }}
+            transition={{ duration: 0.5, repeat: stage === 1 ? Infinity : 0, repeatType: 'loop', ease: 'easeInOut' }}
+            className="flex flex-col items-center gap-6"
+          >
+            <img src={icon} alt="streak" className="w-40 h-40 select-none" />
+            <div className="text-[96px] leading-none font-extrabold tabular-nums" style={{ color: '#fbbf24', textShadow: '0 8px 0 rgba(0,0,0,0.18)' }}>{num}</div>
+          </motion.div>
         </motion.div>
       )}
       {/* Неделя */}
@@ -300,13 +315,13 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
   return (
     <div className="absolute inset-0">
       {/* Фиксированные монеты сверху справа */}
-      <div className="fixed right-4 top-6 z-50">
+      <div className="fixed right-4 top-28 z-50">
         <div className="flex items-center gap-1">
           <img src="/stickers/coin_cat.svg" alt="" className="w-6 h-6 select-none" />
           <span className="text-yellow-300 font-extrabold tabular-nums">{coins}</span>
         </div>
       </div>
-      <div className="max-w-xl mx-auto px-4 pt-32 pb-28 grid gap-8">
+      <div className="max-w-xl mx-auto px-4 pt-60 pb-28 grid gap-8">
         {quests.map((m, i) => {
           const p = progress[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
           const prev = (before?.quests || {})[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
