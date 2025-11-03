@@ -112,13 +112,13 @@ function PromoPlus({ onSkip }: { onSkip: () => void }) {
 }
 
 function StreakWeek({ before, onContinue }: { before: any; onContinue: () => void }) {
-  // Стадии: 1) пауза 3.0с (тряска + tiny); 2) трансформация стрика; 3) слайд вверх + показ недели; 4) подсветка сегодняшнего круга; 5) кнопка
+  // Стадии: 1) пауза 2.0с (тряска + tiny); 2) трансформация стрика; 3) слайд вверх + показ недели; 4) подсветка сегодняшнего круга; 5) кнопка
   const [stage, setStage] = React.useState<1|2|3|4|5>(1);
   const [icon, setIcon] = React.useState<string>('/stickers/dead_fire.svg');
   const [num, setNum] = React.useState<number>(0);
   const [skip, setSkip] = React.useState<boolean>(false);
   const startRef = React.useRef<number>(0);
-  const WAIT_MS = 3000;
+  const WAIT_MS = 2000;
 
   // Инициализация стартового вида и запуск таймингов — по streak_days
   React.useEffect(() => {
@@ -132,7 +132,7 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
     return () => clearTimeout(t);
   }, [before, onContinue]);
 
-  // Во время стадии 1 (3.0с) — тряска и частые tiny-хаптики (~100/сек → ~300 за 3с)
+  // Во время стадии 1 (2.0с) — тряска и частые tiny-хаптики (~100/сек → ~200 за 2с)
   React.useEffect(() => {
     if (stage !== 1) return;
     const pulses = Math.max(1, Math.round(WAIT_MS / 10));
