@@ -1,6 +1,7 @@
 // Receive Vercel Log Drain (Custom Endpoint) events and store in Supabase
 // Optional signature verification with env VERCEL_LOG_DRAIN_SECRET
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 
 export default async function handler(req, res) {
   try {
@@ -8,12 +9,16 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); res.status(405).json({ error: 'Method Not Allowed' }); return }
 
     const secret = process.env.VERCEL_LOG_DRAIN_SECRET || ''
-    if (secret) {
-      const sig = req.headers['x-vercel-signature'] || req.headers['vercel-signature'] || req.headers['x-signature']
-      if (!sig || String(sig) !== String(secret)) { res.status(401).json({ error: 'invalid_signature' }); return }
-    }
-
     const text = await readRaw(req)
+    if (secret) {
+      const header = String(req.headers['x-vercel-signature'] || '')
+      const bodyBuf = Buffer.from(text || '', 'utf-8')
+      const expected = crypto.createHmac('sha1', secret).update(bodyBuf).digest('hex')
+      if (!header || header !== expected) {
+        res.status(403).json({ code: 'invalid_signature', error: "signature didn't match" });
+        return
+      }
+    }
     const rows = parseNdjson(text)
     if (!rows.length) { res.status(200).json({ ok: true, received: 0 }); return }
 
@@ -39,7 +44,15 @@ export default async function handler(req, res) {
 
 function parseNdjson(text) {
   try {
-    const lines = String(text || '').split(/\r?\n/).filter(Boolean)
+    const raw = String(text || '')
+    const trimmed = raw.trim()
+    // Single JSON object/array
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      const j = JSON.parse(trimmed)
+      return Array.isArray(j) ? j : [j]
+    }
+    // NDJSON
+    const lines = raw.split(/\r?\n/).filter(Boolean)
     const arr = []
     for (const ln of lines) {
       try { arr.push(JSON.parse(ln)) } catch { /* skip */ }

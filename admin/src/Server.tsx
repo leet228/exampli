@@ -43,7 +43,7 @@ function LocalMetricsPanel() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('/api/vercel_logs?project=exampli&domain=exampli.vercel.app&range=7d&summary=1')
+        const r = await fetch('/api/logs_db?range=7d&summary=1', { cache: 'no-store' })
         const j = await r.json()
         if (j?.summary && typeof j.summary.errorRate === 'number') setWeeklyErr(j.summary.errorRate)
       } catch {}
@@ -81,11 +81,11 @@ function VercelLogsPanel() {
   async function load(rng: '24h' | '7d') {
     setMeta(m => ({ ...m, loading: true, error: null }))
     try {
-      const r = await fetch('/api/vercel_logs?project=exampli&domain=exampli.vercel.app&range=' + rng)
+      const r = await fetch('/api/logs_db?range=' + rng, { cache: 'no-store' })
       const j = await r.json()
       if (!r.ok || !j?.ok) throw new Error(j?.error || 'load_failed')
       setRows(j.rows || [])
-      setMeta({ deployment: j.deployment || null, loading: false, error: null })
+      setMeta({ deployment: null, loading: false, error: null })
     } catch (e: any) {
       setRows([])
       setMeta({ deployment: null, loading: false, error: e?.message || 'Ошибка загрузки логов' })
