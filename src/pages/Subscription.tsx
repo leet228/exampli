@@ -287,6 +287,8 @@ export default function Subscription() {
       if (link) {
         const tg = (window as any)?.Telegram?.WebApp;
         try {
+          // Запомним последний тип покупки, чтобы в invoiceClosed сделать оптимистичный апдейт даже если колбэк не поддерживается
+          try { (window as any).__exampliLastPurchase = { kind, id, at: Date.now() }; } catch {}
           const ok = tg?.openInvoice?.(link, (status: any) => {
             if (status === 'paid') {
               // Оптимистичное обновление для всех покупок
@@ -392,6 +394,64 @@ export default function Subscription() {
       try {
         window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
       } catch {}
+      // Оптимистично обновим по данным о последней покупке (если доступны)
+      try {
+        const lp = (window as any).__exampliLastPurchase as { kind?: 'plan'|'gems'|'ai_tokens'; id?: string; at?: number } | undefined;
+        if (lp && typeof lp.at === 'number' && Date.now() - lp.at < 120000 /* 2 мин */) {
+          if (lp.kind === 'plan') {
+            const monthsMatch = (lp.id || '').match(/^m(\d+)$/);
+            const months = monthsMatch ? Number(monthsMatch[1]) : 1;
+            const now = new Date();
+            const plusUntil = new Date(now.getTime());
+            plusUntil.setMonth(plusUntil.getMonth() + months);
+            const plusUntilIso = plusUntil.toISOString();
+            try {
+              const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+              cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntilIso });
+              const boot: any = (window as any).__exampliBoot || {};
+              (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), plus_until: plusUntilIso } };
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntilIso } } as any));
+            } catch {}
+          } else if (lp.kind === 'gems') {
+            const coinsMap: Record<string, number> = { g1: 1200, g2: 3000, g3: 6500 };
+            const addCoins = coinsMap[lp.id || ''] || 0;
+            if (addCoins > 0) {
+              // та же плавная анимация, что и в статус-колбэке
+              const start = Number(coins || 0);
+              const end = start + addCoins;
+              let frame = 0; const frames = 24; const step = (end - start) / frames;
+              try { if ((window as any).__exampliCoinsAnim) clearInterval((window as any).__exampliCoinsAnim); } catch {}
+              (window as any).__exampliCoinsAnim = setInterval(() => {
+                frame += 1; const val = frame >= frames ? end : Math.round(start + step * frame);
+                setCoins(val);
+                try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: val } } as any)); } catch {}
+                if (frame >= frames) {
+                  try { clearInterval((window as any).__exampliCoinsAnim); (window as any).__exampliCoinsAnim = null; } catch {}
+                  try {
+                    const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+                    cacheSet(CACHE_KEYS.stats, { ...cs, coins: end });
+                    const boot: any = (window as any).__exampliBoot || {};
+                    (window as any).__exampliBoot = { ...boot, stats: { ...(boot?.stats || {}), coins: end } };
+                  } catch {}
+                }
+              }, 20);
+            }
+          } else if (lp.kind === 'ai_tokens') {
+            const now = new Date();
+            const aiPlusUntil = new Date(now.getTime());
+            aiPlusUntil.setMonth(aiPlusUntil.getMonth() + 1);
+            const aiPlusUntilIso = aiPlusUntil.toISOString();
+            try {
+              const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+              cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: aiPlusUntilIso });
+              const boot: any = (window as any).__exampliBoot || {};
+              (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), ai_plus_until: aiPlusUntilIso } };
+              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: aiPlusUntilIso } } as any));
+            } catch {}
+          }
+        }
+      } catch {}
+
       // Обновим баланс монет и статус подписки
       // Даем webhook время обработать платеж, затем обновляем статистику
       setTimeout(() => {
@@ -456,10 +516,23 @@ export default function Subscription() {
       val = (data as any).metadata.ai_plus_until || null;
     }
     try {
-      const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-      cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: val });
-      (window as any).__exampliBoot = { ...(window as any).__exampliBoot, user: { ...(boot?.user || {}), ai_plus_until: val } };
-      window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: val } } as any));
+      // Защита от отката оптимистичного значения: берём максимум из локального и серверного
+      const local = (() => {
+        try {
+          const fromBoot = (window as any).__exampliBoot?.user?.ai_plus_until || null;
+          const fromCache = (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until) || null;
+          return fromBoot || fromCache || null;
+        } catch { return null; }
+      })();
+      const localMs = local ? new Date(String(local)).getTime() : 0;
+      const serverMs = val ? new Date(String(val)).getTime() : 0;
+      const bestIso = (serverMs > localMs) ? (val as any) : local;
+      if (bestIso !== undefined) {
+        const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+        cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: bestIso || null });
+        (window as any).__exampliBoot = { ...(window as any).__exampliBoot, user: { ...(boot?.user || {}), ai_plus_until: bestIso || null } };
+        window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: bestIso || null } } as any));
+      }
     } catch {}
   }
 
