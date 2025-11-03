@@ -95,7 +95,7 @@ function PromoPlus({ onSkip }: { onSkip: () => void }) {
     <div className="absolute inset-0" style={{ background: '#01347a' }}>
       <img src="/subs/sub_pic.svg" alt="PLUS" className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" style={{ transform: 'translateY(100px)' }} />
       {!ready && (
-        <div className="absolute left-5 w-14 h-14" style={{ top: 96 }}>
+        <div className="absolute left-5 w-14 h-14" style={{ top: 120 }}>
           <div className="relative w-14 h-14 rounded-full" style={{ background: `conic-gradient(#fff ${Math.round(pct*360)}deg, rgba(255,255,255,0.25) 0)` }}>
             <div className="absolute inset-1 rounded-full" style={{ background: '#01347a' }} />
           </div>
@@ -121,24 +121,7 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
 
   // Инициализация стартового вида и запуск таймингов — по streak_days
   React.useEffect(() => {
-    const tz = 'Europe/Moscow';
-    const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const parts = fmt.formatToParts(new Date());
-    const ty = Number(parts.find(x=>x.type==='year')?.value||0);
-    const tm = Number(parts.find(x=>x.type==='month')?.value||0);
-    const td = Number(parts.find(x=>x.type==='day')?.value||0);
-    const todayIso = `${ty}-${pad(tm)}-${pad(td)}`;
-    const yParts = fmt.formatToParts(new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000));
-    const yy = Number(yParts.find(x=>x.type==='year')?.value||0);
-    const ym = Number(yParts.find(x=>x.type==='month')?.value||0);
-    const yd = Number(yParts.find(x=>x.type==='day')?.value||0);
-    const yesterdayIso = `${yy}-${pad(ym)}-${pad(yd)}`;
-    const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
-    const todayRec = (all || []).find(r => String(r?.day || '') === todayIso);
-    if (todayRec) { setSkip(true); const t = setTimeout(() => onContinue(), 0); return () => clearTimeout(t); }
-    const yRec = (all || []).find(r => String(r?.day || '') === yesterdayIso);
-    const yKind = String(yRec?.kind || '');
+    const yKind = String(before?.yKind || '');
     const prev = Math.max(0, Number(before?.streak ?? 0));
     let startIcon = '/stickers/dead_fire.svg';
     if (yKind === 'active') startIcon = '/stickers/almost_dead_fire.svg';
@@ -263,10 +246,10 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
     (async () => {
       if (revealIdx < 0 || revealIdx >= quests.length) return;
       const current = quests[revealIdx];
-      // Если это задание уже выполнено изначально — сразу переходим к следующему без анимаций/хаптиков
-      const p = progress[current.code] || ({ status: 'in_progress' } as any);
-      const alreadyDone = String(p.status || '') === 'completed' || String(p.status || '') === 'claimed';
-      if (alreadyDone) { if (!cancelled) setRevealIdx(i => i + 1); return; }
+      // Пропускаем ТОЛЬКО если задание было выполнено ДО урока (по снапшоту before)
+      const was = (before?.quests || {})[current.code] || ({ status: 'in_progress' } as any);
+      const wasDoneBefore = String(was.status || '') === 'completed' || String(was.status || '') === 'claimed';
+      if (wasDoneBefore) { if (!cancelled) setRevealIdx(i => i + 1); return; }
       // Во время анимации прогресса даём ~10 tiny хаптиков
       const pulses = 10; const step = Math.max(40, Math.floor(BAR_MS / pulses));
       let sent = 0;
@@ -316,14 +299,14 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
 
   return (
     <div className="absolute inset-0">
-      <div className="max-w-xl mx-auto px-4 pt-40 pb-28 grid gap-8">
-        {/* Монеты — опущены ниже (над списком заданий) */}
-        <div className="flex items-center justify-end">
-          <div className="flex items-center gap-1">
-            <img src="/stickers/coin_cat.svg" alt="" className="w-6 h-6 select-none" />
-            <span className="text-yellow-300 font-extrabold tabular-nums">{coins}</span>
-          </div>
+      {/* Фиксированные монеты сверху справа */}
+      <div className="fixed right-4 top-6 z-50">
+        <div className="flex items-center gap-1">
+          <img src="/stickers/coin_cat.svg" alt="" className="w-6 h-6 select-none" />
+          <span className="text-yellow-300 font-extrabold tabular-nums">{coins}</span>
         </div>
+      </div>
+      <div className="max-w-xl mx-auto px-4 pt-32 pb-28 grid gap-8">
         {quests.map((m, i) => {
           const p = progress[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
           const prev = (before?.quests || {})[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
