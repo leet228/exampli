@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/daily_report", "schedule": "0 15 * * *" }
+  ],
   "headers": [
     {
       "source": "/models/(.*)\\.onnx",

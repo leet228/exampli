@@ -18,19 +18,10 @@ export default function PostLesson() {
     try { const pu = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until; return Boolean(pu && new Date(String(pu)).getTime() > Date.now()); } catch { return false; }
   })();
 
-  // Вычисляем, был ли стрик уже сегодня ДО урока — по кешу streak_days
+  // Вычисляем, был ли стрик уже сегодня ДО урока — по снапшоту до урока
   const hadStreakTodayBefore = React.useMemo(() => {
-    try {
-      const tz = 'Europe/Moscow';
-      const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-      const p = fmt.formatToParts(new Date());
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const todayIso = `${Number(p.find(x=>x.type==='year')?.value||0)}-${pad(Number(p.find(x=>x.type==='month')?.value||0))}-${pad(Number(p.find(x=>x.type==='day')?.value||0))}`;
-      const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
-      const todayRec = (all || []).find(r => String(r?.day || '') === todayIso);
-      return Boolean(todayRec);
-    } catch { return false; }
-  }, []);
+    try { return Boolean(before?.streakToday); } catch { return false; }
+  }, [before]);
 
   // Проверяем: все ли квесты уже выполнены на текущий момент
   const allQuestsDone = React.useMemo(() => {
@@ -104,7 +95,7 @@ function PromoPlus({ onSkip }: { onSkip: () => void }) {
     <div className="absolute inset-0" style={{ background: '#01347a' }}>
       <img src="/subs/sub_pic.svg" alt="PLUS" className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" style={{ transform: 'translateY(100px)' }} />
       {!ready && (
-        <div className="absolute right-5 w-14 h-14" style={{ top: 96 }}>
+        <div className="absolute left-5 w-14 h-14" style={{ top: 96 }}>
           <div className="relative w-14 h-14 rounded-full" style={{ background: `conic-gradient(#fff ${Math.round(pct*360)}deg, rgba(255,255,255,0.25) 0)` }}>
             <div className="absolute inset-1 rounded-full" style={{ background: '#01347a' }} />
           </div>
@@ -272,6 +263,10 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
     (async () => {
       if (revealIdx < 0 || revealIdx >= quests.length) return;
       const current = quests[revealIdx];
+      // Если это задание уже выполнено изначально — сразу переходим к следующему без анимаций/хаптиков
+      const p = progress[current.code] || ({ status: 'in_progress' } as any);
+      const alreadyDone = String(p.status || '') === 'completed' || String(p.status || '') === 'claimed';
+      if (alreadyDone) { if (!cancelled) setRevealIdx(i => i + 1); return; }
       // Во время анимации прогресса даём ~10 tiny хаптиков
       const pulses = 10; const step = Math.max(40, Math.floor(BAR_MS / pulses));
       let sent = 0;

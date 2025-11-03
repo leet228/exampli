@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AdminNav from './components/AdminNav'
 
-type UsersStats = { total: number; online: number; new24h: number }
+type UsersStats = { total: number; online: number; new24h: number; plusActive?: number; aiPlusActive?: number }
 
 export default function Admin() {
   const [stats, setStats] = useState<UsersStats | null>(null)
@@ -55,6 +55,8 @@ export default function Admin() {
           ) : (
             <>
               <Card title="Пользователи" subtitle="Всего" value={stats?.total ?? 0} />
+              <Card title="Пользователи с PLUS" subtitle="активные" value={stats?.plusActive ?? 0} />
+              <Card title="Пользователи с AI+" subtitle="активные" value={stats?.aiPlusActive ?? 0} />
               <Card title="Онлайн" subtitle="последние 5 мин (живьём)" value={onlineNow ?? stats?.online ?? 0} />
               <Card title="Новые" subtitle="за 24 часа" value={stats?.new24h ?? 0} />
             </>

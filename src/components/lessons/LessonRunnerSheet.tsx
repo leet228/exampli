@@ -70,7 +70,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [finishMs, setFinishMs] = useState<number>(0);
   const finishSavedRef = useRef<boolean>(false);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
-  const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number } | null>(null);
+  const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -136,22 +136,30 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       try {
         const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
         const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-        // вчера freeze?
+        // snapshot streak days today/yesterday
         let yFrozen = false;
+        let streakToday = false;
+        let yKind: 'active' | 'freeze' | '' = '';
         try {
           const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
           const tz = 'Europe/Moscow';
           const now = new Date();
           const ref = new Date(now.getTime() - 86400000);
           const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+          const pToday = fmt.formatToParts(now);
+          const pad2 = (n: number) => String(n).padStart(2, '0');
+          const tIso = `${Number(pToday.find(x=>x.type==='year')?.value||0)}-${pad2(Number(pToday.find(x=>x.type==='month')?.value||0))}-${pad2(Number(pToday.find(x=>x.type==='day')?.value||0))}`;
+          streakToday = (all || []).some(r => String(r?.day || '') === tIso);
           const p = fmt.formatToParts(ref);
           const pad = (n: number) => String(n).padStart(2, '0');
           const yIso = `${Number(p.find(x=>x.type==='year')?.value||0)}-${pad(Number(p.find(x=>x.type==='month')?.value||0))}-${pad(Number(p.find(x=>x.type==='day')?.value||0))}`;
-          yFrozen = (all || []).some(r => String(r?.day || '') === yIso && String(r?.kind || '') === 'freeze');
+          const yRec = (all || []).find(r => String(r?.day || '') === yIso);
+          yFrozen = String(yRec?.kind || '') === 'freeze';
+          yKind = String(yRec?.kind || '') === 'freeze' ? 'freeze' : (String(yRec?.kind || '') === 'active' ? 'active' : '');
         } catch {}
         const questsMeta = cacheGet<Record<string, any>>(CACHE_KEYS.dailyQuestsProgress) || {};
         const coins0 = Number(cs?.coins ?? 0);
-        beforeRef.current = { streak: Number(cs?.streak ?? 0), last_active_at: (cu?.last_active_at ?? null) as any, timezone: (cu?.timezone ?? null) as any, yesterdayFrozen: yFrozen, quests: questsMeta, coins: coins0 };
+        beforeRef.current = { streak: Number(cs?.streak ?? 0), last_active_at: (cu?.last_active_at ?? null) as any, timezone: (cu?.timezone ?? null) as any, yesterdayFrozen: yFrozen, quests: questsMeta, coins: coins0, streakToday, yKind };
       } catch {}
     })();
   }, [open, lessonId]);

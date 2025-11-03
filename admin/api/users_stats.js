@@ -38,7 +38,18 @@ export default async function handler(req, res) {
     const { count: new24h, error: e3 } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', dayAgo)
     if (e3) { res.status(500).json({ error: e3.message }); return }
 
-    res.status(200).json({ total: total || 0, online: online || 0, new24h: new24h || 0 })
+    // Active PLUS and AI+ (until > now)
+    const nowIso = new Date().toISOString()
+    const { count: plusActive } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gt('plus_until', nowIso)
+    const { count: aiPlusActive } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gt('ai_plus_until', nowIso)
+
+    res.status(200).json({ total: total || 0, online: online || 0, new24h: new24h || 0, plusActive: plusActive || 0, aiPlusActive: aiPlusActive || 0 })
   } catch (e) {
     res.status(500).json({ error: e?.message || 'Unexpected error' })
   }
