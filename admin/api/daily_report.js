@@ -52,8 +52,10 @@ export default async function handler(req, res) {
     try {
       const { data, error } = await supabase
         .from('vercel_logs')
-        .select('id, level, status, ts')
+        .select('id, level, status, ts, source, path')
         .gte('ts', todayIsoMsk)
+        .neq('source', 'external')
+        .not('path', 'ilike', '/_vercel/%')
         .limit(5000)
       if (!error) {
         for (const r of (data||[])) {

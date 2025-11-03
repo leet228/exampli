@@ -13,12 +13,20 @@ export default async function handler(req, res) {
     const sinceMs = range === '7d' ? now - 7 * 24 * 60 * 60 * 1000 : now - 24 * 60 * 60 * 1000
     const sinceIso = new Date(sinceMs).toISOString()
 
-    const { data, error } = await supabase
+    let q = supabase
       .from('vercel_logs')
       .select('ts, level, message, source, path, status')
       .gte('ts', sinceIso)
       .order('ts', { ascending: false })
       .limit(500)
+
+    // По умолчанию отдаём только function-логи (исключаем внешние/инсайты)
+    const functionsOnly = String(req.query?.functionsOnly || '1')
+    if (functionsOnly === '1' || functionsOnly.toLowerCase() === 'true') {
+      q = q.neq('source', 'external').not('path', 'ilike', '/_vercel/%')
+    }
+
+    const { data, error } = await q
     if (error) { res.status(500).json({ error: error.message }); return }
 
     const rows = (data || []).map(r => ({ ts: r.ts, level: String(r.level||'info'), message: r.message || '', source: r.source || 'log', path: r.path || null, status: r.status != null ? Number(r.status) : null }))
