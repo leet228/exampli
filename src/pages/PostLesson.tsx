@@ -18,26 +18,19 @@ export default function PostLesson() {
     try { const pu = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until; return Boolean(pu && new Date(String(pu)).getTime() > Date.now()); } catch { return false; }
   })();
 
-  // Вычисляем, был ли стрик уже сегодня ДО урока
+  // Вычисляем, был ли стрик уже сегодня ДО урока — по кешу streak_days
   const hadStreakTodayBefore = React.useMemo(() => {
     try {
-      const tz = (before?.timezone as string) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-      const toParts = (d: Date | null) => {
-        if (!d) return null as any;
-        const fmt = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' });
-        const p = fmt.formatToParts(d);
-        return { y: Number(p.find(x=>x.type==='year')?.value||NaN), m: Number(p.find(x=>x.type==='month')?.value||NaN)-1, d: Number(p.find(x=>x.type==='day')?.value||NaN) };
-      };
-      const last = before?.last_active_at ? new Date(String(before.last_active_at)) : null;
-      const lp = last ? toParts(last) : null;
-      const now = new Date();
-      const fmt2 = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' });
-      const tp = fmt2.formatToParts(now);
-      const todayStart = new Date(Number(tp.find(x=>x.type==='year')?.value||now.getFullYear()), Number(tp.find(x=>x.type==='month')?.value||now.getMonth()+1)-1, Number(tp.find(x=>x.type==='day')?.value||now.getDate())).getTime();
-      const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-      return (lastStart != null) && Math.round((todayStart - lastStart) / 86400000) <= 0;
+      const tz = 'Europe/Moscow';
+      const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const p = fmt.formatToParts(new Date());
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const todayIso = `${Number(p.find(x=>x.type==='year')?.value||0)}-${pad(Number(p.find(x=>x.type==='month')?.value||0))}-${pad(Number(p.find(x=>x.type==='day')?.value||0))}`;
+      const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+      const todayRec = (all || []).find(r => String(r?.day || '') === todayIso);
+      return Boolean(todayRec);
     } catch { return false; }
-  }, [before]);
+  }, []);
 
   // Проверяем: все ли квесты уже выполнены на текущий момент
   const allQuestsDone = React.useMemo(() => {
@@ -135,32 +128,34 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
   const [skip, setSkip] = React.useState<boolean>(false);
   const startRef = React.useRef<number>(0);
 
-  // Инициализация стартового вида и запуск таймингов
+  // Инициализация стартового вида и запуск таймингов — по streak_days
   React.useEffect(() => {
-    const tz = (before?.timezone as string) || (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow'; } catch { return 'Europe/Moscow'; } })();
-    const toParts = (d: Date | null) => {
-      if (!d) return null as any;
-      try { const fmt = new Intl.DateTimeFormat(tz, { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' }); const p = fmt.formatToParts(d); return { y: Number(p.find(x=>x.type==='year')?.value||NaN), m: Number(p.find(x=>x.type==='month')?.value||NaN)-1, d: Number(p.find(x=>x.type==='day')?.value||NaN) }; } catch { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
-    };
-    const last = before?.last_active_at ? new Date(String(before.last_active_at)) : null;
-    const lp = last ? toParts(last) : null;
-    const now = new Date();
-    const tp = toParts(now) as any;
-    const todayStart = new Date(tp.y, tp.m, tp.d).getTime();
-    const lastStart = lp ? new Date(lp.y, lp.m, lp.d).getTime() : null;
-    const diffDays = lastStart == null ? Infinity : Math.round((todayStart - lastStart) / 86400000);
-    const hadTodayBefore = (lastStart != null) && Math.round((todayStart - lastStart) / 86400000) <= 0;
-    const prev = Number(before?.streak ?? 0);
-    let startIcon = '/stickers/almost_dead_fire.svg';
-    let startNum = Math.max(0, prev);
-    if (!lastStart || diffDays > 1) { startIcon = '/stickers/dead_fire.svg'; startNum = 0; }
-    else if (diffDays === 2 || before?.yesterdayFrozen) { startIcon = '/stickers/frozen_fire.svg'; startNum = Math.max(0, prev); }
-    setIcon(startIcon); setNum(startNum); startRef.current = startNum;
-    // если стрик уже был сегодня — полностью пропускаем (и неделю тоже): переходим дальше
-    if (hadTodayBefore) { setSkip(true); const t = setTimeout(() => onContinue(), 0); return () => clearTimeout(t); }
+    const tz = 'Europe/Moscow';
+    const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const parts = fmt.formatToParts(new Date());
+    const ty = Number(parts.find(x=>x.type==='year')?.value||0);
+    const tm = Number(parts.find(x=>x.type==='month')?.value||0);
+    const td = Number(parts.find(x=>x.type==='day')?.value||0);
+    const todayIso = `${ty}-${pad(tm)}-${pad(td)}`;
+    const yParts = fmt.formatToParts(new Date(Date.parse(`${todayIso}T00:00:00+03:00`) - 86400000));
+    const yy = Number(yParts.find(x=>x.type==='year')?.value||0);
+    const ym = Number(yParts.find(x=>x.type==='month')?.value||0);
+    const yd = Number(yParts.find(x=>x.type==='day')?.value||0);
+    const yesterdayIso = `${yy}-${pad(ym)}-${pad(yd)}`;
+    const all = (cacheGet<any[]>(CACHE_KEYS.streakDaysAll) || []) as any[];
+    const todayRec = (all || []).find(r => String(r?.day || '') === todayIso);
+    if (todayRec) { setSkip(true); const t = setTimeout(() => onContinue(), 0); return () => clearTimeout(t); }
+    const yRec = (all || []).find(r => String(r?.day || '') === yesterdayIso);
+    const yKind = String(yRec?.kind || '');
+    const prev = Math.max(0, Number(before?.streak ?? 0));
+    let startIcon = '/stickers/dead_fire.svg';
+    if (yKind === 'active') startIcon = '/stickers/almost_dead_fire.svg';
+    else if (yKind === 'freeze') startIcon = '/stickers/frozen_fire.svg';
+    setIcon(startIcon); setNum(prev); startRef.current = prev;
     const t = setTimeout(() => setStage(2), 500);
     return () => clearTimeout(t);
-  }, [before]);
+  }, [before, onContinue]);
 
   // Стадия 2: трансформация (огонь + инкремент), затем 0.5с пауза → стадия 3
   React.useEffect(() => {
@@ -271,16 +266,29 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
     return map;
   }, [quests, progress, before]);
 
-  // Последовательно запускаем прогресс для 1→2→3
+  // Последовательно: бар (во время — многократные tiny) → (если стал completed) select + монеты → следующий
   React.useEffect(() => {
-    if (revealIdx < 0 || revealIdx >= quests.length) return;
-    const current = quests[revealIdx];
-    // По завершении анимации — если этот квест стал выполненным, прибавим монеты
-    const award = current ? (awardsByCode[current.code] || 0) : 0;
-    const coinTimer = setTimeout(() => { if (award > 0) animateAddCoins(award); }, BAR_MS);
-    // Планируем показ следующего квеста с небольшой паузой
-    const revealTimer = setTimeout(() => { setRevealIdx((i) => i + 1); }, BAR_MS + 200);
-    return () => { clearTimeout(coinTimer); clearTimeout(revealTimer); };
+    let cancelled = false;
+    (async () => {
+      if (revealIdx < 0 || revealIdx >= quests.length) return;
+      const current = quests[revealIdx];
+      // Во время анимации прогресса даём ~10 tiny хаптиков
+      const pulses = 10; const step = Math.max(40, Math.floor(BAR_MS / pulses));
+      let sent = 0;
+      const pulseId = setInterval(() => {
+        try { hapticTiny(); } catch {}
+        sent += 1; if (sent >= pulses) clearInterval(pulseId as any);
+      }, step);
+      await new Promise((r) => setTimeout(r, BAR_MS));
+      if (cancelled) return;
+      const award = current ? (awardsByCode[current.code] || 0) : 0;
+      if (award > 0) {
+        try { hapticSelect(); } catch {}
+        await animateAddCoins(award);
+      }
+      if (!cancelled) setRevealIdx((i) => i + 1);
+    })();
+    return () => { cancelled = true; };
   }, [revealIdx, quests, awardsByCode]);
 
   const animateAddCoins = React.useCallback(async (delta: number) => {
@@ -383,7 +391,7 @@ function PressCta({ children, onClick, disabled = false }: { children: React.Rea
     <motion.button
       type="button"
       disabled={disabled}
-      onClick={() => { if (!disabled) onClick?.(); }}
+      onClick={() => { if (!disabled) { try { hapticSelect(); } catch {} onClick?.(); } }}
       whileTap={{ y: disabled ? 0 : press, boxShadow: disabled ? `0 0 0 0 ${dark}` : `0 0 0 0 ${dark}` }}
       transition={{ duration: 0 }}
       className={`w-full rounded-2xl text-white font-extrabold tracking-wider py-3 text-center ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
