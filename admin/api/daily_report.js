@@ -14,6 +14,23 @@ export default async function handler(req, res) {
     if (!botToken || !adminChat) { res.status(500).json({ error: 'telegram_env_missing' }); return }
     const supabase = createClient(supabaseUrl, serviceKey)
 
+    // IQSMS balance helper
+    async function fetchIqsmsBalance() {
+      try {
+        const login = process.env.IQSMS_LOGIN
+        const password = process.env.IQSMS_PASSWORD
+        if (!login || !password) return { ok: false, error: 'missing_iqsms_env' }
+        const url = `https://api.iqsms.ru/messages/v2/balance/?login=${encodeURIComponent(login)}&password=${encodeURIComponent(password)}`
+        const r = await fetch(url)
+        const txt = await r.text().catch(() => '')
+        if (!r.ok) return { ok: false, error: 'http', status: r.status, detail: txt }
+        const first = (txt || '').trim().split(/\r?\n/)[0] || ''
+        const [curr, amt] = first.split(';')
+        const balance = Number(String(amt || '0').replace(',', '.'))
+        return { ok: true, currency: (curr || 'RUB').trim(), balance: Number.isFinite(balance) ? balance : 0, raw: txt }
+      } catch (e) { return { ok: false, error: String(e) } }
+    }
+
     // Today bounds in MSK (+03:00)
     const now = new Date()
     const pad = (n) => String(n).padStart(2,'0')
@@ -69,6 +86,9 @@ export default async function handler(req, res) {
       }
     } catch {}
 
+    // IQSMS balance
+    const iq = await fetchIqsmsBalance()
+
     // Build message (HTML)
     const msg = [
       `<b>Отчёт за сегодня (МСК)</b>`,
@@ -78,8 +98,13 @@ export default async function handler(req, res) {
       `\n⭐ PLUS активные: <b>${(plusActive||0).toLocaleString('ru-RU')}</b>`,
       `🤖 AI+ активные: <b>${(aiPlusActive||0).toLocaleString('ru-RU')}</b>`,
       `\n💰 Доход сегодня: <b>${Math.round(grossToday).toLocaleString('ru-RU')} ₽</b>`,
-      `🪵 Логи ошибок сегодня: <b>${errorsToday}</b>`
+      `🪵 Логи ошибок сегодня: <b>${errorsToday}</b>`,
+      `\n📟 IQSMS баланс: <b>${iq?.ok ? `${(iq.balance||0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${iq.currency || 'RUB'}` : 'н/д'}</b>`
     ].join('\n')
+
+    // Debug via browser without sending Telegram
+    if (String((req.query||{}).only||'') === 'iqsms') { res.status(200).json({ ok: true, iqsms: iq }); return }
+    if (String((req.query||{}).dry||'') === '1') { res.status(200).json({ ok: true, message: msg }); return }
 
     const tgUrl = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`
     const r = await fetch(tgUrl, {

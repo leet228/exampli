@@ -112,6 +112,35 @@ export default function Onboarding({ open, onDone }: Props) {
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const tapRef = useRef<{ y: number; t: number } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [otpSent, setOtpSent] = useState<boolean>(false);
+  const [otpDigits, setOtpDigits] = useState<string>('');
+  const [otpError, setOtpError] = useState<string>('');
+  const [sending, setSending] = useState<boolean>(false);
+  const [confirming, setConfirming] = useState<boolean>(false);
+  const [resendIn, setResendIn] = useState<number>(0);
+  const resendTimerRef = useRef<number | null>(null);
+
+  // Telegram BackButton: when on OTP step, allow going back to phone input
+  useEffect(() => {
+    try {
+      const tg = (window as any)?.Telegram?.WebApp;
+      const btn = tg?.BackButton;
+      if (!tg || !btn) return;
+      const handler = () => {
+        setOtpSent(false);
+        setOtpDigits('');
+        setOtpError('');
+        try { btn.hide(); } catch {}
+      };
+      if (open && step === 1 && otpSent) {
+        try { btn.show(); } catch {}
+        try { btn.onClick?.(handler); } catch {}
+        return () => { try { btn.offClick?.(handler); btn.hide?.(); } catch {} };
+      } else {
+        try { btn.hide(); } catch {}
+      }
+    } catch {}
+  }, [open, step, otpSent]);
 
   const prefixOptions = useMemo(() => [
     { code: '+7',   flag: '🇷🇺', max: 10, fmt: 'ru10' },
@@ -147,40 +176,100 @@ export default function Onboarding({ open, onDone }: Props) {
   const canSubmitPhone = (prefixMax[prefix] || 12) === digits.length;
 
   const submitPhoneManually = useCallback(async () => {
+    if (sending) return;
+    setOtpError('');
+    setSending(true);
     const tg = (window as any)?.Telegram?.WebApp;
     const full = `${prefix}${digits}`;
-    // оптимистичный локальный апдейт
-    try {
-      const boot = (window as any).__exampliBoot as any | undefined;
-      if (boot) {
-        if (boot.user) boot.user.phone_number = full;
-        boot.onboarding = { phone_given: true, course_taken: true, boarding_finished: true };
-        (window as any).__exampliBoot = boot;
-      }
-    } catch {}
-    // UI дальше сразу
-    next();
-    // запись в БД: по id пользователя
     try {
       const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
-      if (tgId) {
-        const { data: user } = await supabase
-          .from('users')
-          .select('id')
-          .eq('tg_id', String(tgId))
-          .single();
-        if (user?.id) {
-          await supabase.from('users').update({ phone_number: full }).eq('id', user.id);
-          try {
-            await supabase.from('user_profile').upsert({
-              user_id: user.id,
-              phone_number: full,
-            }, { onConflict: 'user_id' });
-          } catch {}
+      let userId: string | undefined;
+      try { userId = (window as any)?.__exampliBoot?.user?.id; } catch {}
+      const r = await fetch('/api/phone_start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: full, tg_id: tgId, user_id: userId })
+      });
+      if (!r.ok) throw new Error('fail');
+      const js = await r.json();
+      setOtpSent(true);
+      setOtpDigits('');
+      // стартуем таймер на ресенд (60с)
+      const wait = 60;
+      setResendIn(wait);
+      if (resendTimerRef.current) window.clearInterval(resendTimerRef.current);
+      resendTimerRef.current = window.setInterval(() => {
+        setResendIn((s) => { if (s <= 1) { if (resendTimerRef.current) window.clearInterval(resendTimerRef.current); return 0; } return s - 1; });
+      }, 1000) as unknown as number;
+    } catch (e) {
+      setOtpError('Не удалось отправить код. Попробуйте позже.');
+    } finally {
+      setSending(false);
+    }
+  }, [digits, prefix, sending]);
+
+  const resendCode = useCallback(async () => {
+    if (resendIn > 0 || sending || !otpSent) return;
+    await submitPhoneManually();
+  }, [otpSent, resendIn, sending, submitPhoneManually]);
+
+  const confirmCode = useCallback(async () => {
+    if (confirming || otpDigits.length < 4) return;
+    setConfirming(true);
+    setOtpError('');
+    const tg = (window as any)?.Telegram?.WebApp;
+    const full = `${prefix}${digits}`;
+    try {
+      const tgId: number | undefined = tg?.initDataUnsafe?.user?.id;
+      let userId: string | undefined; try { userId = (window as any)?.__exampliBoot?.user?.id; } catch {}
+      const r = await fetch('/api/phone_confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: full, code: otpDigits, tg_id: tgId, user_id: userId })
+      });
+      const js = await r.json().catch(() => ({}));
+      if (!r.ok || !js?.ok) throw new Error(js?.error || 'fail');
+
+      // success → persist phone to Supabase directly (как в существующем коде выше)
+      try {
+        const tgId2: number | undefined = tg?.initDataUnsafe?.user?.id;
+        if (tgId2) {
+          const { data: user } = await supabase
+            .from('users')
+            .select('id')
+            .eq('tg_id', String(tgId2))
+            .single();
+          if (user?.id) {
+            await supabase.from('users').update({ phone_number: full }).eq('id', user.id);
+            try {
+              const { data: prof } = await supabase.from('user_profile').select('user_id').eq('user_id', user.id).maybeSingle();
+              if (prof?.user_id) {
+                await supabase.from('user_profile').update({ phone_number: full }).eq('user_id', user.id);
+              } else {
+                await supabase.from('user_profile').insert({
+                  user_id: user.id,
+                  phone_number: full,
+                  first_name: '',
+                  username: '',
+                  background_color: '#3280c2',
+                  background_icon: 'bg_icon_cat',
+                });
+              }
+            } catch {}
+          }
         }
-      }
-    } catch {}
-  }, [digits, next, prefix]);
+      } catch {}
+
+      // update local boot and move next
+      try {
+        const boot = (window as any).__exampliBoot as any | undefined;
+        if (boot?.user) boot.user.phone_number = full;
+      } catch {}
+      next();
+    } catch (e) {
+      setOtpError('Неверный или просроченный код.');
+    } finally {
+      setConfirming(false);
+    }
+  }, [confirming, digits, next, otpDigits, prefix]);
 
   const formatDigits = useCallback((pfx: string, ds: string): string => {
     const n = ds;
@@ -258,9 +347,6 @@ export default function Onboarding({ open, onDone }: Props) {
       <img src="/stickers/onBoarding.svg" alt="Onboarding" className="w-64 h-64 object-contain" />
       <div className="space-y-3 px-6 w-full max-w-md">
         <div className="text-3xl font-bold text-white leading-tight">Добро пожаловать в КУРСИК</div>
-        <div className="text-[color:var(--muted)] text-base">
-          Прокачивайся каждый день. ОГЭ и ЕГЭ — в одном месте, в удобном формате.
-        </div>
       </div>
       <div className="w-full px-6 max-w-md">
         <button
@@ -276,87 +362,117 @@ export default function Onboarding({ open, onDone }: Props) {
 
   const phoneStep = (
     <div className="flex flex-col items-center text-center gap-6 w-full min-h-[60vh] justify-center">
-      <div className="space-y-3 px-6 w-full max-w-md">
-        <div className="text-2xl font-bold text-white leading-tight">Укажите номер телефона</div>
-        <div className="text-[color:var(--muted)] text-base">
-          Это поможет нам связаться по важным обновлениям и восстановить доступ.
+      {!otpSent && (
+        <div className="space-y-3 px-6 w-full max-w-md">
+          <div className="text-2xl font-bold text-white leading-tight">Укажите номер телефона</div>
         </div>
-      </div>
+      )}
 
-      <div className="w-full px-6 max-w-md">
-        <div className="flex items-stretch gap-2">
-          <div className="relative" ref={pickerRef}>
-            <button
-              type="button"
-              onClick={() => { hapticSelect(); setShowPicker((v) => !v); }}
-              className="h-14 px-4 rounded-2xl border border-white/10 bg-white/5 font-semibold"
-            >
-              {prefix}
-            </button>
-            {showPicker && (
-              <div
-                className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-1"
-                style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
-                onMouseDown={(e) => e.preventDefault()}
+      {!otpSent && (
+        <div className="w-full px-6 max-w-md">
+          <div className="flex items-stretch gap-2">
+            <div className="relative" ref={pickerRef}>
+              <button
+                type="button"
+                onClick={() => { hapticSelect(); setShowPicker((v) => !v); }}
+                className="h-14 px-4 rounded-2xl border border-white/10 bg-white/5 font-semibold"
               >
-                <div className="h-1" />
-                {prefixOptions.map((p) => (
-                  <button
-                    key={p.code}
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
-                    onPointerDown={(e) => { tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
-                    onPointerUp={(e) => {
-                      const y = (e as any).clientY ?? 0;
-                      const stamp = Date.now();
-                      const start = tapRef.current;
-                      const moved = start ? Math.abs(y - start.y) : 999;
-                      const dt = start ? (stamp - start.t) : 999;
-                      if (moved < 10 && dt < 350) {
-                        hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits('');
-                      }
-                      tapRef.current = null;
-                    }}
-                    className={`flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-white/10 ${p.code===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
-                  >
-                    <span className="text-lg">{p.flag}</span>
-                    <span className="font-semibold">{p.code}</span>
-                  </button>
-                ))}
-                <div className="h-1" />
-              </div>
-            )}
-          </div>
+                {prefix}
+              </button>
+              {showPicker && (
+                <div
+                  className="absolute z-10 mt-2 min-w-[180px] max-h-60 overflow-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-1"
+                  style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <div className="h-1" />
+                  {prefixOptions.map((p) => (
+                    <button
+                      key={p.code}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+                      onPointerDown={(e) => { tapRef.current = { y: (e as any).clientY ?? 0, t: Date.now() }; }}
+                      onPointerUp={(e) => {
+                        const y = (e as any).clientY ?? 0;
+                        const stamp = Date.now();
+                        const start = tapRef.current;
+                        const moved = start ? Math.abs(y - start.y) : 999;
+                        const dt = start ? (stamp - start.t) : 999;
+                        if (moved < 10 && dt < 350) {
+                          hapticSelect(); setPrefix(p.code); setShowPicker(false); setDigits('');
+                        }
+                        tapRef.current = null;
+                      }}
+                      className={`flex items-center gap-2 w-full text-left px-4 py-3 hover:bg-white/10 ${p.code===prefix ? 'text-white' : 'text-[color:var(--muted)]'}`}
+                    >
+                      <span className="text-lg">{p.flag}</span>
+                      <span className="font-semibold">{p.code}</span>
+                    </button>
+                  ))}
+                  <div className="h-1" />
+                </div>
+              )}
+            </div>
 
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              type="tel"
+              className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-left font-semibold tracking-wider placeholder:text-[color:var(--muted)]"
+              placeholder={prefix === '+7' ? '(XXX) XXX-XX-XX' : 'Введите номер'}
+              value={formatted}
+              onFocus={() => setShowPicker(false)}
+              onChange={(e) => onDigitsChange(e.currentTarget.value)}
+              onKeyDown={handleBackspace}
+              maxLength={50}
+              ref={inputRef}
+            />
+          </div>
+        </div>
+      )}
+
+      {otpSent && (
+        <div className="w-full px-6 max-w-md">
+          <div className="text-left text-white/80 mb-2">Мы отправили код на {prefix}{digits}</div>
           <input
             inputMode="numeric"
             pattern="[0-9]*"
             type="tel"
-            className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-left font-semibold tracking-wider placeholder:text-[color:var(--muted)]"
-            placeholder={prefix === '+7' ? '(XXX) XXX-XX-XX' : 'Введите номер'}
-            value={formatted}
-            onFocus={() => setShowPicker(false)}
-            onChange={(e) => onDigitsChange(e.currentTarget.value)}
-            onKeyDown={handleBackspace}
-            maxLength={50}
-            ref={inputRef}
+            className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-left font-semibold tracking-widest text-center"
+            placeholder="Введите код"
+            value={otpDigits}
+            onChange={(e) => setOtpDigits((e.currentTarget.value || '').replace(/\D+/g, '').slice(0, 6))}
+            maxLength={6}
           />
+          {!!otpError && <div className="mt-2 text-[13px] text-red-300">{otpError}</div>}
+          <div className="mt-2 text-[12px] text-[color:var(--muted)]">
+            {resendIn > 0 ? `Отправить код повторно можно через ${resendIn} с` : <button type="button" className="underline underline-offset-2" onClick={resendCode}>Отправить код ещё раз</button>}
+          </div>
         </div>
-        
-      </div>
+      )}
 
       <div className="w-full px-6 max-w-md">
-        <button
-          type="button"
-          disabled={!canSubmitPhone}
-          className={`w-full rounded-2xl py-4 font-semibold transition ${canSubmitPhone ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}`}
-          onClick={submitPhoneManually}
-        >
-          Продолжить
-        </button>
+        {!otpSent ? (
+          <button
+            type="button"
+            disabled={!canSubmitPhone || sending}
+            className={`w-full rounded-2xl py-4 font-semibold transition ${canSubmitPhone ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}`}
+            onClick={submitPhoneManually}
+          >
+            {sending ? 'Отправляем…' : 'Отправить код'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={otpDigits.length < 4 || confirming}
+            className={`w-full rounded-2xl py-4 font-semibold transition ${otpDigits.length >= 4 ? 'btn' : 'bg-[#37464f] text-white/60 cursor-not-allowed'}`}
+            onClick={confirmCode}
+          >
+            {confirming ? 'Проверяем…' : 'Подтвердить'}
+          </button>
+        )}
         <div className="mt-2 text-[11px] text-[color:var(--muted)] text-center">
-          Нажимая «Продолжить», вы соглашаетесь с нашей
-          {' '}
+          Нажимая кнопку, вы соглашаетесь с нашей{' '}
           <button type="button" className="underline underline-offset-2 text-white/85" onClick={() => setPolicyOpen(true)}>Политикой обработки персональных данных</button>.
         </div>
       </div>
