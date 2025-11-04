@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/daily_report", "schedule": "0 15 * * *" }
+    ,{ "path": "/api/bugs_poll", "schedule": "*/1 * * * *" }
   ],
   "headers": [
     {
