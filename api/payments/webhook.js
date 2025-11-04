@@ -160,6 +160,18 @@ export default async function handler(req, res) {
             until.setMonth(until.getMonth() + months);
             await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
           }
+
+          // Notify user in Telegram about PLUS
+          try {
+            const chat = String(tgIdFrom(userRow, tgId));
+            const photo = absPublicUrl(req, '/notifications/plus.png');
+            await sendTelegramPhoto(
+              process.env.TELEGRAM_BOT_TOKEN,
+              chat,
+              photo,
+              '💎 КУРСИК PLUS активирован!\n\nДобро пожаловать в элиту 💫\n\nТеперь у тебя бесконечная энергия, КУРСИК AI под рукой, реклама в прошлом и даже заморозка стрика.'
+            );
+          } catch {}
         } else if (metadata?.type === 'ai_tokens') {
           // Обработка покупки КУРСИК AI + (месячная подписка на токены)
           const months = Number(metadata?.months || 1);
@@ -244,6 +256,18 @@ export default async function handler(req, res) {
               try { console.error('[ai_tokens] failed to set ai_plus_until in metadata', e2); } catch {}
             }
           }
+
+          // Notify user in Telegram about AI+
+          try {
+            const chat = String(tgIdFrom(userRow, tgId));
+            const photo = absPublicUrl(req, '/notifications/AI.png');
+            await sendTelegramPhoto(
+              process.env.TELEGRAM_BOT_TOKEN,
+              chat,
+              photo,
+              '🤖 AI+ — твой новый мозг!\n\nТеперь у тебя токенов больше, чем ошибок в сочинении на черновике. КУРСИК AI готов творить чудеса вместе с тобой 💪'
+            );
+          } catch {}
         }
       }
     }
@@ -263,4 +287,49 @@ async function safeJson(req) {
     req.on?.('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
     req.on?.('error', () => resolve({}));
   });
+}
+
+function tgIdFrom(userRow, fallback) {
+  return (userRow && userRow.tg_id) ? String(userRow.tg_id) : (fallback ? String(fallback) : null);
+}
+
+function publicBase(req) {
+  try {
+    const explicit = process.env.PUBLIC_BASE_URL;
+    if (explicit) return explicit.replace(/\/$/, '');
+    const proto = (req?.headers?.['x-forwarded-proto'] || 'https');
+    const host = (req?.headers?.host || process.env.VERCEL_URL || '').toString();
+    if (host) return `${proto}://${host}`.replace(/\/$/, '');
+  } catch {}
+  return '';
+}
+
+function absPublicUrl(req, relPath) {
+  const base = publicBase(req);
+  const rel = String(relPath || '').startsWith('/') ? String(relPath) : `/${String(relPath || '')}`;
+  return base ? `${base}${rel}` : rel;
+}
+
+async function sendTelegram(botToken, chatId, text) {
+  try {
+    if (!botToken || !chatId || !text) return;
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text })
+    });
+  } catch {}
+}
+
+async function sendTelegramPhoto(botToken, chatId, photoUrl, caption) {
+  try {
+    if (!botToken || !chatId || !photoUrl) return;
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: caption || undefined })
+    });
+  } catch {}
 }

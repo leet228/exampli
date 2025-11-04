@@ -120,6 +120,15 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
   const startRef = React.useRef<number>(0);
   const WAIT_MS = 2000;
 
+  // Цвет числа стрика: стартовый зависит от состояния до урока, затем превращается в оранжевый при трансформации
+  const numColor = React.useMemo(() => {
+    const yKind = String(before?.yKind || '');
+    if (stage >= 2) return '#f59e0b'; // оранжевый в «огонь»
+    if (yKind === 'freeze') return '#60a5fa'; // голубой при заморозке
+    if (yKind === 'active') return '#d1a054'; // серо‑оранжевый при almost_dead
+    return '#374151'; // тёмно‑серый при dead
+  }, [stage, before]);
+
   // Инициализация стартового вида и запуск таймингов — по streak_days
   React.useEffect(() => {
     const yKind = String(before?.yKind || '');
@@ -193,7 +202,18 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
             className="flex flex-col items-center gap-6"
           >
             <img src={icon} alt="streak" className="w-40 h-40 select-none" />
-            <div className="text-[96px] leading-none font-extrabold tabular-nums" style={{ color: '#fbbf24', textShadow: '0 8px 0 rgba(0,0,0,0.18)' }}>{num}</div>
+            <div
+              className="text-[96px] leading-none font-extrabold tabular-nums"
+              style={{
+                color: numColor,
+                WebkitTextStroke: '4px #ffffff',
+                paintOrder: 'stroke fill',
+                textShadow: '0 8px 0 rgba(0,0,0,0.18)',
+                transition: 'color 0.4s ease-in-out',
+              }}
+            >
+              {num}
+            </div>
           </motion.div>
         </motion.div>
       )}
