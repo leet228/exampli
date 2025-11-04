@@ -26,7 +26,8 @@ export default async function handler(req, res) {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const update = await safeJson(req);
-    const msg = update?.message || update?.edited_message || null;
+    // Считаем только обычные новые сообщения; правки (edited_message) игнорируем
+    const msg = update?.message || null;
     const text = (msg?.text || '').trim();
     const chatId = String(msg?.from?.id || msg?.chat?.id || '');
     if (!text || !chatId) { res.status(200).json({ ok: true, skipped: true }); return; }
@@ -48,6 +49,11 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Сначала зафиксируем инкремент счётчика (минимизируем гонки), затем начнём думать
+    const newCountDraft = countToday + 1;
+    const draftMeta = { ...meta, bot_dm_date: todayIso, bot_dm_count: newCountDraft };
+    try { await supabase.from('users').update({ metadata: draftMeta }).eq('id', userRow.id).select('id').single(); } catch {}
+
     // Show typing while we think
     try { await tgTyping(botToken, chatId); } catch {}
 
@@ -64,14 +70,14 @@ export default async function handler(req, res) {
 
     const system = buildSystemPrompt({ plusActive, aiPlusActive, energy, coins, lastActiveInfo });
     let reply = await genReply({ openaiKey, system, userText: text, history: historyText });
-    const newCount = countToday + 1;
+    const newCount = newCountDraft;
     if (newCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
 
     await tgSend(botToken, chatId, reply);
 
     // persist metadata
     const newHist = [...hist, { role: 'user', content: text, t: Date.now() }, { role: 'assistant', content: reply, t: Date.now() }].slice(-8);
-    const nextMeta = { ...meta, bot_dm_date: todayIso, bot_dm_count: newCount, bot_history: newHist };
+    const nextMeta = { ...draftMeta, bot_history: newHist };
     try { await supabase.from('users').update({ metadata: nextMeta }).eq('id', userRow.id); } catch {}
 
     res.status(200).json({ ok: true });
@@ -131,11 +137,10 @@ function buildSystemPrompt(ctx) {
     'Пиши разговорно и по‑простому, можно мемно. Можно ворчать, но не токсичничай на личность. Без эмодзи по умолчанию (редко допустимо).',
     'Если спрашивают не по теме — короткий ответ + как это связать с учёбой в КУРСИК.',
     'Никогда не пиши длинные списки. Максимум 3 пункта, но лучше одно‑два коротких предложения.',
-    'Мягкий мат разрешён («блин», «чёрт», «офигеть», «да ё‑маё», «капец», «нахрен», «за*бало», «охренеть») — особенно если собеседник матерится; оставайся дружественным.',
-    'Пример тонального баланса: Пользователь: «да пошло оно всё нафиг» → Бот: «да я с тобой, но зайди в КУРСИК, добей одно задание — и пошлём всё к чёрту вместе».',
+    'Мягкий мат разрешён («блин», «чёрт», «офигеть», «да ё‑маё», «капец», «нахрен», «заебало», «охренеть») — особенно если собеседник матерится; оставайся дружественным.',
     'Триггеры мотивации: «не хочу/лень/за*бало» → «сделай одно мини‑задание в КУРСИК и свободен»; «страшно/не получается» → «начни с лёгкого теста, прогресс сохранится»; «нет времени» → «5 минут в КУРСИК — и отстану».',
     'Запрещено: любые дискриминационные, NSFW‑темы, мед/юридические советы, мотивационные полотна и канцелярит.',
-    'Всегда помни: коротко, метко, чуть злобно, но полезно. И по возможности напоминай про КУРСИК.',
+    'Всегда помни: коротко, метко, чуть злобно, но полезно.',
     'Фактология про продукт: КУРСИК — приложение с курсами/темами, стриком, энергией (25 у неподписчиков), монетами и ежедневными заданиями.',
     plus,
     aiPlus,
