@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AdminNav from '../components/AdminNav'
 
 type DayRow = { day: string; count: number }
 
@@ -26,8 +27,10 @@ export default function BotStats() {
   }, [])
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ fontWeight: 800, fontSize: 24 }}>Bot Stats</h1>
+    <div className="admin-page">
+      <div style={{ padding: '0 20px 8px', fontSize: 22, fontWeight: 800, letterSpacing: 0.2, textAlign: 'center' }}>Bot Stats</div>
+      <div className="admin-scroll" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+      <div style={{ padding: 24 }}>
       {loading && <div>Loading…</div>}
       {error && <div style={{ color: 'red' }}>Error: {error}</div>}
       {!loading && !error && (
@@ -47,6 +50,9 @@ export default function BotStats() {
           </div>
         </>
       )}
+      </div>
+      </div>
+      <AdminNav active="bot" />
     </div>
   )
 }

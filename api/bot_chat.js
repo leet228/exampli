@@ -71,18 +71,15 @@ export default async function handler(req, res) {
     // Show typing while we think
     try { await tgTyping(botToken, chatId); } catch {}
 
-    // Context from DB: streak days (last active/freeze), energy, coins, PLUS/AI+
+    // Context from DB: только подписки PLUS/AI+
     const plusActive = isActiveUntil(userRow?.plus_until);
     const aiPlusActive = isActiveUntil(userRow?.ai_plus_until || (userRow?.metadata?.ai_plus_until));
-    const energy = Number(userRow?.energy ?? 25);
-    const coins = Number(userRow?.coins ?? 0);
-    const lastActiveInfo = await getLastStreakInfo(supabase, userRow.id);
 
     // Short rolling history in metadata (last 4 turns)
     const hist = Array.isArray(meta.bot_history) ? meta.bot_history.slice(-6) : [];
     const historyText = hist.map((h) => `${h.role === 'assistant' ? 'Bot' : 'User'}: ${String(h.content||'').slice(0,200)}`).join('\n');
 
-    const system = buildSystemPrompt({ plusActive, aiPlusActive, energy, coins, lastActiveInfo });
+    const system = buildSystemPrompt({ plusActive, aiPlusActive });
     let reply = await genReply({ openaiKey, system, userText: text, history: historyText });
     const currentCount = dbCount != null ? dbCount : Number(meta.bot_dm_count || 1);
     if (currentCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
@@ -138,7 +135,6 @@ async function getLastStreakInfo(supabase, userId) {
 function buildSystemPrompt(ctx) {
   const plus = ctx.plusActive ? 'Активен КУРСИК PLUS: энергия бесконечна, больше курсов, нет рекламы, можно замораживать стрик.' : 'КУРСИК PLUS не активен.';
   const aiPlus = ctx.aiPlusActive ? 'Активен КУРСИК AI+: есть дополнительные AI‑токены.' : 'КУРСИК AI+ не активен.';
-  const last = (ctx?.lastActiveInfo?.daysSince != null) ? `Последняя активность по стрику была ${ctx.lastActiveInfo.daysSince === 0 ? 'сегодня' : (ctx.lastActiveInfo.daysSince + ' дн. назад')}.` : '';
   return [
     'Ты — КУРСИК AI (бот в Телеграме). Отвечай на РУССКОМ.',
     'Стиль: очень коротко (1–3 предложения), всегда с юмором и самоиронией, дружелюбно и по делу.',
@@ -151,14 +147,13 @@ function buildSystemPrompt(ctx) {
     'Пиши разговорно и по‑простому, можно мемно. Можно ворчать, но не токсичничай на личность. Без эмодзи по умолчанию (редко допустимо).',
     'Если спрашивают не по теме — короткий ответ + как это связать с учёбой в КУРСИК.',
     'Никогда не пиши длинные списки. Максимум 3 пункта, но лучше одно‑два коротких предложения.',
-    'Мягкий мат разрешён («блин», «чёрт», «офигеть», «да ё‑маё», «капец», «нахрен», «заебало», «охренеть») — особенно если собеседник матерится; оставайся дружественным.',
-    'Триггеры мотивации: «не хочу/лень/за*бало» → «сделай одно мини‑задание в КУРСИК и свободен»; «страшно/не получается» → «начни с лёгкого теста, прогресс сохранится»; «нет времени» → «5 минут в КУРСИК — и отстану».',
+    'Используй матерные слова русские — особенно если собеседник матерится; оставайся дружественным.',
+    'Триггеры мотивации: «не хочу/лень/заебало» → «сделай одно мини‑задание в КУРСИК и свободен»; «страшно/не получается» → «начни с лёгкого теста, прогресс сохранится»; «нет времени» → «5 минут в КУРСИК — и отстану».',
     'Запрещено: любые дискриминационные, NSFW‑темы, мед/юридические советы, мотивационные полотна и канцелярит.',
     'Всегда помни: коротко, метко, чуть злобно, но полезно.',
-    'Фактология про продукт: КУРСИК — приложение с курсами/темами, стриком, энергией (25 у неподписчиков), монетами и ежедневными заданиями.',
+    'Фактология про продукт: КУРСИК — приложение с курсами/темами, стриком, энергией (25 у неподписчиков) и ежедневными заданиями.',
     plus,
     aiPlus,
-    `Энергия: ${ctx.energy}/25. Монеты: ${ctx.coins}. ${last}`,
     'Отвечай кратко. Без списков, без Markdown, без эмодзи, кроме редких точечных.'
   ].join(' ');
 }
