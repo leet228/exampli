@@ -42,6 +42,31 @@ export default async function handler(req, res) {
     if (!botToken) { res.status(500).json({ error: 'missing_env', detail: 'TELEGRAM_BOT_TOKEN' }); return; }
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // --- Test mode: force one template to specific chat (guarded by token) ---
+    try {
+      const url = new URL(req?.url || '/', 'http://localhost');
+      const force = String(url.searchParams.get('force') || '').toLowerCase();
+      const token = String(url.searchParams.get('token') || '');
+      const chat = String(url.searchParams.get('chat') || '');
+      const tpl = String(url.searchParams.get('template') || '').toLowerCase();
+      const allow = process.env.TEST_NOTIFY_TOKEN && token && token === process.env.TEST_NOTIFY_TOKEN;
+      if (force === '1' && allow && chat) {
+        const map = {
+          streak: { text: '⚠️ Стрик шатается!\n\nЕщё один день без КУРСИКА — и твоя серия полетит в пропасть! Вернись, пока она не упала с криком «экзамен не сдан!» 😱', photo: '/notifications/streak_noti.png' },
+          level1: { text: 'Эй, куда пропал?\n\nМы тут решаем тесты, вспоминаем формулы, а тебя нет! 😤 Вернись — без тебя скучно и подозрительно тихо…', photo: '/notifications/level1.png' },
+          level2: { text: 'Ну ты и прогульщик!\n\nУже столько времени тебя не видно — я уже волнуюсь! 😡 Возвращайся, пока я не начал тренировать твоего клона. Серьёзно, нам нужны эти баллы!', photo: '/notifications/level2.png' },
+          level3: { text: 'КУРСИК в ярости!\n\nТак долго без заданий. 😠 Ты хочешь, чтобы твой мозг ушёл в спячку до экзамена? Вернись, пока я не устроил тебе пробник во сне!', photo: '/notifications/level3.png' },
+          energy: { text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать тесты, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' },
+        };
+        const picked = map[tpl] || null;
+        if (!picked) { res.status(400).json({ error: 'unknown_template', templates: Object.keys(map) }); return; }
+        const photo = absPublicUrl(req, picked.photo);
+        await tgSendPhoto(botToken, chat, photo, picked.text);
+        res.status(200).json({ ok: true, forced: tpl, chat });
+        return;
+      }
+    } catch {}
+
     const tz = 'Europe/Moscow';
     const toIso = (d) => {
       const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
