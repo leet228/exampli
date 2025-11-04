@@ -56,8 +56,8 @@ export default function Bugs() {
           )}
           {error && <div style={{ color: 'red', marginTop: 12 }}>Ошибка: {error}</div>}
         </div>
-      </div>
-      <AdminNav active="bot" />
+    </div>
+      <AdminNav active="bugs" />
     </div>
   )
 }
