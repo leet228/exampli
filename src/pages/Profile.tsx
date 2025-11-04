@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
-import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../lib/haptics';
+import { hapticSelect, hapticSlideClose, hapticSlideReveal, hapticTiny } from '../lib/haptics';
 import { getPrecomputedAchievement } from '../lib/achievements';
 import { bootPreloadBackground } from '../lib/boot';
 
@@ -138,6 +138,13 @@ export default function Profile() {
   const [streakAchOpen, setStreakAchOpen] = useState<boolean>(false);
   const [perfectAchOpen, setPerfectAchOpen] = useState<boolean>(false);
   const [duelAchOpen, setDuelAchOpen] = useState<boolean>(false);
+  // Bug report overlay state
+  const [bugOpen, setBugOpen] = useState<boolean>(false);
+  const [bugText, setBugText] = useState<string>('');
+  const [bugFiles, setBugFiles] = useState<string[]>([]); // data URLs
+  const [bugSending, setBugSending] = useState<boolean>(false);
+  const [bugSent, setBugSent] = useState<boolean>(false);
+  const bugFileInputRef = useRef<HTMLInputElement | null>(null);
   const streakBlobRef = useRef<{ value: number; blob: Blob } | null>(null);
   const perfectBlobRef = useRef<{ value: number; blob: Blob } | null>(null);
   const darken = (hex: string, amount = 18) => {
@@ -1192,6 +1199,17 @@ export default function Profile() {
               />
             </div>
           </div>
+          {/* Button: report bug */}
+          <div className="w-full max-w-4xl px-3 mt-3">
+            <button
+              type="button"
+              onClick={() => { try { hapticTiny(); } catch {}; setBugOpen(true); }}
+              className="inline-block font-semibold"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.92)', padding: '4px 8px', borderRadius: 6, fontSize: 10 }}
+            >
+              Сообщить об ошибке
+            </button>
+          </div>
         </>
       ) : (
         <>
@@ -1339,6 +1357,101 @@ export default function Profile() {
       <FriendsPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} />
       {/* Панель добавления друзей */}
       <AddFriendsPanel open={addFriendsOpen} onClose={() => setAddFriendsOpen(false)} />
+
+      {/* Bug report overlay */}
+      <AnimatePresence>
+        {bugOpen && (
+          <motion.div
+            className="fixed inset-0 z-[70]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setBugOpen(false)}
+          >
+            <div className="w-full h-full flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                className="relative overflow-hidden rounded-2xl border border-white/10"
+                style={{ width: 'min(560px, 96vw)', maxWidth: 640, background: 'var(--bg)' }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                <div className="p-5">
+                  <div className="text-lg font-extrabold mb-3">Сообщить об ошибке</div>
+                  <textarea
+                    rows={5}
+                    placeholder="Опишите, что пошло не так…"
+                    value={bugText}
+                    onChange={(e) => setBugText(e.target.value.slice(0, 2000))}
+                    disabled={bugSending || bugSent}
+                    className="w-full rounded-xl p-3"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}
+                  />
+                  <div className="mt-3">
+                    <label className="text-sm text-white/80">Прикрепить файлы (до 3)</label>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { try { hapticTiny(); } catch {}; bugFileInputRef.current?.click(); }}
+                        disabled={bugSending || bugSent}
+                        className="font-semibold"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.92)', padding: '8px 12px', borderRadius: 10 }}
+                      >
+                        Выбрать файлы
+                      </button>
+                      <span className="text-sm text-white/60">{bugFiles.length ? `${bugFiles.length} выбрано` : 'не выбрано'}</span>
+                      <input
+                        ref={bugFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []).slice(0, 3)
+                          const urls: string[] = []
+                          for (const f of files) {
+                            try { urls.push(await toDataUrl(f)) } catch {}
+                          }
+                          setBugFiles(urls.slice(0, 3))
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </div>
+                    {bugFiles.length > 0 && (
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {bugFiles.map((u, i) => (<img key={i} src={u} alt="att" className="w-24 h-24 object-cover rounded" />))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="w-full rounded-2xl text-white font-extrabold tracking-wider py-3 text-center"
+                      style={{ background: bugSent ? '#16a34a' : '#3c73ff', boxShadow: `0 6px 0 0 ${bugSent ? '#0e6f31' : '#2b56c2'}` }}
+                      disabled={bugSending || bugSent}
+                      onClick={async () => {
+                        try {
+                          setBugSending(true);
+                          const tgId = String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id || '')
+                          const uid = (u as any)?.id || (window as any)?.__exampliBoot?.user?.id || null
+                          const r = await fetch('/api/report_bug', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: bugText, images: bugFiles, tg_id: tgId || null, user_id: uid }) })
+                          if (!r.ok) throw new Error('send_failed')
+                          setBugSent(true); try { hapticSelect() } catch {}
+                          setTimeout(() => { setBugOpen(false); setBugText(''); setBugFiles([]); setBugSent(false); setBugSending(false); }, 1200)
+                        } catch { setBugSending(false); }
+                      }}
+                    >
+                      {bugSent ? 'Сообщение отправлено!' : (bugSending ? '…' : 'СООБЩИТЬ')}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* QR Overlay */}
       <AnimatePresence>
@@ -1558,4 +1671,15 @@ function TgBackForStreak({ open, onBack }: { open: boolean; onBack: () => void }
     } catch {}
   }, [open, onBack]);
   return null;
+}
+
+async function toDataUrl(file: File): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    try {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ''));
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    } catch (e) { reject(e); }
+  });
 }

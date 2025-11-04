@@ -172,23 +172,34 @@ export default async function handler(req, res) {
       if (!tg) continue;
       const plusActive = (() => { try { return Boolean(u.plus_until && new Date(String(u.plus_until)).getTime() > Date.now()); } catch { return false; } })();
       if (plusActive) continue; // только для неподписчиков
-      const energy = Number(u.energy ?? 0);
       const meta = (u.metadata && typeof u.metadata === 'object') ? { ...u.metadata } : {};
-      if (energy < 25) {
-        if (!meta.energy_last_below_25_at) {
-          meta.energy_last_below_25_at = new Date().toISOString();
-          energyUpdates.push({ id: u.id, metadata: meta });
-        }
+
+      const lastBelowTs = meta.energy_last_below_25_at ? Date.parse(String(meta.energy_last_below_25_at)) : null;
+      const lastSentTs = meta.energy_full_last_sent_at ? Date.parse(String(meta.energy_full_last_sent_at)) : 0;
+
+      // Если уже фиксировали «было ниже 25», проверим актуальную энергию через RPC (ленивая регенерация)
+      if (lastBelowTs != null) {
+        try {
+          const r = await supabase.rpc('sync_energy', { p_tg_id: tg, p_delta: 0 });
+          const row = Array.isArray(r.data) ? (r.data?.[0] || null) : (r.data || null);
+          const eNow = Number(row?.energy ?? NaN);
+          const fullAt = row?.full_at ? Date.parse(String(row.full_at)) : null;
+          const isFull = (Number.isFinite(eNow) && eNow >= 25) || (fullAt != null && fullAt <= Date.now());
+          if (isFull && lastBelowTs > lastSentTs) {
+            toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' });
+            cntEnergy++;
+            meta.energy_full_last_sent_at = new Date().toISOString();
+            delete meta.energy_last_below_25_at;
+            energyUpdates.push({ id: u.id, metadata: meta });
+          }
+        } catch {}
         continue;
       }
-      // energy == 25
-      const lastBelow = meta.energy_last_below_25_at ? Date.parse(String(meta.energy_last_below_25_at)) : null;
-      const lastSent = meta.energy_full_last_sent_at ? Date.parse(String(meta.energy_full_last_sent_at)) : 0;
-      if (lastBelow != null && lastBelow > lastSent) {
-        toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать тесты, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' });
-        cntEnergy++;
-        meta.energy_full_last_sent_at = new Date().toISOString();
-        delete meta.energy_last_below_25_at;
+
+      // Ещё не фиксировали «было ниже 25»: если сейчас в users.energy < 25 — пометим старт отсчёта
+      const tabEnergy = Number(u.energy ?? 0);
+      if (tabEnergy < 25) {
+        meta.energy_last_below_25_at = new Date().toISOString();
         energyUpdates.push({ id: u.id, metadata: meta });
       }
     }

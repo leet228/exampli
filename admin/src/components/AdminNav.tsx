@@ -11,6 +11,7 @@ export default function AdminNav({ active }: AdminNavProps) {
         <a href="/admin/db" className={`admin-tab${active === 'db' ? ' admin-tab--active' : ''}`} aria-label="База данных">🗄️</a>
         <a href="/admin/revenue" className={`admin-tab${active === 'revenue' ? ' admin-tab--active' : ''}`} aria-label="Доходы">💰</a>
         <a href="/admin/bot" className={`admin-tab${active === 'bot' ? ' admin-tab--active' : ''}`} aria-label="Бот">🤖</a>
+        <a href="/admin/bugs" className={`admin-tab${active === 'bot' ? '' : ''}`} aria-label="Баги">🐞</a>
       </div>
     </div>
   )
