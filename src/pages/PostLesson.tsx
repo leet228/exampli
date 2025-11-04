@@ -229,7 +229,7 @@ function StreakWeek({ before, onContinue }: { before: any; onContinue: () => voi
                   <div key={i} className="w-10">
                     <div className="text-center text-[12px] text-white/80 mb-1 font-extrabold">{d.label}</div>
                     <motion.div className="w-10 h-10 rounded-full grid place-items-center" initial={false} animate={{ backgroundColor: active ? '#f59e0b' : base }} transition={{ duration: 0.5 }}>
-                      {active || d.kind === 'active' ? '✓' : ''}
+                      {active || d.kind === 'active' || d.kind === 'freeze' ? '✓' : ''}
                     </motion.div>
                   </div>
                 );
