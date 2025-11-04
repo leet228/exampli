@@ -36,23 +36,37 @@ export default async function handler(req, res) {
     const { data: userRow } = await supabase.from('users').select('*').eq('tg_id', chatId).maybeSingle();
     if (!userRow?.id) { await tgSend(botToken, chatId, 'Привет! Зайди в приложение КУРСИК, чтобы я узнал тебя и помог 😉'); res.status(200).json({ ok: true }); return; }
 
-    // Daily limit: 3 messages per day (MSK)
+    // Daily limit: 3 messages per day (prefer DB counter via RPC; fallback to metadata)
     const todayIso = mskTodayIso();
     const meta = (userRow.metadata && typeof userRow.metadata === 'object') ? { ...userRow.metadata } : {};
-    const dmDate = String(meta.bot_dm_date || '');
-    const dmCount = Number(meta.bot_dm_count || 0);
-    const isToday = dmDate === todayIso;
-    const countToday = isToday ? dmCount : 0;
-    if (countToday >= 3) {
-      await tgSend(botToken, chatId, 'Сегодня уже наговорился 😊 Завтра продолжим!');
-      res.status(200).json({ ok: true, limited: true });
-      return;
-    }
+    let dbCount = null;
+    try {
+      const c = await incDailyCountDb(supabase, userRow.id, todayIso);
+      if (typeof c === 'number' && Number.isFinite(c)) dbCount = c;
+    } catch {}
 
-    // Сначала зафиксируем инкремент счётчика (минимизируем гонки), затем начнём думать
-    const newCountDraft = countToday + 1;
-    const draftMeta = { ...meta, bot_dm_date: todayIso, bot_dm_count: newCountDraft };
-    try { await supabase.from('users').update({ metadata: draftMeta }).eq('id', userRow.id).select('id').single(); } catch {}
+    if (dbCount != null) {
+      if (dbCount > 3) {
+        await tgSend(botToken, chatId, 'Сегодня уже наговорился 😊 Завтра продолжим!');
+        res.status(200).json({ ok: true, limited: true, source: 'db' });
+        return;
+      }
+    } else {
+      const dmDate = String(meta.bot_dm_date || '');
+      const dmCount = Number(meta.bot_dm_count || 0);
+      const isToday = dmDate === todayIso;
+      const countToday = isToday ? dmCount : 0;
+      if (countToday >= 3) {
+        await tgSend(botToken, chatId, 'Сегодня уже наговорился 😊 Завтра продолжим!');
+        res.status(200).json({ ok: true, limited: true, source: 'meta' });
+        return;
+      }
+      // optimistic increment in metadata (fallback path)
+      const draftMeta = { ...meta, bot_dm_date: todayIso, bot_dm_count: countToday + 1 };
+      try { await supabase.from('users').update({ metadata: draftMeta }).eq('id', userRow.id).select('id').single(); } catch {}
+      meta.bot_dm_date = draftMeta.bot_dm_date;
+      meta.bot_dm_count = draftMeta.bot_dm_count;
+    }
 
     // Show typing while we think
     try { await tgTyping(botToken, chatId); } catch {}
@@ -70,14 +84,14 @@ export default async function handler(req, res) {
 
     const system = buildSystemPrompt({ plusActive, aiPlusActive, energy, coins, lastActiveInfo });
     let reply = await genReply({ openaiKey, system, userText: text, history: historyText });
-    const newCount = newCountDraft;
-    if (newCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
+    const currentCount = dbCount != null ? dbCount : Number(meta.bot_dm_count || 1);
+    if (currentCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
 
     await tgSend(botToken, chatId, reply);
 
     // persist metadata
     const newHist = [...hist, { role: 'user', content: text, t: Date.now() }, { role: 'assistant', content: reply, t: Date.now() }].slice(-8);
-    const nextMeta = { ...draftMeta, bot_history: newHist };
+    const nextMeta = { ...(meta || {}), bot_history: newHist, bot_dm_date: todayIso, bot_dm_count: (dbCount != null ? dbCount : meta.bot_dm_count) };
     try { await supabase.from('users').update({ metadata: nextMeta }).eq('id', userRow.id); } catch {}
 
     res.status(200).json({ ok: true });
@@ -209,6 +223,34 @@ async function safeJson(req) {
     req.on?.('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
     req.on?.('error', () => resolve({}));
   });
+}
+
+// --- DB daily increment via RPC (atomic). Create in Supabase:
+// Table:
+//   create table if not exists bot_dm_daily(
+//     user_id uuid not null,
+//     day date not null,
+//     count int not null default 0,
+//     updated_at timestamptz not null default now(),
+//     primary key(user_id, day)
+//   );
+// RPC:
+//   create or replace function rpc_bot_dm_inc(p_user_id uuid, p_day date)
+//   returns int language plpgsql as $$
+//   declare c int; begin
+//     insert into bot_dm_daily(user_id, day, count)
+//     values(p_user_id, p_day, 1)
+//     on conflict(user_id, day) do update set count = bot_dm_daily.count + 1, updated_at = now();
+//     select count into c from bot_dm_daily where user_id = p_user_id and day = p_day;
+//     return c; end; $$;
+async function incDailyCountDb(supabase, userId, dayIso) {
+  try {
+    const { data, error } = await supabase.rpc('rpc_bot_dm_inc', { p_user_id: userId, p_day: dayIso });
+    if (error) throw error;
+    if (typeof data === 'number') return data;
+    if (data && typeof data.count === 'number') return data.count;
+    return null;
+  } catch { return null; }
 }
 
 

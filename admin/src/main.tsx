@@ -7,6 +7,7 @@ import Server from './Server.tsx'
 import DB from './DB.tsx'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import Revenue from './pages/Revenue.tsx'
+import BotStats from './pages/BotStats.tsx'
 import { prefetchEmbeddingSession } from './lib/embeddings'
 
 const router = createBrowserRouter([
@@ -15,6 +16,7 @@ const router = createBrowserRouter([
   { path: '/admin/server', element: <Server /> },
   { path: '/admin/db', element: <DB /> },
   { path: '/admin/revenue', element: <Revenue /> },
+  { path: '/admin/bot', element: <BotStats /> },
 ])
 
 createRoot(document.getElementById('root')!).render(

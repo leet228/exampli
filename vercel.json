@@ -2,7 +2,6 @@
     "crons": [
         { "path": "/api/streak/reset", "schedule": "5 21 * * *" },
         { "path": "/api/daily_quests_roll", "schedule": "0 21 * * *" },
-        { "path": "/api/cron_notify", "schedule": "0 14 * * *" },
         { "path": "/api/cron_notify", "schedule": "0 * * * *" }
     ],
     "headers": [

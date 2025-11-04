@@ -110,14 +110,15 @@ export default async function handler(req, res) {
     }
 
     const toSend = [];
+    let cntStreak = 0, cntL1 = 0, cntL2 = 0, cntL3 = 0, cntEnergy = 0;
 
     // Определяем час по МСК, чтобы стричные уведомления слали только в ~17:00 МСК
     const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).formatToParts(today);
     const hourStr = parts.find(p => p.type === 'hour')?.value || '00';
     const hourMsk = parseInt(hourStr, 10);
 
-    if (hourMsk === 17) {
-      for (const u of (users || [])) {
+    // Стрик/пропуски отправляем в 17:00 МСК
+    if (hourMsk === 17) for (const u of (users || [])) {
         const uid = u.id; const tg = u.tg_id ? String(u.tg_id) : null;
         if (!tg) continue;
         const map = daysByUser.get(uid) || new Map();
@@ -129,6 +130,7 @@ export default async function handler(req, res) {
           // Напоминание: серия может слететь (шаблон 1)
           const text = '⚠️ Стрик шатается!\n\nЕщё один день без КУРСИКА — и твоя серия полетит в пропасть! Вернись, пока она не упала с криком «экзамен не сдан!» 😱';
           toSend.push({ tg, text, photo: '/notifications/streak_noti.png' });
+          cntStreak++;
           continue;
         }
         // Подсчёт пропусков подряд до сегодня (вчера, позавчера, ...)
@@ -145,20 +147,22 @@ export default async function handler(req, res) {
             // Шаблон 2
             text = 'Эй, куда пропал?\n\nМы тут решаем тесты, вспоминаем формулы, а тебя нет! 😤 Вернись — без тебя скучно и подозрительно тихо…';
             toSend.push({ tg, text, photo: '/notifications/level1.png' });
+            cntL1++;
             continue;
           } else if (miss <= 7) {
             // Шаблон 3
             text = 'Ну ты и прогульщик!\n\nУже столько времени тебя не видно — я уже волнуюсь! 😡 Возвращайся, пока я не начал тренировать твоего клона. Серьёзно, нам нужны эти баллы!';
             toSend.push({ tg, text, photo: '/notifications/level2.png' });
+            cntL2++;
             continue;
           } else {
             // Шаблон 4
             text = 'КУРСИК в ярости!\n\nТак долго без заданий. 😠 Ты хочешь, чтобы твой мозг ушёл в спячку до экзамена? Вернись, пока я не устроил тебе пробник во сне!';
             toSend.push({ tg, text, photo: '/notifications/level3.png' });
+            cntL3++;
             continue;
           }
         }
-      }
     }
 
     // --- Энергия: уведомление при полном восстановлении до 25 для НЕ подписчиков ---
@@ -182,6 +186,7 @@ export default async function handler(req, res) {
       const lastSent = meta.energy_full_last_sent_at ? Date.parse(String(meta.energy_full_last_sent_at)) : 0;
       if (lastBelow != null && lastBelow > lastSent) {
         toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать тесты, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' });
+        cntEnergy++;
         meta.energy_full_last_sent_at = new Date().toISOString();
         delete meta.energy_last_below_25_at;
         energyUpdates.push({ id: u.id, metadata: meta });
@@ -209,7 +214,7 @@ export default async function handler(req, res) {
       try { await supabase.from('users').update({ metadata: up.metadata }).eq('id', up.id); } catch {}
     }
 
-    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdates.length, hour_msk: hourMsk });
+    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdates.length, hour_msk: hourMsk, by_type: { streak: cntStreak, level1: cntL1, level2: cntL2, level3: cntL3, energy: cntEnergy } });
   } catch (e) {
     try { console.error('[api/cron_notify] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
