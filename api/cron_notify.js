@@ -217,10 +217,9 @@ export default async function handler(req, res) {
             if (Number.isFinite(eNow)) isFull = eNow >= 25 || (fullAt != null && fullAt <= Date.now());
           } catch {}
           if (isFull && hadBelow) {
-            toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' });
+            // Не ставим sentKey здесь — пусть воркер отметит после фактической доставки
+            toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png', kind: 'energy', uid });
             cntEnergy++;
-            await r.set(sentKey, '1', { ex: 60 * 60 * 24 });
-            await r.del(belowKey);
           }
         } catch {}
       }

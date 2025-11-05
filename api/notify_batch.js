@@ -2,6 +2,7 @@
 // Body: { jobs: Array<{ tg: string, text: string, photo?: string }> }
 
 import { verifyQStash } from './_qstash.mjs';
+import { kvAvailable, getRedis } from './_kv.mjs';
 
 function publicBase(req) {
   try {
@@ -41,13 +42,47 @@ export default async function handler(req, res) {
     if (!jobs.length) { res.status(200).json({ ok: true, sent: 0 }); return; }
 
     let sent = 0;
+    // Helpers: timezone-aware date for daily keys
+    const tz = 'Europe/Moscow';
+    const toIso = (d) => {
+      const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+      const p = fmt.formatToParts(d);
+      const y = Number(p.find(x=>x.type==='year')?.value||0);
+      const m = String(Number(p.find(x=>x.type==='month')?.value||0)).padStart(2,'0');
+      const dd = String(Number(p.find(x=>x.type==='day')?.value||0)).padStart(2,'0');
+      return `${y}-${m}-${dd}`;
+    };
+    const todayIso = toIso(new Date());
+    const canKv = kvAvailable();
+    const r = canKv ? getRedis() : null;
     // Send sequentially to respect Telegram limits per chat; batches already chunked upstream
     for (const it of jobs) {
       const tg = String(it?.tg || '');
       const text = String(it?.text || '');
       const photo = it?.photo ? String(it.photo) : '';
+      const kind = it?.kind ? String(it.kind) : '';
+      const uid = it?.uid ? String(it.uid) : '';
       if (!tg || (!text && !photo)) continue;
       try {
+        // Energy/streak de-dup at worker level to avoid marking sent when delivery fails upstream
+        if (canKv && r && uid) {
+          if (kind === 'energy' || photo.endsWith('/notifications/full_energy.png')) {
+            const sentKey = `energy:full_sent:day:v1:${uid}:${todayIso}`;
+            const already = await r.get(sentKey);
+            if (already) continue;
+            // deliver
+            if (photo) {
+              const url = absPublicUrl(req, photo);
+              await tgSendPhoto(botToken, tg, url, text || undefined);
+            } else {
+              await tgSend(botToken, tg, text);
+            }
+            sent++;
+            try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {}
+            try { await r.del(`energy:last_below:v1:${uid}`); } catch {}
+            continue;
+          }
+        }
         if (photo) {
           const url = absPublicUrl(req, photo);
           await tgSendPhoto(botToken, tg, url, text || undefined);
