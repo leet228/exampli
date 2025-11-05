@@ -17,16 +17,25 @@ export function getQStash() {
   return _client;
 }
 
+function sanitizeDedup(id) {
+  try {
+    if (!id) return undefined;
+    // Allow only A-Z a-z 0-9 _ -
+    return String(id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 128);
+  } catch { return undefined; }
+}
+
 // Enqueue a POST to our handler with JSON body
 export async function enqueueJson({ url, body, delaySeconds, deduplicationKey }) {
   const cli = getQStash();
   if (!cli) return { ok: false, error: 'qstash_not_configured' };
   try {
+    const dedupId = sanitizeDedup(deduplicationKey);
     const res = await cli.publishJSON({
       url,
       body,
       delay: typeof delaySeconds === 'number' ? delaySeconds : undefined,
-      deduplicationId: deduplicationKey,
+      deduplicationId: dedupId,
     });
     return { ok: true, messageId: res.messageId };
   } catch (e) {

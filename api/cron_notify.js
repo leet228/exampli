@@ -208,31 +208,29 @@ export default async function handler(req, res) {
       }
     }
 
-    // Отправка: если QStash доступен — ставим задачи чанками, иначе шлём напрямую
+    // Отправка: если QStash доступен — ставим задачи чанками; ошибки — шлём напрямую
     const groups = slice(toSend, 100);
+    const sendBatch = async (batch) => {
+      for (const it of batch) {
+        try {
+          if (it.photo) {
+            const url = absPublicUrl(req, it.photo);
+            await tgSendPhoto(botToken, it.tg, url, it.text);
+          } else {
+            await tgSend(botToken, it.tg, it.text);
+          }
+        } catch {}
+      }
+    };
     if (qstashAvailable()) {
       const url = absPublicUrl(req, '/api/notify_batch');
-      let enq = 0;
       for (let i = 0; i < groups.length; i++) {
         const g = groups[i];
-        const delay = Math.min(i * 2, 60); // растянем до 2 сек между группами
-        const { ok } = await enqueueJson({ url, body: { jobs: g }, delaySeconds: delay, deduplicationKey: `notify:${todayIso}:${i}` });
-        if (ok) enq++;
+        const delay = Math.min(i * 2, 60);
+        const { ok } = await enqueueJson({ url, body: { jobs: g }, delaySeconds: delay, deduplicationKey: `notify_${todayIso}_${i}` });
+        if (!ok) { await sendBatch(g); }
       }
     } else {
-      // Fallback: прямые отправки малыми батчами
-      const sendBatch = async (batch) => {
-        for (const it of batch) {
-          try {
-            if (it.photo) {
-              const url = absPublicUrl(req, it.photo);
-              await tgSendPhoto(botToken, it.tg, url, it.text);
-            } else {
-              await tgSend(botToken, it.tg, it.text);
-            }
-          } catch {}
-        }
-      };
       for (const g of groups) { await sendBatch(g); }
     }
 
