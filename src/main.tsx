@@ -6,6 +6,15 @@ import { applyTelegramTheme } from './theme/telegram';
 import { setupViewportMode } from './theme/telegram';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
+import { setupPreconnects, setupLazyImagesObserver } from './lib/preconnect';
+import { registerSW } from 'virtual:pwa-register';
+
+// Preconnect and lazy images
+setupPreconnects();
+setupLazyImagesObserver();
+
+// PWA service worker
+try { registerSW({ immediate: true }); } catch {}
 
 applyTelegramTheme();
 setupViewportMode();

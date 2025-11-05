@@ -131,7 +131,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
         >
           {override ? (
             <div className="w-full h-full flex flex-col items-center justify-center">
-              <img src={override.src} alt="loading" className="w-[72%] max-w-[560px] h-auto object-contain" draggable={false} />
+              <img src={override.src} alt="loading" className="w-[72%] max-w-[560px] h-auto object-contain" draggable={false} loading="eager" fetchPriority="high" />
               <div className="mt-4 font-extrabold text-white text-lg">
                 {`"${override.title}" грузится...`}
               </div>
@@ -142,6 +142,8 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
               alt="Загрузка"
               className="w-full h-full object-contain"
               draggable={false}
+              loading="eager"
+              fetchPriority="high"
             />
           )}
         </motion.div>
