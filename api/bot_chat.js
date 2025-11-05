@@ -36,9 +36,8 @@ export default async function handler(req, res) {
     const { data: userRow } = await supabase.from('users').select('*').eq('tg_id', chatId).maybeSingle();
     if (!userRow?.id) { await tgSend(botToken, chatId, 'Привет! Зайди в приложение КУРСИК, чтобы я узнал тебя и помог 😉'); res.status(200).json({ ok: true }); return; }
 
-    // Daily limit: 3 messages per day (prefer DB counter via RPC; fallback to metadata)
+    // Daily limit: 3 messages per day (через RPC). Fallback через metadata убран.
     const todayIso = mskTodayIso();
-    const meta = (userRow.metadata && typeof userRow.metadata === 'object') ? { ...userRow.metadata } : {};
     let dbCount = null;
     try {
       const c = await incDailyCountDb(supabase, userRow.id, todayIso);
@@ -51,21 +50,6 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, limited: true, source: 'db' });
         return;
       }
-    } else {
-      const dmDate = String(meta.bot_dm_date || '');
-      const dmCount = Number(meta.bot_dm_count || 0);
-      const isToday = dmDate === todayIso;
-      const countToday = isToday ? dmCount : 0;
-      if (countToday >= 3) {
-        await tgSend(botToken, chatId, 'Сегодня уже наговорился 😊 Завтра продолжим!');
-        res.status(200).json({ ok: true, limited: true, source: 'meta' });
-        return;
-      }
-      // optimistic increment in metadata (fallback path)
-      const draftMeta = { ...meta, bot_dm_date: todayIso, bot_dm_count: countToday + 1 };
-      try { await supabase.from('users').update({ metadata: draftMeta }).eq('id', userRow.id).select('id').single(); } catch {}
-      meta.bot_dm_date = draftMeta.bot_dm_date;
-      meta.bot_dm_count = draftMeta.bot_dm_count;
     }
 
     // Show typing while we think
@@ -73,23 +57,20 @@ export default async function handler(req, res) {
 
     // Context from DB: только подписки PLUS/AI+
     const plusActive = isActiveUntil(userRow?.plus_until);
-    const aiPlusActive = isActiveUntil(userRow?.ai_plus_until || (userRow?.metadata?.ai_plus_until));
+    const aiPlusActive = isActiveUntil(userRow?.ai_plus_until);
 
-    // Short rolling history in metadata (last 4 turns)
-    const hist = Array.isArray(meta.bot_history) ? meta.bot_history.slice(-6) : [];
-    const historyText = hist.map((h) => `${h.role === 'assistant' ? 'Bot' : 'User'}: ${String(h.content||'').slice(0,200)}`).join('\n');
+    // Историю диалога пока не сохраняем в users (нет колонки metadata)
+    const hist = [];
+    const historyText = '';
 
     const system = buildSystemPrompt({ plusActive, aiPlusActive });
     let reply = await genReply({ openaiKey, system, userText: text, history: historyText });
-    const currentCount = dbCount != null ? dbCount : Number(meta.bot_dm_count || 1);
+    const currentCount = dbCount != null ? dbCount : 1;
     if (currentCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
 
     await tgSend(botToken, chatId, reply);
 
-    // persist metadata
-    const newHist = [...hist, { role: 'user', content: text, t: Date.now() }, { role: 'assistant', content: reply, t: Date.now() }].slice(-8);
-    const nextMeta = { ...(meta || {}), bot_history: newHist, bot_dm_date: todayIso, bot_dm_count: (dbCount != null ? dbCount : meta.bot_dm_count) };
-    try { await supabase.from('users').update({ metadata: nextMeta }).eq('id', userRow.id); } catch {}
+    // Ничего не сохраняем в users.metadata (колонки нет)
 
     res.status(200).json({ ok: true });
   } catch (e) {

@@ -47,10 +47,6 @@ export default function BottomNav() {
     try {
       const apu0 = (window as any)?.__exampliBoot?.user?.ai_plus_until || (cacheGet<any>(CACHE_KEYS.user)?.ai_plus_until);
       if (apu0) return Boolean(new Date(String(apu0)).getTime() > Date.now());
-      const meta = (window as any)?.__exampliBoot?.user?.metadata || (cacheGet<any>(CACHE_KEYS.user)?.metadata);
-      if (meta && typeof meta === 'object' && meta.ai_plus_until) {
-        return Boolean(new Date(String(meta.ai_plus_until)).getTime() > Date.now());
-      }
       return false;
     } catch { return false; }
   });

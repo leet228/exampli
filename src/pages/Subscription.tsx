@@ -509,12 +509,8 @@ export default function Subscription() {
     const boot: any = (window as any).__exampliBoot || {};
     const userId = boot?.user?.id || (cacheGet<any>(CACHE_KEYS.user)?.id) || null;
     if (!userId) return;
-    const { data } = await supabase.from('users').select('id, ai_plus_until, metadata').eq('id', userId).maybeSingle();
+    const { data } = await supabase.from('users').select('id, ai_plus_until').eq('id', userId).maybeSingle();
     let val = (data as any)?.ai_plus_until || null;
-    // Если поля нет, проверяем metadata
-    if (!val && (data as any)?.metadata && typeof (data as any).metadata === 'object') {
-      val = (data as any).metadata.ai_plus_until || null;
-    }
     try {
       // Защита от отката оптимистичного значения: берём максимум из локального и серверного
       const local = (() => {

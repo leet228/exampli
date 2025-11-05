@@ -108,14 +108,7 @@ async function applyPayment({ supabase, req, userRow, p }) {
     }
     const now = new Date(); const aiPlusUntil = new Date(now.getTime()); aiPlusUntil.setMonth(aiPlusUntil.getMonth() + (months > 0 ? months : 1));
     const updateResult = await supabase.from('users').update({ ai_plus_until: aiPlusUntil.toISOString() }).eq('id', userRow.id);
-    if (updateResult.error) {
-      try {
-        const { data: currentUser } = await supabase.from('users').select('metadata').eq('id', userRow.id).single();
-        const currentMeta = (currentUser?.metadata && typeof currentUser.metadata === 'object') ? currentUser.metadata : {};
-        const newMeta = { ...currentMeta, ai_plus_until: aiPlusUntil.toISOString() };
-        await supabase.from('users').update({ metadata: newMeta }).eq('id', userRow.id);
-      } catch {}
-    }
+    // если колонка отсутствует — считаем это ошибкой схемы; fallback не используем
     try {
       const chat = String(tgIdFrom(userRow, p.tg_id || null));
       const photo = absPublicUrl(req, '/notifications/AI.png');

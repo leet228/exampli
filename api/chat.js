@@ -397,30 +397,19 @@ async function assertWithinLimit({ userId, estTokens }) {
         let tokenCap = BASE_TOKEN_LIMIT;
         
         // Проверяем активную подписку на AI токены (КУРСИК AI +)
-        // Проверяем ai_plus_until в users или в metadata
         let hasAiPlusSubscription = false;
         try {
             const { data: userRow } = await supabase
                 .from('users')
-                .select('ai_plus_until, metadata')
+                .select('ai_plus_until')
                 .eq('id', userId)
                 .maybeSingle();
             
             if (userRow) {
-                // Проверяем поле ai_plus_until если оно существует
                 if (userRow.ai_plus_until) {
                     const untilDate = new Date(userRow.ai_plus_until);
                     if (untilDate.getTime() > Date.now()) {
                         hasAiPlusSubscription = true;
-                    }
-                } else if (userRow.metadata && typeof userRow.metadata === 'object') {
-                    // Проверяем в metadata
-                    const metaUntil = userRow.metadata.ai_plus_until;
-                    if (metaUntil) {
-                        const untilDate = new Date(metaUntil);
-                        if (untilDate.getTime() > Date.now()) {
-                            hasAiPlusSubscription = true;
-                        }
                     }
                 }
             }

@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     // Users with Telegram id
     const { data: users } = await supabase
       .from('users')
-      .select('id, tg_id, energy, plus_until, metadata')
+      .select('id, tg_id, energy, plus_until')
       .not('tg_id', 'is', null)
       .limit(50000);
 
