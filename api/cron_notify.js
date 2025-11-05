@@ -114,10 +114,12 @@ export default async function handler(req, res) {
     const toSend = [];
     let cntStreak = 0, cntL1 = 0, cntL2 = 0, cntL3 = 0, cntEnergy = 0;
 
-    // Определяем час по МСК, чтобы стричные уведомления слали только в ~17:00 МСК
-    const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).formatToParts(today);
+    // Определяем час/минуту по МСК, чтобы стричные уведомления слали только в ~17:00 МСК
+    const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(today);
     const hourStr = parts.find(p => p.type === 'hour')?.value || '00';
+    const minuteStr = parts.find(p => p.type === 'minute')?.value || '00';
     const hourMsk = parseInt(hourStr, 10);
+    const minuteMsk = parseInt(minuteStr, 10);
 
     // Стрик/пропуски отправляем в 17:00 МСК
     if (hourMsk === 17) for (const u of (users || [])) {
@@ -126,6 +128,18 @@ export default async function handler(req, res) {
         const map = daysByUser.get(uid) || new Map();
         const hasToday = map.has(todayIso);
         if (hasToday) continue; // никаких сообщений сегодня
+        // Дедупликация по дню: при частом запуске крона не шлём повторно
+        let allowSend = true;
+        let r = null;
+        if (kvAvailable()) { try { r = getRedis(); } catch {} }
+        const sentKey = `streak:sent:day:v1:${uid}:${todayIso}`;
+        if (r) {
+          try { const already = await r.get(sentKey); if (already) allowSend = false; } catch {}
+        } else {
+          // Fallback без Redis: ограничим окно отправки первыми 5 минутами часа
+          if (!(minuteMsk >= 0 && minuteMsk < 5)) allowSend = false;
+        }
+        if (!allowSend) continue;
 
         const yKind = map.get(yesterdayIso) || '';
         if (yKind === 'active' || yKind === 'freeze') {
@@ -133,6 +147,7 @@ export default async function handler(req, res) {
           const text = '⚠️ Стрик шатается!\n\nЕщё один день без КУРСИКА — и твоя серия полетит в пропасть! Вернись, пока она не упала с криком «экзамен не сдан!» 😱';
           toSend.push({ tg, text, photo: '/notifications/streak_noti.png' });
           cntStreak++;
+          if (r) { try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
           continue;
         }
         // Подсчёт пропусков подряд до сегодня (вчера, позавчера, ...)
@@ -150,18 +165,21 @@ export default async function handler(req, res) {
             text = 'Эй, куда пропал?\n\nМы тут решаем тесты, вспоминаем формулы, а тебя нет! 😤 Вернись — без тебя скучно и подозрительно тихо…';
             toSend.push({ tg, text, photo: '/notifications/level1.png' });
             cntL1++;
+            if (r) { try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
             continue;
           } else if (miss <= 7) {
             // Шаблон 3
             text = 'Ну ты и прогульщик!\n\nУже столько времени тебя не видно — я уже волнуюсь! 😡 Возвращайся, пока я не начал тренировать твоего клона. Серьёзно, нам нужны эти баллы!';
             toSend.push({ tg, text, photo: '/notifications/level2.png' });
             cntL2++;
+            if (r) { try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
             continue;
           } else {
             // Шаблон 4
             text = 'КУРСИК в ярости!\n\nТак долго без заданий. 😠 Ты хочешь, чтобы твой мозг ушёл в спячку до экзамена? Вернись, пока я не устроил тебе пробник во сне!';
             toSend.push({ tg, text, photo: '/notifications/level3.png' });
             cntL3++;
+            if (r) { try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
             continue;
           }
         }

@@ -389,78 +389,95 @@ export default function Subscription() {
   // Вместо поллинга статуса используем событие Telegram WebApp invoiceClosed
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
-    const handler = (_ev: any) => {
-      try { hapticSelect(); } catch {}
+    const handler = (ev: any) => {
+      // Определяем статус: поддержим разные варианты (строка или объект)
+      let status: string | undefined;
       try {
-        window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
-      } catch {}
-      // Оптимистично обновим по данным о последней покупке (если доступны)
-      try {
-        const lp = (window as any).__exampliLastPurchase as { kind?: 'plan'|'gems'|'ai_tokens'; id?: string; at?: number } | undefined;
-        if (lp && typeof lp.at === 'number' && Date.now() - lp.at < 120000 /* 2 мин */) {
-          if (lp.kind === 'plan') {
-            const monthsMatch = (lp.id || '').match(/^m(\d+)$/);
-            const months = monthsMatch ? Number(monthsMatch[1]) : 1;
-            const now = new Date();
-            const plusUntil = new Date(now.getTime());
-            plusUntil.setMonth(plusUntil.getMonth() + months);
-            const plusUntilIso = plusUntil.toISOString();
-            try {
-              const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-              cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntilIso });
-              const boot: any = (window as any).__exampliBoot || {};
-              (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), plus_until: plusUntilIso } };
-              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntilIso } } as any));
-            } catch {}
-          } else if (lp.kind === 'gems') {
-            const coinsMap: Record<string, number> = { g1: 1200, g2: 3000, g3: 6500 };
-            const addCoins = coinsMap[lp.id || ''] || 0;
-            if (addCoins > 0) {
-              // та же плавная анимация, что и в статус-колбэке
-              const start = Number(coins || 0);
-              const end = start + addCoins;
-              let frame = 0; const frames = 24; const step = (end - start) / frames;
-              try { if ((window as any).__exampliCoinsAnim) clearInterval((window as any).__exampliCoinsAnim); } catch {}
-              (window as any).__exampliCoinsAnim = setInterval(() => {
-                frame += 1; const val = frame >= frames ? end : Math.round(start + step * frame);
-                setCoins(val);
-                try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: val } } as any)); } catch {}
-                if (frame >= frames) {
-                  try { clearInterval((window as any).__exampliCoinsAnim); (window as any).__exampliCoinsAnim = null; } catch {}
-                  try {
-                    const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
-                    cacheSet(CACHE_KEYS.stats, { ...cs, coins: end });
-                    const boot: any = (window as any).__exampliBoot || {};
-                    (window as any).__exampliBoot = { ...boot, stats: { ...(boot?.stats || {}), coins: end } };
-                  } catch {}
-                }
-              }, 20);
-            }
-          } else if (lp.kind === 'ai_tokens') {
-            const now = new Date();
-            const aiPlusUntil = new Date(now.getTime());
-            aiPlusUntil.setMonth(aiPlusUntil.getMonth() + 1);
-            const aiPlusUntilIso = aiPlusUntil.toISOString();
-            try {
-              const cu = cacheGet<any>(CACHE_KEYS.user) || {};
-              cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: aiPlusUntilIso });
-              const boot: any = (window as any).__exampliBoot || {};
-              (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), ai_plus_until: aiPlusUntilIso } };
-              window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: aiPlusUntilIso } } as any));
-            } catch {}
-          }
-        }
+        if (typeof ev === 'string') status = ev;
+        else if (typeof ev?.status === 'string') status = ev.status;
+        else if (ev?.paid === true || ev?.is_paid === true || ev?.isPaid === true) status = 'paid';
       } catch {}
 
-      // Обновим баланс монет и статус подписки
-      // Даем webhook время обработать платеж, затем обновляем статистику
-      setTimeout(() => {
-        void (async () => { 
-          try { await refreshCoinsFromServer(); } catch {} 
-          try { await refreshPlusUntilFromServer(); } catch {} 
-          try { await refreshAiPlusUntilFromServer(); } catch {} 
-        })();
-      }, 500); // 500ms задержка для обработки webhook
+      if (status === 'paid') {
+        try { hapticSelect(); } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
+        } catch {}
+        // Оптимистично обновим по данным о последней покупке (если доступны)
+        try {
+          const lp = (window as any).__exampliLastPurchase as { kind?: 'plan'|'gems'|'ai_tokens'; id?: string; at?: number } | undefined;
+          if (lp && typeof lp.at === 'number' && Date.now() - lp.at < 120000 /* 2 мин */) {
+            if (lp.kind === 'plan') {
+              const monthsMatch = (lp.id || '').match(/^m(\d+)$/);
+              const months = monthsMatch ? Number(monthsMatch[1]) : 1;
+              const now = new Date();
+              const plusUntil = new Date(now.getTime());
+              plusUntil.setMonth(plusUntil.getMonth() + months);
+              const plusUntilIso = plusUntil.toISOString();
+              try {
+                const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                cacheSet(CACHE_KEYS.user, { ...cu, plus_until: plusUntilIso });
+                const boot: any = (window as any).__exampliBoot || {};
+                (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), plus_until: plusUntilIso } };
+                window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntilIso } } as any));
+              } catch {}
+            } else if (lp.kind === 'gems') {
+              const coinsMap: Record<string, number> = { g1: 1200, g2: 3000, g3: 6500 };
+              const addCoins = coinsMap[lp.id || ''] || 0;
+              if (addCoins > 0) {
+                // та же плавная анимация, что и в статус-колбэке
+                const start = Number(coins || 0);
+                const end = start + addCoins;
+                let frame = 0; const frames = 24; const step = (end - start) / frames;
+                try { if ((window as any).__exampliCoinsAnim) clearInterval((window as any).__exampliCoinsAnim); } catch {}
+                (window as any).__exampliCoinsAnim = setInterval(() => {
+                  frame += 1; const val = frame >= frames ? end : Math.round(start + step * frame);
+                  setCoins(val);
+                  try { window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { coins: val } } as any)); } catch {}
+                  if (frame >= frames) {
+                    try { clearInterval((window as any).__exampliCoinsAnim); (window as any).__exampliCoinsAnim = null; } catch {}
+                    try {
+                      const cs = cacheGet<any>(CACHE_KEYS.stats) || {};
+                      cacheSet(CACHE_KEYS.stats, { ...cs, coins: end });
+                      const boot: any = (window as any).__exampliBoot || {};
+                      (window as any).__exampliBoot = { ...boot, stats: { ...(boot?.stats || {}), coins: end } };
+                    } catch {}
+                  }
+                }, 20);
+              }
+            } else if (lp.kind === 'ai_tokens') {
+              const now = new Date();
+              const aiPlusUntil = new Date(now.getTime());
+              aiPlusUntil.setMonth(aiPlusUntil.getMonth() + 1);
+              const aiPlusUntilIso = aiPlusUntil.toISOString();
+              try {
+                const cu = cacheGet<any>(CACHE_KEYS.user) || {};
+                cacheSet(CACHE_KEYS.user, { ...cu, ai_plus_until: aiPlusUntilIso });
+                const boot: any = (window as any).__exampliBoot || {};
+                (window as any).__exampliBoot = { ...boot, user: { ...(boot?.user || {}), ai_plus_until: aiPlusUntilIso } };
+                window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { ai_plus_until: aiPlusUntilIso } } as any));
+              } catch {}
+            }
+          }
+        } catch {}
+
+        // Обновим баланс монет и статус подписки — после короткой задержки для webhook
+        setTimeout(() => {
+          void (async () => {
+            try { await refreshCoinsFromServer(); } catch {}
+            try { await refreshPlusUntilFromServer(); } catch {}
+            try { await refreshAiPlusUntilFromServer(); } catch {}
+          })();
+        }, 500);
+        return;
+      }
+
+      if (status === 'cancelled') {
+        try { window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'warn', text: 'Оплата отменена' } } as any)); } catch {}
+        return;
+      }
+
+      // Неизвестный статус — ничего не делаем
     };
     try { tg?.onEvent?.('invoiceClosed', handler); } catch {}
     return () => { try { tg?.offEvent?.('invoiceClosed', handler); } catch {} };
