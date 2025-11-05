@@ -1,5 +1,6 @@
 // ESM serverless function: Telegram Bot webhook for Stars payments
 import { createClient } from '@supabase/supabase-js';
+import { qstashAvailable, enqueueJson } from '../_qstash.mjs';
 
 export default async function handler(req, res) {
   try {
@@ -71,14 +72,53 @@ export default async function handler(req, res) {
         };
       }
 
+      // Normalize core data for async processing
       const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
       if (!supabaseUrl || !supabaseKey) { res.status(200).json({ ok: true, warn: 'missing_supabase' }); return; }
-      const supabase = createClient(supabaseUrl, supabaseKey);
 
-      const userId = metadata?.user_id || null;
       const tgId = metadata?.tg_id || message?.from?.id || null;
+      const RUB_PER_STAR = Number(process.env.RUB_PER_STAR || '1');
+      const starsPaid = Number(successfulPayment.total_amount || 0);
+      const amountRub = Number.isFinite(starsPaid) && Number.isFinite(RUB_PER_STAR)
+        ? Math.round(starsPaid * (RUB_PER_STAR > 0 ? RUB_PER_STAR : 1))
+        : 0;
+      const paymentId = String(
+        successfulPayment.provider_payment_charge_id ||
+        successfulPayment.telegram_payment_charge_id ||
+        `xtr:${message?.date || Date.now()}:${message?.from?.id || 'unknown'}`
+      );
 
+      const job = {
+        payment: {
+          type: metadata?.type || null,
+          product_id: metadata?.product_id || null,
+          months: metadata?.months || null,
+          coins: metadata?.coins || null,
+          user_id: metadata?.user_id || null,
+          tg_id: tgId ? String(tgId) : null,
+          amount_rub: amountRub,
+          stars: starsPaid,
+          payment_id: paymentId,
+          meta: { ...metadata, total_amount: successfulPayment.total_amount },
+        }
+      };
+
+      // Use QStash if available: enqueue and ACK immediately
+      if (qstashAvailable()) {
+        try {
+          const url = absPublicUrl(req, '/api/payments/apply');
+          await enqueueJson({ url, body: job, deduplicationKey: `pay:${paymentId}` });
+          res.status(200).json({ ok: true, enqueued: true });
+          return;
+        } catch (e) {
+          try { console.warn('[payments] enqueue failed, will process inline', e); } catch {}
+        }
+      }
+
+      // Fallback: inline processing (original logic)
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const userId = metadata?.user_id || null;
       let userRow = null;
       if (userId) {
         const { data } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
@@ -87,188 +127,8 @@ export default async function handler(req, res) {
         const { data } = await supabase.from('users').select('*').eq('tg_id', String(tgId)).maybeSingle();
         userRow = data || null;
       }
-
       if (userRow?.id) {
-        // Convert Stars → RUB using env RUB_PER_STAR (default 1)
-        const RUB_PER_STAR = Number(process.env.RUB_PER_STAR || '1');
-        const starsPaid = Number(successfulPayment.total_amount || 0);
-        const amountRub = Number.isFinite(starsPaid) && Number.isFinite(RUB_PER_STAR)
-          ? Math.round(starsPaid * (RUB_PER_STAR > 0 ? RUB_PER_STAR : 1))
-          : 0;
-        const paymentId = String(
-          successfulPayment.provider_payment_charge_id ||
-          successfulPayment.telegram_payment_charge_id ||
-          `xtr:${message?.date || Date.now()}:${message?.from?.id || 'unknown'}`
-        );
-
-        if (metadata?.type === 'gems') {
-          const addCoins = Number(metadata?.coins || 0);
-          if (Number.isFinite(addCoins) && addCoins > 0) {
-            const rpcRes = await supabase.rpc('rpc_add_coins', { p_user_id: userRow.id, p_delta: addCoins });
-            if (rpcRes?.error) {
-              await supabase
-                .from('users')
-                .update({ coins: Number(userRow.coins || 0) + addCoins })
-                .eq('id', userRow.id);
-            }
-          }
-          try {
-            const { data: payIns, error: payErr } = await supabase.from('payments').upsert({
-              id: paymentId,
-              user_id: userRow.id,
-              type: 'gems',
-              product_id: String(metadata?.product_id || ''),
-              amount_rub: amountRub,
-              currency: 'XTR',
-              status: 'succeeded',
-              test: false,
-              payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
-              captured_at: new Date().toISOString(),
-            });
-            if (payErr) { try { console.error('[payments upsert gems] error:', payErr); } catch {} }
-          } catch (e) { try { console.error('payments upsert (gems) failed', e); } catch {} }
-        } else if (metadata?.type === 'plan') {
-          const months = Number(metadata?.months || 1);
-          const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
-          try {
-            const { data: payIns2, error: payErr2 } = await supabase.from('payments').upsert({
-              id: paymentId,
-              user_id: userRow.id,
-              type: 'plan',
-              product_id: pcode,
-              amount_rub: amountRub,
-              currency: 'XTR',
-              status: 'succeeded',
-              test: false,
-              payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid },
-              captured_at: new Date().toISOString(),
-            });
-            if (payErr2) { try { console.error('[payments upsert plan] error:', payErr2); } catch {} }
-          } catch (e) { try { console.error('payments upsert (plan) failed', e); } catch {} }
-
-          const { error: extErr } = await supabase.rpc('extend_subscription', {
-            p_user_id: userRow.id,
-            p_plan_code: pcode,
-            p_months: Number.isFinite(months) && months > 0 ? months : 1,
-            p_payment_id: null,
-          });
-          if (extErr && months > 0) {
-            const now = new Date();
-            const until = new Date(now.getTime());
-            until.setMonth(until.getMonth() + months);
-            await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
-          }
-
-          // Notify user in Telegram about PLUS
-          try {
-            const chat = String(tgIdFrom(userRow, tgId));
-            const photo = absPublicUrl(req, '/notifications/plus.png');
-            await sendTelegramPhoto(
-              process.env.TELEGRAM_BOT_TOKEN,
-              chat,
-              photo,
-              '💎 КУРСИК PLUS активирован!\n\nДобро пожаловать в элиту 💫\n\nТеперь у тебя бесконечная энергия, КУРСИК AI под рукой, реклама в прошлом и даже заморозка стрика.'
-            );
-          } catch {}
-        } else if (metadata?.type === 'ai_tokens') {
-          // Обработка покупки КУРСИК AI + (месячная подписка на токены)
-          const months = Number(metadata?.months || 1);
-          const pcode = String(metadata?.product_id || '').trim() || 'ai_plus';
-          
-          // Сохраняем платеж (ВНИМАНИЕ: нужно добавить 'ai_tokens' в CHECK constraint payments_type_check в Supabase!)
-          // Временно используем 'plan' если 'ai_tokens' не поддерживается
-          let paymentType = 'ai_tokens';
-          try {
-            const { data: payIns3, error: payErr3 } = await supabase.from('payments').upsert({
-              id: paymentId,
-              user_id: userRow.id,
-              type: paymentType,
-              product_id: pcode,
-              amount_rub: amountRub,
-              currency: 'XTR',
-              status: 'succeeded',
-              test: false,
-              payment_method: null,
-              metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid, original_type: 'ai_tokens' },
-              captured_at: new Date().toISOString(),
-            });
-            if (payErr3) {
-              // Если constraint не позволяет 'ai_tokens', пробуем 'plan' как fallback
-              if (payErr3.code === '23514' && payErr3.message && payErr3.message.includes('payments_type_check')) {
-                try {
-                  console.warn('[payments] ai_tokens type not allowed, using plan as fallback. Please add ai_tokens to payments_type_check constraint in Supabase!');
-                  await supabase.from('payments').upsert({
-                    id: paymentId,
-                    user_id: userRow.id,
-                    type: 'plan',
-                    product_id: pcode,
-                    amount_rub: amountRub,
-                    currency: 'XTR',
-                    status: 'succeeded',
-                    test: false,
-                    payment_method: null,
-                    metadata: { ...metadata, total_amount: successfulPayment.total_amount, stars: starsPaid, original_type: 'ai_tokens' },
-                    captured_at: new Date().toISOString(),
-                  });
-                } catch (e2) {
-                  try { console.error('[payments upsert ai_tokens fallback] error:', e2); } catch {}
-                }
-              } else {
-                try { console.error('[payments upsert ai_tokens] error:', payErr3); } catch {}
-              }
-            }
-          } catch (e) { try { console.error('payments upsert (ai_tokens) failed', e); } catch {} }
-
-          // Устанавливаем дату окончания подписки на AI токены
-          const now = new Date();
-          const aiPlusUntil = new Date(now.getTime());
-          aiPlusUntil.setMonth(aiPlusUntil.getMonth() + months);
-          
-          // Пытаемся обновить ai_plus_until напрямую
-          // Если поле не существует, сохраняем в metadata как fallback
-          const updateResult = await supabase
-            .from('users')
-            .update({ ai_plus_until: aiPlusUntil.toISOString() })
-            .eq('id', userRow.id);
-          
-          // Если обновление не удалось (поле не существует), используем metadata
-          if (updateResult.error) {
-            try {
-              // Получаем текущие данные пользователя
-              const { data: currentUser } = await supabase
-                .from('users')
-                .select('metadata')
-                .eq('id', userRow.id)
-                .single();
-              
-              const currentMeta = (currentUser?.metadata && typeof currentUser.metadata === 'object') 
-                ? currentUser.metadata 
-                : {};
-              const newMeta = { ...currentMeta, ai_plus_until: aiPlusUntil.toISOString() };
-              
-              await supabase
-                .from('users')
-                .update({ metadata: newMeta })
-                .eq('id', userRow.id);
-            } catch (e2) {
-              try { console.error('[ai_tokens] failed to set ai_plus_until in metadata', e2); } catch {}
-            }
-          }
-
-          // Notify user in Telegram about AI+
-          try {
-            const chat = String(tgIdFrom(userRow, tgId));
-            const photo = absPublicUrl(req, '/notifications/AI.png');
-            await sendTelegramPhoto(
-              process.env.TELEGRAM_BOT_TOKEN,
-              chat,
-              photo,
-              '🤖 AI+ — твой новый мозг!\n\nТеперь у тебя токенов больше, чем ошибок в сочинении на черновике. КУРСИК AI готов творить чудеса вместе с тобой 💪'
-            );
-          } catch {}
-        }
+        await processPaymentInline({ supabase, req, userRow, paymentId, amountRub, starsPaid, metadata });
       }
     }
 
@@ -276,6 +136,70 @@ export default async function handler(req, res) {
   } catch (e) {
     try { console.error('[api/payments/webhook] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
+  }
+}
+async function processPaymentInline({ supabase, req, userRow, paymentId, amountRub, starsPaid, metadata }) {
+  const tgId = tgIdFrom(userRow, metadata?.tg_id || null);
+  if (metadata?.type === 'gems') {
+    const addCoins = Number(metadata?.coins || 0);
+    if (Number.isFinite(addCoins) && addCoins > 0) {
+      const rpcRes = await supabase.rpc('rpc_add_coins', { p_user_id: userRow.id, p_delta: addCoins });
+      if (rpcRes?.error) {
+        await supabase.from('users').update({ coins: Number(userRow.coins || 0) + addCoins }).eq('id', userRow.id);
+      }
+    }
+    try {
+      await supabase.from('payments').upsert({
+        id: paymentId, user_id: userRow.id, type: 'gems', product_id: String(metadata?.product_id || ''),
+        amount_rub: amountRub, currency: 'XTR', status: 'succeeded', test: false, payment_method: null,
+        metadata: { ...metadata, stars: starsPaid }, captured_at: new Date().toISOString(),
+      });
+    } catch {}
+  } else if (metadata?.type === 'plan') {
+    const months = Number(metadata?.months || 1);
+    const pcode = String(metadata?.product_id || metadata?.plan_code || '').trim() || 'm1';
+    try {
+      await supabase.from('payments').upsert({
+        id: paymentId, user_id: userRow.id, type: 'plan', product_id: pcode,
+        amount_rub: amountRub, currency: 'XTR', status: 'succeeded', test: false, payment_method: null,
+        metadata: { ...metadata, stars: starsPaid }, captured_at: new Date().toISOString(),
+      });
+    } catch {}
+    const { error: extErr } = await supabase.rpc('extend_subscription', { p_user_id: userRow.id, p_plan_code: pcode, p_months: months > 0 ? months : 1, p_payment_id: null });
+    if (extErr && months > 0) {
+      const now = new Date(); const until = new Date(now.getTime()); until.setMonth(until.getMonth() + months);
+      await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
+    }
+    try {
+      const chat = String(tgId);
+      const photo = absPublicUrl(req, '/notifications/plus.png');
+      await sendTelegramPhoto(process.env.TELEGRAM_BOT_TOKEN, chat, photo, '💎 КУРСИК PLUS активирован!');
+    } catch {}
+  } else if (metadata?.type === 'ai_tokens') {
+    const months = Number(metadata?.months || 1);
+    const pcode = String(metadata?.product_id || '').trim() || 'ai_plus';
+    try {
+      await supabase.from('payments').upsert({
+        id: paymentId, user_id: userRow.id, type: 'ai_tokens', product_id: pcode,
+        amount_rub: amountRub, currency: 'XTR', status: 'succeeded', test: false, payment_method: null,
+        metadata: { ...metadata, stars: starsPaid }, captured_at: new Date().toISOString(),
+      });
+    } catch {}
+    const now = new Date(); const aiPlusUntil = new Date(now.getTime()); aiPlusUntil.setMonth(aiPlusUntil.getMonth() + (months > 0 ? months : 1));
+    const updateResult = await supabase.from('users').update({ ai_plus_until: aiPlusUntil.toISOString() }).eq('id', userRow.id);
+    if (updateResult.error) {
+      try {
+        const { data: currentUser } = await supabase.from('users').select('metadata').eq('id', userRow.id).single();
+        const currentMeta = (currentUser?.metadata && typeof currentUser.metadata === 'object') ? currentUser.metadata : {};
+        const newMeta = { ...currentMeta, ai_plus_until: aiPlusUntil.toISOString() };
+        await supabase.from('users').update({ metadata: newMeta }).eq('id', userRow.id);
+      } catch {}
+    }
+    try {
+      const chat = String(tgId);
+      const photo = absPublicUrl(req, '/notifications/AI.png');
+      await sendTelegramPhoto(process.env.TELEGRAM_BOT_TOKEN, chat, photo, '🤖 AI+ активирован!');
+    } catch {}
   }
 }
 
