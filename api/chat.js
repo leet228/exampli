@@ -1,8 +1,12 @@
 // ESM serverless function for Vercel to call DeepSeek Chat Completions
 // Compatible with "type": "module" projects
 import { createClient } from '@supabase/supabase-js';
+import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit, acquireLock, releaseLock } from './_kv.mjs';
+import { createHash } from 'node:crypto';
 
 export default async function handler(req, res) {
+    let timeoutId = null;
+    let lockKey = null;
     try {
         if (req.method === 'OPTIONS') {
             res.setHeader('Allow', 'POST, OPTIONS');
@@ -29,6 +33,19 @@ export default async function handler(req, res) {
             res.status(400).json({ error: 'Invalid payload: messages must be an array' });
             return;
         }
+
+        // Rate limits (best-effort): per IP and per user
+        try {
+            const ip = String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+            if (ip && kvAvailable()) {
+                const rlIp = await rateLimit({ key: `chat:ip:${ip}`, limit: 120, windowSeconds: 60 });
+                if (!rlIp.ok) { res.status(429).json({ error: 'rate_limited' }); return; }
+            }
+            if (userId && kvAvailable()) {
+                const rlUser = await rateLimit({ key: `chat:user:${userId}`, limit: 30, windowSeconds: 60 });
+                if (!rlUser.ok) { res.status(429).json({ error: 'rate_limited' }); return; }
+            }
+        } catch {}
 
         const systemPrompt = [
             'Ты — КУРСИК AI, умный и доброжелательный учитель (мужского пола), созданный в КУРСИК.',
@@ -63,6 +80,20 @@ export default async function handler(req, res) {
             ...openAiPrepared
         ], 35000);
 
+        // De-duplication: identical payload in last 30s → return cached
+        let dedupKey = null;
+        if (kvAvailable()) {
+            try {
+                const h = createHash('sha1').update(JSON.stringify({ model, prepared, userId: userId || 'anon' })).digest('hex');
+                dedupKey = `chat:resp:v1:${userId || 'anon'}:${h}`;
+                const cached = await cacheGetJSON(dedupKey);
+                if (cached && typeof cached.content === 'string') {
+                    res.status(200).json({ content: cached.content, cached: true });
+                    return;
+                }
+            } catch {}
+        }
+
         // Нестриминговый ответ (полный текст сразу)
         // Опционально прикидываем лимит перед запросом (грубая оценка по символам)
         const plainForEstimate = (messages || []).map(extractPlainTextFromMessage).join('\n');
@@ -72,6 +103,18 @@ export default async function handler(req, res) {
             res.status(402).json({ error: 'limit_exceeded', detail: 'limit_exceeded' });
             return;
         }
+
+        // Concurrency guard: one in-flight per user (best-effort)
+        lockKey = userId ? `chat:lock:${userId}` : null;
+        if (lockKey && kvAvailable()) {
+            const ok = await acquireLock(lockKey, 25);
+            if (!ok) { res.status(429).json({ error: 'busy' }); return; }
+        }
+
+        // Timeout controller
+        const controller = new AbortController();
+        const timeoutMs = 25000;
+        timeoutId = setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
 
         const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -84,7 +127,8 @@ export default async function handler(req, res) {
                 messages: prepared,
                 temperature: 1,
                 stream: false,
-            })
+            }),
+            signal: controller.signal
         });
 
         if (!dsResponse.ok) {
@@ -98,10 +142,18 @@ export default async function handler(req, res) {
             const usedTokens = (json?.usage?.total_tokens) || (json?.usage?.prompt_tokens || 0) + (json?.usage?.completion_tokens || 0) || 0;
             await trackUsage({ userId, usedTokens });
         } catch {}
+        // Cache response for dedup window
+        try {
+            if (dedupKey) { await cacheSetJSON(dedupKey, { content }, 30); }
+        } catch {}
         res.status(200).json({ content });
     } catch (error) {
         console.error('[api/chat] Unhandled error:', error);
         res.status(500).json({ error: 'Internal error', detail: String(error && error.message || error) });
+    } finally {
+        // ensure any timer cleared
+        try { if (timeoutId) clearTimeout(timeoutId); } catch {}
+        try { if (lockKey) await releaseLock(lockKey); } catch {}
     }
 }
 

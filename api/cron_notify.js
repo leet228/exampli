@@ -4,6 +4,8 @@
 // 3) Purchase notifications are handled in payments/webhook.js
 
 import { createClient } from '@supabase/supabase-js';
+import { kvAvailable, getRedis } from './_kv.mjs';
+import { qstashAvailable, enqueueJson } from './_qstash.mjs';
 
 function publicBase(req) {
   try {
@@ -165,67 +167,79 @@ export default async function handler(req, res) {
         }
     }
 
-    // --- Энергия: уведомление при полном восстановлении до 25 для НЕ подписчиков ---
-    const energyUpdates = [];
-    for (const u of (users || [])) {
-      const tg = u.tg_id ? String(u.tg_id) : null;
-      if (!tg) continue;
-      const plusActive = (() => { try { return Boolean(u.plus_until && new Date(String(u.plus_until)).getTime() > Date.now()); } catch { return false; } })();
-      if (plusActive) continue; // только для неподписчиков
-      const meta = (u.metadata && typeof u.metadata === 'object') ? { ...u.metadata } : {};
-
-      const lastBelowTs = meta.energy_last_below_25_at ? Date.parse(String(meta.energy_last_below_25_at)) : null;
-      const lastSentTs = meta.energy_full_last_sent_at ? Date.parse(String(meta.energy_full_last_sent_at)) : 0;
-
-      // Если уже фиксировали «было ниже 25», проверим актуальную энергию через RPC (ленивая регенерация)
-      if (lastBelowTs != null) {
+    // --- Энергия: уведомление при полном восстановлении до 25 для НЕ подписчиков (без metadata; Redis) ---
+    if (kvAvailable()) {
+      const r = getRedis();
+      for (const u of (users || [])) {
+        const tg = u.tg_id ? String(u.tg_id) : null;
+        if (!tg) continue;
+        const plusActive = (() => { try { return Boolean(u.plus_until && new Date(String(u.plus_until)).getTime() > Date.now()); } catch { return false; } })();
+        if (plusActive) continue; // только для неподписчиков
         try {
-          const r = await supabase.rpc('sync_energy', { p_tg_id: tg, p_delta: 0 });
-          const row = Array.isArray(r.data) ? (r.data?.[0] || null) : (r.data || null);
-          const eNow = Number(row?.energy ?? NaN);
-          const fullAt = row?.full_at ? Date.parse(String(row.full_at)) : null;
-          const isFull = (Number.isFinite(eNow) && eNow >= 25) || (fullAt != null && fullAt <= Date.now());
-          if (isFull && lastBelowTs > lastSentTs) {
+          // Фиксируем переход "ниже 25" во внешнем состоянии (Redis)
+          const belowKey = `energy:last_below:v1:${u.id}`;
+          const sentKey = `energy:full_sent:day:v1:${u.id}:${todayIso}`;
+          const tabEnergy = Number(u.energy ?? 0);
+          if (tabEnergy < 25) {
+            // отметим флаг ниже 25 на сутки
+            await r.set(belowKey, '1', { ex: 60 * 60 * 24 });
+            continue;
+          }
+          // Если уже полная — проверим не отправляли ли сегодня
+          const alreadySent = await r.get(sentKey);
+          if (alreadySent) continue;
+          const hadBelow = await r.get(belowKey);
+          // Проверим точную регенерацию через RPC (если доступна), чтобы не спамить
+          let isFull = tabEnergy >= 25;
+          try {
+            const rr = await supabase.rpc('sync_energy', { p_tg_id: tg, p_delta: 0 });
+            const row = Array.isArray(rr.data) ? (rr.data?.[0] || null) : (rr.data || null);
+            const eNow = Number(row?.energy ?? NaN);
+            const fullAt = row?.full_at ? Date.parse(String(row.full_at)) : null;
+            if (Number.isFinite(eNow)) isFull = eNow >= 25 || (fullAt != null && fullAt <= Date.now());
+          } catch {}
+          if (isFull && hadBelow) {
             toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png' });
             cntEnergy++;
-            meta.energy_full_last_sent_at = new Date().toISOString();
-            delete meta.energy_last_below_25_at;
-            energyUpdates.push({ id: u.id, metadata: meta });
-          }
-        } catch {}
-        continue;
-      }
-
-      // Ещё не фиксировали «было ниже 25»: если сейчас в users.energy < 25 — пометим старт отсчёта
-      const tabEnergy = Number(u.energy ?? 0);
-      if (tabEnergy < 25) {
-        meta.energy_last_below_25_at = new Date().toISOString();
-        energyUpdates.push({ id: u.id, metadata: meta });
-      }
-    }
-
-    // Send in small batches to respect Telegram limits
-    const sendBatch = async (batch) => {
-      for (const it of batch) {
-        try {
-          if (it.photo) {
-            const url = absPublicUrl(req, it.photo);
-            await tgSendPhoto(botToken, it.tg, url, it.text);
-          } else {
-            await tgSend(botToken, it.tg, it.text);
+            await r.set(sentKey, '1', { ex: 60 * 60 * 24 });
+            await r.del(belowKey);
           }
         } catch {}
       }
-    };
-    const groups = slice(toSend, 25);
-    for (const g of groups) { await sendBatch(g); }
-
-    // Persist metadata updates for energy state
-    for (const up of energyUpdates) {
-      try { await supabase.from('users').update({ metadata: up.metadata }).eq('id', up.id); } catch {}
     }
 
-    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdates.length, hour_msk: hourMsk, by_type: { streak: cntStreak, level1: cntL1, level2: cntL2, level3: cntL3, energy: cntEnergy } });
+    // Отправка: если QStash доступен — ставим задачи чанками, иначе шлём напрямую
+    const groups = slice(toSend, 100);
+    if (qstashAvailable()) {
+      const url = absPublicUrl(req, '/api/notify_batch');
+      let enq = 0;
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i];
+        const delay = Math.min(i * 2, 60); // растянем до 2 сек между группами
+        const { ok } = await enqueueJson({ url, body: { jobs: g }, delaySeconds: delay, deduplicationKey: `notify:${todayIso}:${i}` });
+        if (ok) enq++;
+      }
+    } else {
+      // Fallback: прямые отправки малыми батчами
+      const sendBatch = async (batch) => {
+        for (const it of batch) {
+          try {
+            if (it.photo) {
+              const url = absPublicUrl(req, it.photo);
+              await tgSendPhoto(botToken, it.tg, url, it.text);
+            } else {
+              await tgSend(botToken, it.tg, it.text);
+            }
+          } catch {}
+        }
+      };
+      for (const g of groups) { await sendBatch(g); }
+    }
+
+    // metadata больше не трогаем: состояние по энергии в Redis
+
+    const energyUpdatesLen = 0;
+    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdatesLen, hour_msk: hourMsk, by_type: { streak: cntStreak, level1: cntL1, level2: cntL2, level3: cntL3, energy: cntEnergy } });
   } catch (e) {
     try { console.error('[api/cron_notify] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });

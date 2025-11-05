@@ -1,6 +1,7 @@
 // ESM serverless function for Vercel: Aggregated BOOT STEP 1 (critical path)
 // Returns minimal data required for first render in one server call
 import { createClient } from '@supabase/supabase-js';
+import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit } from './_kv.mjs';
 
 export default async function handler(req, res) {
   try {
@@ -22,6 +23,15 @@ export default async function handler(req, res) {
       return;
     }
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Soft rate limit per IP (pre-user) — защита от бурста
+    try {
+      const ip = String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+      if (ip && kvAvailable()) {
+        const rl = await rateLimit({ key: `boot1:ip:${ip}`, limit: 60, windowSeconds: 60 });
+        if (!rl.ok) { res.status(429).json({ error: 'rate_limited' }); return; }
+      }
+    } catch {}
 
     const body = await safeJson(req);
     const tgUser = body?.tg_user || null; // { id, username, first_name, last_name, photo_url }
@@ -90,49 +100,51 @@ export default async function handler(req, res) {
       }
     }
 
-    // read minimal profile
-    // One RPC to fetch profile, friend count, active subject & lessons
+    // read aggregated data via single RPC (with graceful fallback)
     let profData = null;
     let friendsCnt = 0;
     let subjectAndLessons = { active_id: null, active_code: null, subject: null, lessons: [] };
     let chosenSubjects = [];
     try {
-      const rpc = await supabase.rpc('rpc_boot1', {
-        p_user_id: userRow.id,
-        p_active_code: activeCodeFromClient,
-      });
-      if (rpc.error) throw rpc.error;
-      const pack = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : (rpc.data || {});
-      profData = pack.profile || null;
-      friendsCnt = Number(pack.friends_count || 0);
-      subjectAndLessons = {
-        active_id: pack.active_id || null,
-        active_code: pack.active_code || null,
-        subject: pack.subject || null,
-        lessons: pack.lessons || [],
-      };
-      // Если активна подписка — читаем выбранные курсы (до 4); иначе игнорируем chosen_courses
-      const plusActive = (() => {
-        try { return Boolean(userRow?.plus_until && new Date(String(userRow.plus_until)).getTime() > Date.now()); } catch { return false; }
-      })();
-      if (plusActive) {
+      // per-user short cache (15-60s)
+      let pack = null;
+      const cacheKey = `boot_all:v1:u:${userRow.id}:ac:${activeCodeFromClient || '-'}`;
+      if (kvAvailable()) {
+        pack = await cacheGetJSON(cacheKey);
+      }
+      if (!pack) {
+        const rpc = await supabase.rpc('rpc_boot_all', { p_user_id: userRow.id, p_active_code: activeCodeFromClient });
+        if (rpc.error) throw rpc.error;
+        pack = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : (rpc.data || {});
+        if (kvAvailable()) { try { await cacheSetJSON(cacheKey, pack, 45); } catch {} }
+        // additionally seed long-lived caches for static catalogs
         try {
-          const { data: chosen } = await supabase
-            .from('chosen_courses')
-            .select('subject_id')
-            .eq('user_id', userRow.id)
-            .limit(4);
-          const ids = Array.isArray(chosen) ? chosen.map(r => r.subject_id).filter(Boolean) : [];
-          if (ids.length) {
-            const { data: subs } = await supabase
-              .from('subjects')
-              .select('id,code,title,level')
-              .in('id', ids);
-            const byId = new Map((subs || []).map(s => [String(s.id), s]));
-            chosenSubjects = ids.map(id => byId.get(String(id))).filter(Boolean);
+          if (kvAvailable()) {
+            if (Array.isArray(pack.subjectsAll) && pack.subjectsAll.length) {
+              await cacheSetJSON('subjectsAll:v1', pack.subjectsAll, 60 * 60 * 24 * 7);
+            }
+            const topicsBy = pack.topicsBySubject || {};
+            for (const sid of Object.keys(topicsBy)) {
+              await cacheSetJSON(`topicsBySubject:v1:${sid}`, topicsBy[sid], 60 * 60 * 24 * 7);
+            }
+            const lessonsBy = pack.lessonsByTopic || {};
+            for (const tid of Object.keys(lessonsBy)) {
+              await cacheSetJSON(`lessonsByTopic:v1:${tid}`, lessonsBy[tid], 60 * 60 * 24 * 7);
+            }
           }
         } catch {}
       }
+      const d = pack || {};
+      profData = d.profile || null;
+      friendsCnt = Number(d.friends_count || 0);
+      subjectAndLessons = {
+        active_id: d.active_id || null,
+        active_code: d.active_code || null,
+        subject: d.subject || null,
+        lessons: d.lessons || [],
+      };
+      const arrChosen = Array.isArray(d.chosen_subjects) ? d.chosen_subjects : [];
+      if (arrChosen.length) chosenSubjects = arrChosen;
     } catch (e) {
       // Fallback: previous 3 queries if RPC is unavailable
       const arr = await Promise.all([
@@ -184,27 +196,8 @@ export default async function handler(req, res) {
       course_taken: true,
     };
 
-    // Определим последний день стрика (СТРОГО по МСК) до и включая сегодня
-    let lastStreakDay = null;
-    try {
-      const tz = 'Europe/Moscow';
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-      const parts = fmt.formatToParts(now);
-      const y = Number(parts.find(p => p.type === 'year')?.value || NaN);
-      const m = Number(parts.find(p => p.type === 'month')?.value || NaN);
-      const d = Number(parts.find(p => p.type === 'day')?.value || NaN);
-      const toIso = (Y, M, D) => `${Y}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
-      const todayIso = toIso(y, m, d);
-      const { data: sd } = await supabase
-        .from('streak_days')
-        .select('day')
-        .eq('user_id', userRow.id)
-        .lte('day', todayIso)
-        .order('day', { ascending: false })
-        .limit(1);
-      if (Array.isArray(sd) && sd.length > 0) lastStreakDay = String(sd[0]?.day || '');
-    } catch {}
+    // last streak day теперь возвращает rpc_boot_all, но оставим фоллбек через null
+    const lastStreakDay = null;
 
     res.status(200).json({
       user: userRow,

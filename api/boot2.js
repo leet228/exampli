@@ -1,6 +1,7 @@
 // ESM serverless function for Vercel: Aggregated BOOT STEP 2 (background)
 // Returns heavy/secondary data in one server call
 import { createClient } from '@supabase/supabase-js';
+import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit } from './_kv.mjs';
 
 export default async function handler(req, res) {
   try {
@@ -23,6 +24,15 @@ export default async function handler(req, res) {
     }
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Soft rate limit per IP
+    try {
+      const ip = String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+      if (ip && kvAvailable()) {
+        const rl = await rateLimit({ key: `boot2:ip:${ip}`, limit: 60, windowSeconds: 60 });
+        if (!rl.ok) { res.status(429).json({ error: 'rate_limited' }); return; }
+      }
+    } catch {}
+
     const body = await safeJson(req);
     const userId = body?.user_id || null;
     const activeId = body?.active_id || null;
@@ -37,7 +47,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Prefer single RPC that returns everything; fallback to previous multi-requests
+    // Prefer single RPC that returns everything (rpc_boot_all); fallback к прежней логике
     let friendsListRaw = [];
     let invites = [];
     let subjectsAll = [];
@@ -46,19 +56,68 @@ export default async function handler(req, res) {
     let streakDaysAll = [];
     let friendsStats = {};
     try {
-      const rpc = await supabase.rpc('rpc_boot2', { p_user_id: userId, p_active_id: activeId });
-      if (!rpc.error && rpc.data) {
-        const d = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : rpc.data;
-        friendsListRaw = Array.isArray(d.friends) ? d.friends : [];
-        invites = Array.isArray(d.invites) ? d.invites : [];
+      const cacheKey = `boot_all:v1:u:${userId}:aid:${activeId || '-'}`;
+      let d = null;
+      if (kvAvailable()) d = await cacheGetJSON(cacheKey);
+      if (!d) {
+        const rpc = await supabase.rpc('rpc_boot_all', { p_user_id: userId, p_active_id: activeId });
+        if (rpc.error) throw rpc.error;
+        d = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : rpc.data;
+        if (kvAvailable()) { try { await cacheSetJSON(cacheKey, d, 45); } catch {} }
+        // seed long-lived catalogs
+        try {
+          if (kvAvailable()) {
+            if (Array.isArray(d.subjectsAll) && d.subjectsAll.length) {
+              await cacheSetJSON('subjectsAll:v1', d.subjectsAll, 60 * 60 * 24 * 7);
+            }
+            const topicsBy = d.topicsBySubject || {};
+            for (const sid of Object.keys(topicsBy)) {
+              await cacheSetJSON(`topicsBySubject:v1:${sid}`, topicsBy[sid], 60 * 60 * 24 * 7);
+            }
+            const lessonsBy = d.lessonsByTopic || {};
+            for (const tid of Object.keys(lessonsBy)) {
+              await cacheSetJSON(`lessonsByTopic:v1:${tid}`, lessonsBy[tid], 60 * 60 * 24 * 7);
+            }
+          }
+        } catch {}
+      }
+      friendsListRaw = Array.isArray(d.friends) ? d.friends : [];
+      invites = Array.isArray(d.invites) ? d.invites : [];
+      // overlay super-long caches if exist (subjects/topics/lessons)
+      try {
+        if (kvAvailable()) {
+          const cachedSubjectsAll = await cacheGetJSON('subjectsAll:v1');
+          if (cachedSubjectsAll && Array.isArray(cachedSubjectsAll)) subjectsAll = cachedSubjectsAll; else subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
+          const sid = activeId || d.active_id || null;
+          if (sid) {
+            const topicsCached = await cacheGetJSON(`topicsBySubject:v1:${sid}`);
+            if (topicsCached && Array.isArray(topicsCached)) topicsOnly = { topicsBySubject: { [String(sid)]: topicsCached } };
+            const lessonsBy = {};
+            if (topicsCached && Array.isArray(topicsCached)) {
+              for (const t of topicsCached) {
+                const key = `lessonsByTopic:v1:${t.id}`;
+                const ls = await cacheGetJSON(key);
+                if (Array.isArray(ls)) lessonsBy[String(t.id)] = ls;
+              }
+            }
+            if (Object.keys(lessonsBy).length) lessonsByTopic = lessonsBy; else lessonsByTopic = d.lessonsByTopic || {};
+          } else {
+            subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
+            topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
+            lessonsByTopic = d.lessonsByTopic || {};
+          }
+        } else {
+          subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
+          topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
+          lessonsByTopic = d.lessonsByTopic || {};
+        }
+      } catch {
         subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
         topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
         lessonsByTopic = d.lessonsByTopic || {};
-        streakDaysAll = Array.isArray(d.streakDaysAll) ? d.streakDaysAll : [];
-        friendsStats = d.friendsStats || {};
-      } else {
-        throw rpc.error || new Error('rpc_boot2 failed');
       }
+      streakDaysAll = Array.isArray(d.streakDaysAll) ? d.streakDaysAll : [];
+      friendsStats = d.friendsStats || {};
     } catch {
       const arr = await Promise.all([
         supabase.rpc('rpc_friend_list', { caller: userId }).then(({ data, error }) => (!error && Array.isArray(data) ? data : [])),
