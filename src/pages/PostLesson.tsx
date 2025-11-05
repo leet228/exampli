@@ -347,8 +347,15 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
         {quests.map((m, i) => {
           const p = progress[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
           const prev = (before?.quests || {})[m.code] || { progress: 0, target: m.target, status: 'in_progress' };
+          const isMinutes = (() => {
+            try {
+              const meta = cacheGet<any>(CACHE_KEYS.dailyQuests) || { quests: [] };
+              const rec = (Array.isArray(meta.quests) ? meta.quests : []).find((q: any) => String(q.code) === String(m.code));
+              return /minutes_studied/i.test(String(rec?.metric_key || ''));
+            } catch { return false; }
+          })();
           const max = Math.max(1, Number(p.target || m.target));
-          const val = Math.max(0, Math.min(max, Number(p.progress || 0)));
+          const val = Math.max(0, Math.min(max, Number(p.progress || 0))); // для time-квестов: секунды
           const prevMax = Math.max(1, Number(prev?.target || m.target));
           const prevVal = Math.max(0, Math.min(prevMax, Number(prev?.progress || 0)));
           const done = (() => { const s = String(p.status || ''); return s === 'completed' || s === 'claimed'; })();
@@ -372,12 +379,22 @@ function QuestsBlock({ onDone, before }: { onDone: () => void; before: any }) {
                       <div className="h-full" style={{ width: `${prevPct}%`, background: 'linear-gradient(90deg, #86efac 0%, #a3e635 100%)' }} />
                     )}
                     <div className="absolute inset-0 flex items-center justify-center text-[11px] text-white font-bold">
-                      {isCurrent ? (
-                        <NumberTween from={prevVal} to={val} max={max} durationMs={BAR_MS} />
-                      ) : isRevealed ? (
-                        <>{`${val} / ${max}`}</>
+                      {isMinutes ? (
+                        isCurrent ? (
+                          <NumberTweenTime fromSec={prevVal} toSec={val} targetMin={Math.max(1, Math.floor(max / 60))} durationMs={BAR_MS} />
+                        ) : isRevealed ? (
+                          <>{`${formatMMSS(val)} / ${Math.max(1, Math.floor(max / 60))}`}</>
+                        ) : (
+                          <>{`${formatMMSS(prevVal)} / ${Math.max(1, Math.floor(prevMax / 60))}`}</>
+                        )
                       ) : (
-                        <>{`${prevVal} / ${max}`}</>
+                        isCurrent ? (
+                          <NumberTween from={prevVal} to={val} max={max} durationMs={BAR_MS} />
+                        ) : isRevealed ? (
+                          <>{`${val} / ${max}`}</>
+                        ) : (
+                          <>{`${prevVal} / ${prevMax}`}</>
+                        )
                       )}
                     </div>
                   </div>
@@ -444,6 +461,28 @@ function NumberTween({ from, to, max, durationMs = 1000 }: { from: number; to: n
     return () => clearInterval(id as any);
   }, [from, to, durationMs]);
   return <>{`${val} / ${max}`}</> as any;
+}
+
+function NumberTweenTime({ fromSec, toSec, targetMin, durationMs = 1000 }: { fromSec: number; toSec: number; targetMin: number; durationMs?: number }) {
+  const [val, setVal] = React.useState<number>(fromSec);
+  React.useEffect(() => {
+    const start = Math.max(0, Number(fromSec || 0)); const end = Math.max(0, Number(toSec || 0));
+    if (start === end) { setVal(end); return; }
+    let frame = 0; const frames = Math.max(1, Math.round(durationMs / 40)); const step = (end - start) / frames;
+    const id = setInterval(() => {
+      frame += 1; const next = frame >= frames ? end : Math.round(start + step * frame);
+      setVal(next); if (frame >= frames) clearInterval(id as any);
+    }, 40);
+    return () => clearInterval(id as any);
+  }, [fromSec, toSec, durationMs]);
+  return <>{`${formatMMSS(val)} / ${Math.max(1, Math.floor(targetMin || 1))}`}</> as any;
+}
+
+function formatMMSS(totalSeconds: number): string {
+  const sec = Math.max(0, Number(totalSeconds || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function FixedContinue({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
