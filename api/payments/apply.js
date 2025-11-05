@@ -62,6 +62,12 @@ async function applyPayment({ supabase, req, userRow, p }) {
       amount_rub: Number(p.amount_rub || 0), currency: 'XTR', status: 'succeeded', test: false, payment_method: null,
       metadata: { ...(p.meta || {}), stars: Number(p.stars || 0) }, captured_at: new Date().toISOString(),
     });
+    // Optional notify about coins purchase
+    try {
+      const chat = String(tgIdFrom(userRow, p.tg_id || null));
+      const text = `💰 Баланс пополнен: +${Number(p.coins || 0)} монет.`;
+      await tgSend(process.env.TELEGRAM_BOT_TOKEN, chat, text);
+    } catch {}
     return;
   }
   if (type === 'plan') {
@@ -77,6 +83,11 @@ async function applyPayment({ supabase, req, userRow, p }) {
       const now = new Date(); const until = new Date(now.getTime()); until.setMonth(until.getMonth() + months);
       await supabase.from('users').update({ plus_until: until.toISOString() }).eq('id', userRow.id);
     }
+    try {
+      const chat = String(tgIdFrom(userRow, p.tg_id || null));
+      const photo = absPublicUrl(req, '/notifications/plus.png');
+      await tgSendPhoto(process.env.TELEGRAM_BOT_TOKEN, chat, photo, '💎 КУРСИК PLUS активирован!');
+    } catch {}
     return;
   }
   if (type === 'ai_tokens') {
@@ -105,6 +116,11 @@ async function applyPayment({ supabase, req, userRow, p }) {
         await supabase.from('users').update({ metadata: newMeta }).eq('id', userRow.id);
       } catch {}
     }
+    try {
+      const chat = String(tgIdFrom(userRow, p.tg_id || null));
+      const photo = absPublicUrl(req, '/notifications/AI.png');
+      await tgSendPhoto(process.env.TELEGRAM_BOT_TOKEN, chat, photo, '🤖 AI+ активирован!');
+    } catch {}
     return;
   }
 }
@@ -117,6 +133,45 @@ async function readJson(req) {
     req.on?.('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
     req.on?.('error', () => resolve({}));
   });
+}
+
+function publicBase(req) {
+  try {
+    const explicit = process.env.PUBLIC_BASE_URL;
+    if (explicit) return explicit.replace(/\/$/, '');
+    const proto = (req?.headers?.['x-forwarded-proto'] || 'https');
+    const host = (req?.headers?.host || process.env.VERCEL_URL || '').toString();
+    if (host) return `${proto}://${host}`.replace(/\/$/, '');
+  } catch {}
+  return '';
+}
+function absPublicUrl(req, relPath) {
+  const base = publicBase(req);
+  const rel = String(relPath || '').startsWith('/') ? String(relPath) : `/${String(relPath || '')}`;
+  return base ? `${base}${rel}` : rel;
+}
+async function tgSend(botToken, chatId, text) {
+  try {
+    if (!botToken || !chatId || !text) return;
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`;
+    await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text })
+    });
+  } catch {}
+}
+async function tgSendPhoto(botToken, chatId, photoUrl, caption) {
+  try {
+    if (!botToken || !chatId || !photoUrl) return;
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`;
+    await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: caption || undefined })
+    });
+  } catch {}
+}
+function tgIdFrom(userRow, fallback) {
+  return (userRow && userRow.tg_id) ? String(userRow.tg_id) : (fallback ? String(fallback) : null);
 }
 
 

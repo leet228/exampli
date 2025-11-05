@@ -108,9 +108,13 @@ export default async function handler(req, res) {
       if (qstashAvailable()) {
         try {
           const url = absPublicUrl(req, '/api/payments/apply');
-          await enqueueJson({ url, body: job, deduplicationKey: `pay:${paymentId}` });
-          res.status(200).json({ ok: true, enqueued: true });
-          return;
+          const pub = await enqueueJson({ url, body: job, deduplicationKey: `pay:${paymentId}` });
+          if (pub && pub.ok) {
+            res.status(200).json({ ok: true, enqueued: true });
+            return;
+          } else {
+            try { console.warn('[payments] enqueue returned not ok:', pub?.error || pub); } catch {}
+          }
         } catch (e) {
           try { console.warn('[payments] enqueue failed, will process inline', e); } catch {}
         }
