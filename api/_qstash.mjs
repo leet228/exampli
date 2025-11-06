@@ -31,11 +31,19 @@ export async function enqueueJson({ url, body, delaySeconds, deduplicationKey })
   if (!cli) return { ok: false, error: 'qstash_not_configured' };
   try {
     const dedupId = sanitizeDedup(deduplicationKey);
+    // Pass Vercel protection bypass header if set (lets QStash call protected deployments)
+    const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+      || process.env.VERCEL_PROTECTION_BYPASS
+      || process.env.QSTASH_VERCEL_BYPASS
+      || process.env.QSTASH_BYPASS
+      || process.env.QSTASH_BYPASS_TOKEN;
+    const headers = bypass ? { 'x-vercel-protection-bypass': bypass } : undefined;
     const res = await cli.publishJSON({
       url,
       body,
       delay: typeof delaySeconds === 'number' ? delaySeconds : undefined,
       deduplicationId: dedupId,
+      headers,
     });
     return { ok: true, messageId: res.messageId };
   } catch (e) {

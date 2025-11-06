@@ -480,12 +480,10 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     } catch {}
   }
   // Предзагрузку уроков для всех тем переносим в boot2 (фон)
-  // Прогрев лого/иконок, важных для первого кадра
-  try {
-    await preloadImage('/kursik.svg');
-  } catch {}
+  // Прогрев лого/иконок, важных для первого кадра (fire-and-forget)
+  try { preloadImage('/kursik2.svg'); } catch {}
   if (activeCode) {
-    try { await preloadImage(`/subjects/${activeCode}.svg`); } catch {}
+    try { preloadImage(`/subjects/${activeCode}.svg`); } catch {}
   }
   // фаза 2 завершена
   report(66);
@@ -496,20 +494,21 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // (скрытый шаг)
   step(++i, 1);
 
-  // 9) Прогрев иконок нижней навигации и HUD — дожидаемся загрузки
+  // 9) Прогрев иконок нижней навигации и HUD — не ждём загрузки (fire-and-forget)
   phase('Финальный прогрев интерфейса');
   try {
-    await Promise.all([
-      preloadImage('/stickers/home.svg'),
-      preloadImage('/stickers/quests.svg'),
-      preloadImage('/stickers/battle.svg'),
-      preloadImage('/stickers/ai.svg'),
-      preloadImage('/stickers/diamond.svg'),
-      preloadImage('/stickers/profile.svg'),
-      preloadImage('/stickers/dead_fire.svg'),
-      preloadImage('/stickers/coin_cat.svg'),
-      preloadImage('/stickers/lightning.svg'),
-    ]);
+    const icons = [
+      '/stickers/home2.svg',
+      '/stickers/quests2.svg',
+      '/stickers/battle2.svg',
+      '/stickers/ai2.svg',
+      '/stickers/diamond2.svg',
+      '/stickers/profile4.svg',
+      '/stickers/dead_fire.svg',
+      '/stickers/coin_cat.svg',
+      '/stickers/lightning.svg',
+    ];
+    icons.forEach((src) => { try { preloadImage(src); } catch {} });
   } catch {}
   // Фоново запишем квесты дня в кэш (cache-first для страницы /quests)
   try {
