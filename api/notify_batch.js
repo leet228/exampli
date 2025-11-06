@@ -18,7 +18,22 @@ function publicBase(req) {
 function absPublicUrl(req, relPath) {
   const base = publicBase(req);
   const rel = String(relPath || '').startsWith('/') ? String(relPath) : `/${String(relPath || '')}`;
-  return base ? `${base}${rel}` : rel;
+  let out = base ? `${base}${rel}` : rel;
+  try {
+    const bypass =
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+      process.env.VERCEL_PROTECTION_BYPASS ||
+      process.env.QSTASH_VERCEL_BYPASS ||
+      process.env.QSTASH_BYPASS ||
+      process.env.QSTASH_BYPASS_TOKEN;
+    // добавляем параметр обхода только для статических ресурсов, не для /api/*
+    if (bypass && !rel.startsWith('/api/')) {
+      const u = new URL(out);
+      u.searchParams.set('x-vercel-protection-bypass', bypass);
+      out = u.toString();
+    }
+  } catch {}
+  return out;
 }
 
 export default async function handler(req, res) {
