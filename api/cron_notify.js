@@ -195,30 +195,53 @@ export default async function handler(req, res) {
         const plusActive = (() => { try { return Boolean(u.plus_until && new Date(String(u.plus_until)).getTime() > Date.now()); } catch { return false; } })();
         if (plusActive) continue; // только для неподписчиков
         try {
-          // Фиксируем переход "ниже 25" во внешнем состоянии (Redis)
+          // Фиксируем переход "ниже 25" во внешнем состоянии (Redis) и решаем отправку по фактической регенерации
           const belowKey = `energy:last_below:v1:${u.id}`;
-          const sentKey = `energy:full_sent:day:v1:${u.id}:${todayIso}`;
-          const tabEnergy = Number(u.energy ?? 0);
-          if (tabEnergy < 25) {
-            // отметим флаг ниже 25 на сутки
-            await r.set(belowKey, '1', { ex: 60 * 60 * 24 });
-            continue;
-          }
-          // Если уже полная — проверим не отправляли ли сегодня
-          const alreadySent = await r.get(sentKey);
-          if (alreadySent) continue;
-          const hadBelow = await r.get(belowKey);
-          // Проверим точную регенерацию через RPC (если доступна), чтобы не спамить
-          let isFull = tabEnergy >= 25;
+          const tabEnergy = Number(u.energy ?? 0); // может быть устаревшим из‑за «ленивой» регенерации
+
+          // Всегда проверяем точную регенерацию через RPC (ленивая модель энергии может не обновлять users.energy)
+          let eNow = Number.NaN;
+          let fullAtMs = null;
           try {
             const rr = await supabase.rpc('sync_energy', { p_tg_id: tg, p_delta: 0 });
             const row = Array.isArray(rr.data) ? (rr.data?.[0] || null) : (rr.data || null);
-            const eNow = Number(row?.energy ?? NaN);
-            const fullAt = row?.full_at ? Date.parse(String(row.full_at)) : null;
-            if (Number.isFinite(eNow)) isFull = eNow >= 25 || (fullAt != null && fullAt <= Date.now());
+            eNow = Number(row?.energy ?? Number.NaN);
+            fullAtMs = row?.full_at ? Date.parse(String(row.full_at)) : null;
           } catch {}
+
+          let isFull = false;
+          if (Number.isFinite(eNow)) {
+            isFull = eNow >= 25 || (fullAtMs != null && fullAtMs <= Date.now());
+          } else {
+            // Fallback на поле users.energy, если RPC недоступно
+            isFull = tabEnergy >= 25;
+          }
+
+          // Обновим флаг «ниже 25» по фактическому значению
+          const isBelow = (Number.isFinite(eNow) ? eNow < 25 : tabEnergy < 25);
+          if (isBelow) {
+            try { await r.set(belowKey, '1', { ex: 60 * 60 * 24 }); } catch {}
+            // Если известно точное время полного восстановления — спланируем QStash-задачу на это время
+            if (qstashAvailable() && typeof fullAtMs === 'number' && fullAtMs > Date.now()) {
+              try {
+                const delaySec = Math.max(1, Math.min(24 * 60 * 60, Math.floor((fullAtMs - Date.now()) / 1000) + 10));
+                const dedup = `energy_${u.id}_${todayIso}_${Math.floor(fullAtMs/1000)}`;
+                const url = absPublicUrl(req, '/api/notify_batch');
+                const job = { tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png', kind: 'energy', uid: u.id };
+                // ключ, чтобы не планировать дубли в течение суток
+                const planKey = `energy:planned:v1:${u.id}:${Math.floor(fullAtMs/60_000)}`;
+                const wasPlanned = await r.get(planKey);
+                if (!wasPlanned) {
+                  const { ok } = await enqueueJson({ url, body: { jobs: [job] }, delaySeconds: delaySec, deduplicationKey: dedup });
+                  if (ok) { try { await r.set(planKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
+                }
+              } catch {}
+            }
+          }
+
+          const hadBelow = await r.get(belowKey);
           if (isFull && hadBelow) {
-            // Не ставим sentKey здесь — пусть воркер отметит после фактической доставки
+            // Отправка по циклу: ниже 25 → полная → отправка (воркер очистит belowKey)
             toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png', kind: 'energy', uid: u.id });
             cntEnergy++;
           }

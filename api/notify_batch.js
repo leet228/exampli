@@ -1,8 +1,9 @@
 // ESM serverless function: QStash worker to deliver Telegram notifications in batches
-// Body: { jobs: Array<{ tg: string, text: string, photo?: string }> }
+// Body: { jobs: Array<{ tg: string, text: string, photo?: string, kind?: string, uid?: string }> }
 
 import { verifyQStash } from './_qstash.mjs';
 import { kvAvailable, getRedis } from './_kv.mjs';
+import { createClient } from '@supabase/supabase-js';
 
 function publicBase(req) {
   try {
@@ -27,6 +28,11 @@ export default async function handler(req, res) {
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) { res.status(500).json({ error: 'missing_env', detail: 'TELEGRAM_BOT_TOKEN' }); return; }
+
+    // Optional: Supabase client for energy revalidation
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabase = (supabaseUrl && serviceKey) ? createClient(supabaseUrl, serviceKey) : null;
 
     // Validate QStash signature if available (best-effort)
     try {
@@ -67,9 +73,23 @@ export default async function handler(req, res) {
         // Energy/streak de-dup at worker level to avoid marking sent when delivery fails upstream
         if (canKv && r && uid) {
           if (kind === 'energy' || photo.endsWith('/notifications/full_energy.png')) {
-            const sentKey = `energy:full_sent:day:v1:${uid}:${todayIso}`;
-            const already = await r.get(sentKey);
-            if (already) continue;
+            const belowKey = `energy:last_below:v1:${uid}`;
+            const hadBelow = await r.get(belowKey);
+            if (!hadBelow) continue; // не было нового расхода — не отправляем
+            // Revalidate energy if possible (lazy regeneration model)
+            let okToSend = true;
+            if (supabase) {
+              try {
+                const rr = await supabase.rpc('sync_energy', { p_tg_id: tg, p_delta: 0 });
+                const row = Array.isArray(rr.data) ? (rr.data?.[0] || null) : (rr.data || null);
+                const eNow = Number(row?.energy ?? Number.NaN);
+                const fullAtMs = row?.full_at ? Date.parse(String(row.full_at)) : null;
+                if (Number.isFinite(eNow)) {
+                  okToSend = eNow >= 25 || (fullAtMs != null && fullAtMs <= Date.now());
+                }
+              } catch {}
+            }
+            if (!okToSend) continue;
             // deliver
             if (photo) {
               const url = absPublicUrl(req, photo);
@@ -78,8 +98,7 @@ export default async function handler(req, res) {
               await tgSend(botToken, tg, text);
             }
             sent++;
-            try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {}
-            try { await r.del(`energy:last_below:v1:${uid}`); } catch {}
+            try { await r.del(belowKey); } catch {}
             continue;
           }
         }
