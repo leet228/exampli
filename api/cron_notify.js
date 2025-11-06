@@ -6,6 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { kvAvailable, getRedis } from './_kv.mjs';
 import { qstashAvailable, enqueueJson } from './_qstash.mjs';
+import { pickBotOpener } from './bot_chat.js';
 
 function publicBase(req) {
   try {
@@ -112,7 +113,7 @@ export default async function handler(req, res) {
     }
 
     const toSend = [];
-    let cntStreak = 0, cntL1 = 0, cntL2 = 0, cntL3 = 0, cntEnergy = 0;
+    let cntStreak = 0, cntL1 = 0, cntL2 = 0, cntL3 = 0, cntEnergy = 0, cntOpeners = 0;
 
     // Определяем час/минуту по МСК, чтобы стричные уведомления слали только в ~17:00 МСК
     const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(today);
@@ -218,10 +219,58 @@ export default async function handler(req, res) {
           } catch {}
           if (isFull && hadBelow) {
             // Не ставим sentKey здесь — пусть воркер отметит после фактической доставки
-            toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png', kind: 'energy', uid });
+            toSend.push({ tg, text: 'Энергия на максимуме!\n\nАккуратнее, у тебя 100% заряда! 🔋\nСамое время штурмовать уроки, пока батарейка не ушла на мемы.', photo: '/notifications/full_energy.png', kind: 'energy', uid: u.id });
             cntEnergy++;
           }
         } catch {}
+      }
+    }
+
+    // --- Проактивные сообщения бота в 20:00 МСК ---
+    // Условие: (1) у пользователя за сегодня count в bot_dm_daily < 3; (2) ни сегодня, ни вчера не было streak/freeze
+    if (hourMsk === 20) {
+      // Соберём map user_id -> dmCountToday
+      const dmCountByUser = new Map();
+      const chs = slice(userIds, 1000);
+      for (const ch of chs) {
+        try {
+          const { data: rows } = await supabase
+            .from('bot_dm_daily')
+            .select('user_id, count')
+            .eq('day', todayIso)
+            .in('user_id', ch);
+          for (const r of rows || []) {
+            dmCountByUser.set(String(r.user_id), Number(r.count || 0));
+          }
+        } catch {}
+      }
+      // Redis для дедупликации
+      let r = null;
+      if (kvAvailable()) { try { r = getRedis(); } catch {} }
+      for (const u of (users || [])) {
+        const uid = String(u.id);
+        const tg = u.tg_id ? String(u.tg_id) : null;
+        if (!tg) continue;
+        const map = daysByUser.get(u.id) || new Map();
+        const hasToday = map.has(todayIso);
+        const hasYesterdayAny = map.has(yesterdayIso);
+        if (hasToday || hasYesterdayAny) continue; // был актив/фриз сегодня/вчера — не пишем
+        const used = Number(dmCountByUser.get(uid) || 0);
+        if (used >= 3) continue; // лимит исчерпан — не пишем
+        // Дедупикация на день
+        let allowSend = true;
+        const sentKey = `bot_opener:sent:day:v1:${uid}:${todayIso}`;
+        if (r) {
+          try { const already = await r.get(sentKey); if (already) allowSend = false; } catch {}
+        } else {
+          // Без Redis — только первые 5 минут часа
+          if (!(minuteMsk >= 0 && minuteMsk < 5)) allowSend = false;
+        }
+        if (!allowSend) continue;
+        const text = pickBotOpener();
+        toSend.push({ tg, text });
+        cntOpeners++;
+        if (r) { try { await r.set(sentKey, '1', { ex: 60 * 60 * 24 }); } catch {} }
       }
     }
 
@@ -254,7 +303,7 @@ export default async function handler(req, res) {
     // metadata больше не трогаем: состояние по энергии в Redis
 
     const energyUpdatesLen = 0;
-    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdatesLen, hour_msk: hourMsk, by_type: { streak: cntStreak, level1: cntL1, level2: cntL2, level3: cntL3, energy: cntEnergy } });
+    res.status(200).json({ ok: true, sent: toSend.length, users: (users || []).length, energy_updates: energyUpdatesLen, hour_msk: hourMsk, by_type: { streak: cntStreak, level1: cntL1, level2: cntL2, level3: cntL3, energy: cntEnergy, openers: cntOpeners } });
   } catch (e) {
     try { console.error('[api/cron_notify] error', e); } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) });
