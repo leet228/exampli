@@ -107,8 +107,7 @@ export default async function handler(req, res) {
             if (!okToSend) continue;
             // deliver
             if (photo) {
-              const url = absPublicUrl(req, photo);
-              await tgSendPhoto(botToken, tg, url, text || undefined);
+              await tgSendPhotoSmart(botToken, req, tg, photo, text || undefined);
             } else {
               await tgSend(botToken, tg, text);
             }
@@ -118,8 +117,7 @@ export default async function handler(req, res) {
           }
         }
         if (photo) {
-          const url = absPublicUrl(req, photo);
-          await tgSendPhoto(botToken, tg, url, text || undefined);
+          await tgSendPhotoSmart(botToken, req, tg, photo, text || undefined);
         } else {
           await tgSend(botToken, tg, text);
         }
@@ -146,21 +144,81 @@ async function readText(req) {
 async function tgSend(botToken, chatId, text) {
   if (!botToken || !chatId || !text) return;
   const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`;
-  await fetch(url, {
+  const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text })
   });
+  try {
+    if (!resp.ok) {
+      const js = await resp.json().catch(() => ({}));
+      console.warn('[notify_batch] sendMessage failed', { status: resp.status, detail: js?.description });
+    } else {
+      const js = await resp.json().catch(() => null);
+      if (js && js.ok === false) console.warn('[notify_batch] sendMessage ok=false', js);
+    }
+  } catch {}
 }
 
-async function tgSendPhoto(botToken, chatId, photoUrl, caption) {
-  if (!botToken || !chatId || !photoUrl) return;
-  const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`;
-  await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: caption || undefined })
-  });
+async function tgSendPhotoSmart(botToken, req, chatId, relPhotoPathOrAbs, caption) {
+  if (!botToken || !chatId || !relPhotoPathOrAbs) return;
+  const api = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`;
+  // 1) Пытаемся отправить по URL
+  const forceUpload = String(process.env.TG_SENDPHOTO_FORCE_UPLOAD || '').toLowerCase() === '1' || String(process.env.TG_SENDPHOTO_FORCE_UPLOAD || '').toLowerCase() === 'true';
+  const urlPhoto = absPublicUrl(req, relPhotoPathOrAbs);
+  let resp = null;
+  if (!forceUpload) {
+    resp = await fetch(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, photo: urlPhoto, caption: caption || undefined })
+    });
+  }
+  let shouldFallbackUpload = false;
+  try {
+    const js = resp ? await resp.json().catch(() => null) : null;
+    if (!resp || !resp.ok || (js && js.ok === false)) {
+      const desc = (js && js.description) ? String(js.description) : '';
+      // Типичные причины 400 с URL — «wrong HTTP URL specified», «HTTP URL content blocked»
+      if (!resp || resp.status === 400) shouldFallbackUpload = true;
+      if (desc && /wrong http url|http url content blocked|failed to get http url|file is too big/i.test(desc)) {
+        shouldFallbackUpload = true;
+      }
+      if (resp && !shouldFallbackUpload) {
+        console.warn('[notify_batch] sendPhoto url failed', { status: resp.status, desc });
+      }
+    }
+  } catch {
+    // если не смогли распарсить, подстрахуемся
+    if (!resp || !resp.ok) shouldFallbackUpload = true;
+  }
+  if (!shouldFallbackUpload) return;
+
+  // 2) Фоллбэк — загружаем файл и отправляем multipart
+  try {
+    const bypass =
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+      process.env.VERCEL_PROTECTION_BYPASS ||
+      process.env.QSTASH_VERCEL_BYPASS ||
+      process.env.QSTASH_BYPASS ||
+      process.env.QSTASH_BYPASS_TOKEN;
+    const headers = bypass ? { 'x-vercel-protection-bypass': bypass } : undefined;
+    const assetResp = await fetch(urlPhoto, { headers });
+    const contentType = assetResp.headers.get('content-type') || 'image/png';
+    const arr = await assetResp.arrayBuffer();
+    const fd = new FormData();
+    fd.append('chat_id', chatId);
+    if (caption) fd.append('caption', caption);
+    const blob = new Blob([arr], { type: contentType });
+    fd.append('photo', blob, 'image');
+    const r2 = await fetch(api, { method: 'POST', body: fd });
+    if (!r2.ok) {
+      const js2 = await r2.json().catch(() => ({}));
+      console.warn('[notify_batch] sendPhoto upload failed', { status: r2.status, detail: js2?.description });
+    }
+  } catch (e) {
+    console.warn('[notify_batch] sendPhoto upload exception', String(e?.message || e));
+  }
 }
 
 
