@@ -7,6 +7,7 @@ import BottomSheet from '../sheets/BottomSheet';
 import LessonButton from './LessonButton';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
+import { sfx } from '../../lib/sfx';
 
 type TaskRow = {
   id: number | string;
@@ -258,6 +259,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const ok = user === (task.correct || '');
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
+    try { ok ? sfx.playCorrect() : sfx.playWrong(); } catch {}
     // обновим метрики
     setAnswersTotal((v) => v + 1);
     if (ok) setAnswersCorrect((v) => v + 1); else setHadAnyMistakes(true);
@@ -1054,6 +1056,8 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
 
 /* ===== Экран завершения урока ===== */
 function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs, onDone, onReady, canProceed }: { answersTotal: number; answersCorrect: number; hadAnyMistakes: boolean; elapsedMs: number; onDone: () => void; onReady: () => void; canProceed: boolean }) {
+  // Проигрываем звук завершения при показе экрана результатов
+  useEffect(() => { try { sfx.playLessonFinished(); } catch {} }, []);
   const percent = Math.max(0, Math.min(100, Math.round((answersCorrect / Math.max(1, answersTotal)) * 100)));
   const formatTime = (ms: number) => {
     const totalSec = Math.max(0, Math.round((ms || 0) / 1000));

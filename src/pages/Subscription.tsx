@@ -4,6 +4,7 @@ import { hapticSelect, hapticTiny } from '../lib/haptics';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { sfx } from '../lib/sfx';
 
 type Plan = { id: string; months: number; price: number; title: string };
 
@@ -152,6 +153,15 @@ export default function Subscription() {
   const [isPlus, setIsPlus] = useState<boolean>(false);
   const [plusUntil, setPlusUntil] = useState<string | null>(null);
   const [isAiPlus, setIsAiPlus] = useState<boolean>(false);
+  // Анти-дубль звука покупки (колбэк openInvoice + invoiceClosed)
+  const lastSoundRef = useRef<{ t: number; k: 'plan'|'gems'|'ai_tokens'|null }>({ t: 0, k: null });
+  const playPurchaseSound = (k: 'plan'|'gems'|'ai_tokens') => {
+    const now = Date.now();
+    const last = lastSoundRef.current;
+    if (last && now - (last.t || 0) < 800 && last.k === k) return;
+    lastSoundRef.current = { t: now, k };
+    try { k === 'gems' ? sfx.playCoinsBought() : sfx.playSubsBought(); } catch {}
+  };
   // Автопродление отключено при оплате через Telegram Stars
   const [_autoRenew, _setAutoRenew] = useState<{ enabled: boolean; loading: boolean }>({ enabled: false, loading: false });
 
@@ -197,12 +207,14 @@ export default function Subscription() {
         window.history.replaceState({}, '', url.toString());
         // Вибрация + всплывашка через кастомное событие (остальной UI может подписаться)
         try { hapticSelect(); } catch {}
+        try { sfx.playSubsBought(); } catch {}
         try {
           window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата прошла успешно' } } as any));
         } catch {}
       }
       if (tgStartApp === 'paid') {
         try { hapticSelect(); } catch {}
+        try { sfx.playSubsBought(); } catch {}
         try {
           window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата прошла успешно' } } as any));
         } catch {}
@@ -293,6 +305,7 @@ export default function Subscription() {
             if (status === 'paid') {
               // Оптимистичное обновление для всех покупок
               if (kind === 'plan') {
+                playPurchaseSound('plan');
                 // Определяем количество месяцев из productId (m1 = 1, m6 = 6, m12 = 12)
                 const monthsMatch = id.match(/^m(\d+)$/);
                 const months = monthsMatch ? Number(monthsMatch[1]) : 1;
@@ -308,6 +321,7 @@ export default function Subscription() {
                   window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { plus_until: plusUntilIso } } as any));
                 } catch {}
               } else if (kind === 'gems') {
+                playPurchaseSound('gems');
                 // Определяем количество монет из productId (g1 = 1200, g2 = 3000, g3 = 6500)
                 const coinsMap: Record<string, number> = { g1: 1200, g2: 3000, g3: 6500 };
                 const addCoins = coinsMap[id] || 0;
@@ -343,6 +357,7 @@ export default function Subscription() {
                   } catch {}
                 }
               } else if (kind === 'ai_tokens') {
+                playPurchaseSound('ai_tokens');
                 const months = 1; // AI+ всегда на 1 месяц
                 const now = new Date();
                 const aiPlusUntil = new Date(now.getTime());
@@ -400,6 +415,12 @@ export default function Subscription() {
 
       if (status === 'paid') {
         try { hapticSelect(); } catch {}
+        try {
+          const lp = (window as any).__exampliLastPurchase as { kind?: 'plan'|'gems'|'ai_tokens'; id?: string; at?: number } | undefined;
+          if (lp?.kind === 'gems') playPurchaseSound('gems');
+          else if (lp?.kind === 'ai_tokens') playPurchaseSound('ai_tokens');
+          else if (lp?.kind === 'plan') playPurchaseSound('plan');
+        } catch {}
         try {
           window.dispatchEvent(new CustomEvent('exampli:toast', { detail: { kind: 'success', text: 'Оплата подтверждена' } } as any));
         } catch {}

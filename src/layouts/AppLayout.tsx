@@ -31,6 +31,7 @@ import TopicsPanel from '../components/panels/TopicsPanel';
 import AddCourseSheet from '../components/panels/AddCourseSheet';
 import FriendsPanel from '../components/panels/FriendsPanel';
 import AddFriendsPanel from '../components/panels/AddFriendsPanel';
+import { sfx } from '../lib/sfx';
 
 
 export default function AppLayout() {
@@ -71,6 +72,13 @@ export default function AppLayout() {
       try { tg?.ready(); tg?.expand?.(); } catch {}
     }, 1000);
     return () => clearTimeout(t);
+  }, []);
+
+  // Разблокируем аудио по первому пользовательскому вводу
+  useEffect(() => {
+    const onDown = () => { try { sfx.unlock(); } catch {} };
+    try { window.addEventListener('pointerdown', onDown as any, { once: true } as any); } catch { window.addEventListener('pointerdown', onDown as any); }
+    return () => { try { window.removeEventListener('pointerdown', onDown as any); } catch {} };
   }, []);
 
   // слушаем глобальное событие из bootPreload (дубликат защиты)
@@ -135,6 +143,7 @@ export default function AppLayout() {
   // После ухода сплэша подсказать оверлеям пересчитать позицию
   useEffect(() => {
     if (bootDone) {
+      try { sfx.playOpen(); } catch {}
       window.dispatchEvent(new Event('exampli:overlayToggled'));
       // Фоновый прогрев для мгновенных панелей: если есть список всех предметов — прогреем ещё 1-2 помимо активного
       try {
