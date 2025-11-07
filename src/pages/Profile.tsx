@@ -171,30 +171,39 @@ export default function Profile() {
     try {
       setQrLoading(true);
       setQrImgUrl('');
-      const myId: string | undefined = (() => {
-        try { return (u?.id as string) || (window as any)?.__exampliBoot?.user?.id; } catch { return undefined; }
-      })();
-      // создаём инвайт токен
-      let token: string | null = null;
-      try {
-        let r = await supabase.rpc('rpc_invite_create', { caller: myId } as any);
-        if (r.error) r = await supabase.rpc('rpc_invite_create', {} as any);
-        const d: any = r.data;
-        if (typeof d === 'string') token = d;
-        else if (Array.isArray(d) && d.length && d[0]?.token) token = String(d[0].token);
-        else if (d?.token) token = String(d.token);
-      } catch {}
-      if (!token) throw new Error('no token');
-      let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
-      if (bot && bot.startsWith('@')) bot = bot.slice(1);
-      const paramEnv = String((import.meta as any).env?.VITE_TG_INVITE_PARAM || '').trim().toLowerCase();
-      const param = (paramEnv === 'start' || paramEnv === 'startattach') ? paramEnv : 'startapp';
-      const inviteUrl = bot
-        ? `https://t.me/${bot}?${param}=${encodeURIComponent(token)}`
-        : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
-      // генерируем QR через публичный сервис (без зависимостей)
-      const qr = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(inviteUrl)}`;
-      setQrImgUrl(qr);
+      const ensureInviteUrl = async (): Promise<string> => {
+        try {
+          // попробуем из кэша (короткий TTL 1 день)
+          const cached = cacheGet<string>(CACHE_KEYS.inviteUrl);
+          if (cached) return cached;
+        } catch {}
+        const myId: string | undefined = (() => {
+          try { return (u?.id as string) || (window as any)?.__exampliBoot?.user?.id; } catch { return undefined; }
+        })();
+        // создаём инвайт токен
+        let token: string | null = null;
+        try {
+          let r = await supabase.rpc('rpc_invite_create', { caller: myId } as any);
+          if (r.error) r = await supabase.rpc('rpc_invite_create', {} as any);
+          const d: any = r.data;
+          if (typeof d === 'string') token = d;
+          else if (Array.isArray(d) && d.length && d[0]?.token) token = String(d[0].token);
+          else if (d?.token) token = String(d.token);
+        } catch {}
+        if (!token) throw new Error('no token');
+        let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+        if (bot && bot.startsWith('@')) bot = bot.slice(1);
+        const paramEnv = String((import.meta as any).env?.VITE_TG_INVITE_PARAM || '').trim().toLowerCase();
+        const param = (paramEnv === 'start' || paramEnv === 'startattach') ? paramEnv : 'startapp';
+        const inviteUrl = bot
+          ? `https://t.me/${bot}?${param}=${encodeURIComponent(token)}`
+          : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
+        try { cacheSet(CACHE_KEYS.inviteUrl, inviteUrl, 24 * 60 * 60 * 1000); } catch {}
+        return inviteUrl;
+      };
+      const url = await ensureInviteUrl();
+      const big = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(url)}`;
+      setQrImgUrl(big);
       setQrOpen(true);
     } catch {
       // игнорируем тихо
