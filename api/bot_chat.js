@@ -32,6 +32,20 @@ export default async function handler(req, res) {
     const chatId = String(msg?.from?.id || msg?.chat?.id || '');
     if (!text || !chatId) { res.status(200).json({ ok: true, skipped: true }); return; }
 
+    // Перехват команды /start: отправляем приветствие и ничего не пускаем в OpenAI
+    if (/^\/start(\s|$)/i.test(text)) {
+      const welcome =
+        [
+          '<b>Привет! Я — КУРСИК.</b>',
+          '',
+          '— Помогаю готовиться к ОГЭ/ЕГЭ.',
+          '— Открывай мини‑приложение <i>КУРСИК</i>, чтобы проходить уроки, копить стрик и монеты.',
+        ].join('\n');
+      await tgSend(botToken, chatId, welcome, { parse_mode: 'HTML', disable_web_page_preview: true });
+      res.status(200).json({ ok: true, greeted: true });
+      return;
+    }
+
     // Resolve user by tg_id
     const { data: userRow } = await supabase.from('users').select('*').eq('tg_id', chatId).maybeSingle();
     if (!userRow?.id) { await tgSend(botToken, chatId, 'Привет! Зайди в приложение КУРСИК, чтобы я узнал тебя и помог 😉'); res.status(200).json({ ok: true }); return; }
@@ -169,9 +183,10 @@ function ruleBasedFallback(userText) {
   return 'Я рядом. Что решаем сейчас — одну задачку и победа?';
 }
 
-async function tgSend(botToken, chatId, text) {
+async function tgSend(botToken, chatId, text, extra) {
   const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`;
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text }) });
+  const payload = { chat_id: chatId, text, ...(extra || {}) };
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 }
 
 async function tgTyping(botToken, chatId) {
