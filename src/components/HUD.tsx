@@ -49,6 +49,13 @@ export default function HUD() {
     return () => window.removeEventListener('exampli:energyPulse', onPulse);
   }, []);
 
+  // Открыть шторку энергии по глобальному событию
+  useEffect(() => {
+    const openEnergyHandler = () => setOpen('energy');
+    window.addEventListener('exampli:openEnergy', openEnergyHandler as unknown as EventListener);
+    return () => window.removeEventListener('exampli:openEnergy', openEnergyHandler as unknown as EventListener);
+  }, []);
+
   // нижняя шторка «Добавить курс»
   const [addOpen, setAddOpen] = useState(false);
 

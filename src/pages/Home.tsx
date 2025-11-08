@@ -439,9 +439,17 @@ export default function Home() {
           try {
             const stats = cacheGet<any>(CACHE_KEYS.stats);
             const energy = Number(stats?.energy ?? 0);
-            if (!energy || energy <= 0) {
-              // просто закрываем поповер, можно показать тост позже
+            // локально проверяем активную подписку (PLUS) по plus_until из кэша/boot
+            const isPlus = (() => {
+              try {
+                const pu = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until;
+                return Boolean(pu && new Date(String(pu)).getTime() > Date.now());
+              } catch { return false; }
+            })();
+            if ((!energy || energy <= 0) && !isPlus) {
+              // закрываем поповер и открываем шторку энергии
               setLessonPreviewOpen(false);
+              try { window.dispatchEvent(new Event('exampli:openEnergy')); } catch {}
               return;
             }
           } catch {}
