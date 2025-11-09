@@ -10,6 +10,25 @@ export default async function handler(req, res) {
       res.status(204).end()
       return
     }
+    if (req.method === 'GET') {
+      const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+      if (!supabaseUrl || !serviceKey) { res.status(500).json({ error: 'missing_env' }); return }
+      const supabase = createClient(supabaseUrl, serviceKey)
+
+      // Debug: return report text; optionally send if chat provided (?send=1&chat=123)
+      const botToken = process.env.ADMIN_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN
+      const msg = await buildDailyReportMessage(supabase)
+      const send = String((req.query||{}).send||'0') === '1'
+      const chat = String((req.query||{}).chat||'')
+      if (send && botToken && chat) {
+        try { await tgSend(botToken, chat, msg, { parse_mode: 'HTML', disable_web_page_preview: true }) } catch {}
+        res.status(200).json({ ok: true, sent: true, chat })
+        return
+      }
+      res.status(200).json({ ok: true, message: msg })
+      return
+    }
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST, OPTIONS')
       res.status(405).json({ error: 'Method Not Allowed' })
@@ -28,8 +47,16 @@ export default async function handler(req, res) {
     const chatId = String(msg?.from?.id || msg?.chat?.id || '')
     if (!text || !chatId) { res.status(200).json({ ok: true, skipped: true }); return }
 
+    // Only allow messages from ADMIN_TG_ID (if set)
+    const adminId = String(process.env.ADMIN_TG_ID || '')
+    const fromId = String(msg?.from?.id || '')
+    if (adminId && fromId !== adminId) {
+      res.status(200).json({ ok: true, ignored: true })
+      return
+    }
+
     // /stats: send daily admin report message (same as 18:00 MSK)
-    if (/^\/stats(\s|$)/i.test(text)) {
+    if (/^\/stats(?:@\w+)?(?:\s|$)/i.test(text)) {
       try {
         const report = await buildDailyReportMessage(supabase)
         await tgSend(botToken, chatId, report, { parse_mode: 'HTML', disable_web_page_preview: true })
