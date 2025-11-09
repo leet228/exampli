@@ -51,6 +51,34 @@ export default async function handler(req, res) {
       online = count || 0
     } catch {}
 
+    // Online stats for today (MSK): average (active hours) and max with time
+    let avgOnlineToday = 0
+    let maxOnlineToday = 0
+    let maxAtIso = null
+    try {
+      const dayMsk = String(todayIsoMsk).slice(0, 10) // YYYY-MM-DD
+      const { data: samples } = await supabase
+        .from('online_samples')
+        .select('online,hour_utc')
+        .eq('day_msk', dayMsk)
+        .order('hour_utc', { ascending: true })
+        .limit(1000)
+      const nums = []
+      for (const r of (samples || [])) {
+        const v = Number(r?.online || 0)
+        if (v > maxOnlineToday) { maxOnlineToday = v; maxAtIso = String(r?.hour_utc || null) || null }
+        if (v > 0) nums.push(v)
+      }
+      if (nums.length > 0) {
+        const sum = nums.reduce((a, b) => a + b, 0)
+        avgOnlineToday = Math.round(sum / nums.length)
+      } else {
+        avgOnlineToday = 0
+      }
+    } catch {}
+
+    const maxAtMsk = maxAtIso ? formatTimeMsk(maxAtIso) : null
+
     // Revenue today (RUB)
     let grossToday = 0
     try {
@@ -94,6 +122,8 @@ export default async function handler(req, res) {
       `<b>Отчёт за сегодня (МСК)</b>`,
       `\n👤 Всего пользователей: <b>${(total||0).toLocaleString('ru-RU')}</b>`,
       `⚡ Онлайн сейчас: <b>${(online||0).toLocaleString('ru-RU')}</b>`,
+      `📈 Средний онлайн за день: <b>${(avgOnlineToday||0).toLocaleString('ru-RU')}</b>`,
+      `🔝 Максимальный онлайн за день: <b>${(maxOnlineToday||0).toLocaleString('ru-RU')}</b>${maxAtMsk ? ` в <b>${maxAtMsk} МСК</b>` : ''}`,
       `🆕 Новые сегодня: <b>${(newToday||0).toLocaleString('ru-RU')}</b>`,
       `\n⭐ PLUS активные: <b>${(plusActive||0).toLocaleString('ru-RU')}</b>`,
       `🤖 AI+ активные: <b>${(aiPlusActive||0).toLocaleString('ru-RU')}</b>`,
@@ -119,6 +149,15 @@ export default async function handler(req, res) {
   } catch (e) {
     res.status(500).json({ error: e?.message || 'daily_report_failed' })
   }
+}
+
+function formatTimeMsk(iso) {
+  try {
+    const tz = 'Europe/Moscow'
+    const d = new Date(String(iso))
+    const f = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+    return f.format(d)
+  } catch { return null }
 }
 
 
