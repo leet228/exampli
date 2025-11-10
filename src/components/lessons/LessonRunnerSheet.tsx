@@ -86,7 +86,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       // сначала попробуем из localStorage (кеш урока)
       let rows: any[] | null = null;
       try {
-        const raw = localStorage.getItem(`exampli:lesson_tasks:${lessonId}`);
+        const raw = localStorage.getItem(`exampli:lesson_tasks:v2:${lessonId}`);
         if (raw) rows = JSON.parse(raw) as any[];
       } catch {}
       if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -104,7 +104,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           if (ao !== bo) return ao - bo;
           return Number(a?.id || 0) - Number(b?.id || 0);
         });
-        try { localStorage.setItem(`exampli:lesson_tasks:${lessonId}`, JSON.stringify(rows)); } catch {}
+        try { localStorage.setItem(`exampli:lesson_tasks:v2:${lessonId}`, JSON.stringify(rows)); } catch {}
       }
       setTasks(rows as any);
       const base = (rows as any[]).slice(0, Math.min(PLANNED_COUNT, (rows as any[]).length));
@@ -741,7 +741,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           {/* подтверждение выхода */}
           <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop panelBg={'var(--bg)'}>
             <div className="grid gap-4 text-center">
-              <div className="text-lg font-semibold">Если выйдешь, потеряешь XP этой лекции</div>
+              <div className="text-lg font-semibold">Если выйдешь, потеряешь прогресс этого урока</div>
               <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
               <button
                 type="button"
