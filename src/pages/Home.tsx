@@ -241,6 +241,11 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Широковещательно сообщаем об открытии/закрытии превью
+  useEffect(() => {
+    try { window.dispatchEvent(new CustomEvent('exampli:lessonPreview', { detail: { open: lessonPreviewOpen } } as any)); } catch {}
+  }, [lessonPreviewOpen]);
+
   // На обновление boot — повторим быструю привязку по кэшу
   useEffect(() => {
     const onBoot = () => { void (async () => { const sel = await ensureActiveCourse(); await fetchLessons(sel.code); })(); };
@@ -357,6 +362,7 @@ export default function Home() {
                 try {
                   localStorage.setItem('exampli:currentTopicId', String(next.id));
                   localStorage.setItem('exampli:currentTopicTitle', String(next.title || ''));
+                  localStorage.setItem('exampli:currentTopicOrder', String(next.order_index ?? ''));
                 } catch {}
                 setCurrentTopicTitle(String(next.title || ''));
                 setNextTopicTitle(() => {
@@ -432,7 +438,7 @@ export default function Home() {
       <LessonStartPopover
         open={lessonPreviewOpen}
         anchorEl={anchorEl}
-        onClose={() => setLessonPreviewOpen(false)}
+        onClose={() => { setLessonPreviewOpen(false); try { window.dispatchEvent(new CustomEvent('exampli:lessonPreview', { detail: { open: false } } as any)); } catch {} }}
         title={courseTitle || 'Урок'}
         onStart={() => {
           // блокируем старт при 0 энергии
@@ -454,6 +460,7 @@ export default function Home() {
             }
           } catch {}
           setLessonPreviewOpen(false);
+          try { window.dispatchEvent(new CustomEvent('exampli:lessonPreview', { detail: { open: false } } as any)); } catch {}
           try { pingPresence('lesson_start'); } catch {}
           setRunnerOpen(true);
         }}

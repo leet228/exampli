@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice';
   options: string[] | null;
   correct: string;
 };
@@ -40,6 +40,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [cardBoxRect, setCardBoxRect] = useState<DOMRect | null>(null);
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  // Multiple choice (новый тип)
+  const [multiSel, setMultiSel] = useState<number[]>([]); // выбранные номера (1..n)
+  // Prompt (T) overlay
+  const [showT, setShowT] = useState<boolean>(false);
   const [streakLocal, setStreakLocal] = useState<number>(0);
   const [streakFlash, setStreakFlash] = useState<{ v: number; key: number } | null>(null);
   const streakKeyRef = useRef<number>(0);
@@ -203,6 +207,84 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updatePos); };
   }, [open, loading, idx, status, streakFlash]);
 
+  // Рендер текста c поддержкой **жирного** и *жирного*
+  function renderWithBold(src: string): React.ReactNode[] {
+    // Сначала обрабатываем двойные **...**, затем — одинарные *...* в «обычных» фрагментах
+    const renderSingles = (s: string, keyPrefix: string): React.ReactNode[] => {
+      const out: React.ReactNode[] = [];
+      let i = 0;
+      while (i < s.length) {
+        const start = s.indexOf('*', i);
+        if (start === -1) { out.push(<span key={`${keyPrefix}-t-${i}`}>{s.slice(i)}</span>); break; }
+        // если это двойная звезда — пропускаем как текст
+        if (s[start + 1] === '*') {
+          out.push(<span key={`${keyPrefix}-t-${i}`}>{s.slice(i, start + 2)}</span>);
+          i = start + 2;
+          continue;
+        }
+        const end = s.indexOf('*', start + 1);
+        if (end === -1) { out.push(<span key={`${keyPrefix}-t-${i}`}>{s.slice(i)}</span>); break; }
+        // до *, жирный, после
+        if (start > i) out.push(<span key={`${keyPrefix}-t-${i}`}>{s.slice(i, start)}</span>);
+        const boldInner = s.slice(start + 1, end);
+        out.push(<strong key={`${keyPrefix}-s-${start}`} className="font-extrabold">{boldInner}</strong>);
+        i = end + 1;
+      }
+      return out;
+    };
+    const parts: React.ReactNode[] = [];
+    const re = /\*\*([\s\S]+?)\*\*/g;
+    let last = 0; let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      if (m.index > last) parts.push(...renderSingles(src.slice(last, m.index), `b-pre-${last}`));
+      parts.push(<strong key={`b-strong-${m.index}`} className="font-extrabold">{m[1]}</strong>);
+      last = m.index + m[0].length;
+    }
+    if (last < src.length) parts.push(...renderSingles(src.slice(last), `b-post-${last}`));
+    return parts;
+  }
+
+  // Извлекаем (T) ... (T) из prompt
+  function parsePromptT(src: string): { display: string; t: string | null } {
+    if (!src) return { display: '', t: null };
+    const re = /\(T\)([\s\S]*?)\(T\)/g;
+    const chunks: string[] = [];
+    let cleaned = src;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      chunks.push((m[1] || '').trim());
+    }
+    cleaned = cleaned.replace(re, '').trim();
+    return { display: cleaned, t: chunks.length ? chunks.join('\n\n') : null };
+  }
+
+  // multiple_choice: варианты — пары "(n) ... (n)"
+  function parseMcOptions(src: string): Array<{ id: number; text: string }> {
+    const res: Array<{ id: number; text: string }> = [];
+    if (!src) return res;
+    const re = /\((\d+)\)([\s\S]*?)\(\1\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const id = Number(m[1]);
+      if (!Number.isFinite(id)) continue;
+      const text = String(m[2] || '').trim();
+      res.push({ id, text });
+    }
+    // Убираем дубликаты по id, сохраняя первый
+    const seen = new Set<number>();
+    return res.filter(o => { if (seen.has(o.id)) return false; seen.add(o.id); return true; }).sort((a, b) => a.id - b.id);
+  }
+
+  function parseCorrectIds(src: string): Set<number> {
+    const re = /\((\d+)\)/g;
+    const s = new Set<number>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src || ''))) {
+      const n = Number(m[1]); if (Number.isFinite(n)) s.add(n);
+    }
+    return s;
+  }
+
   function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }>{
     const res: Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }> = [];
     const re = /(\(underline\)|\(letter_box\)|\(input_box\)|\(card_box\))/g;
@@ -223,11 +305,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const canAnswer = useMemo(() => {
     if (!task) return false;
     if (task.answer_type === 'choice') return !!choice;
+    if (task.answer_type === 'multiple_choice') return (multiSel.length > 0);
     if (task.answer_type === 'word_letters') return (lettersSel.length > 0);
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
     return false;
-  }, [task, choice, text, lettersSel, selectedCard]);
+  }, [task, choice, text, lettersSel, selectedCard, multiSel]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -249,6 +332,68 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let user = '';
     if (task.answer_type === 'text') user = text.trim();
     else if (task.answer_type === 'choice') user = (choice || '');
+    else if (task.answer_type === 'multiple_choice') {
+      // сравнение множеств как строк отсортированных id
+      const sel = Array.from(new Set(multiSel)).sort((a, b) => a - b);
+      const correct = Array.from(parseCorrectIds(task.correct || '')).sort((a, b) => a - b);
+      user = sel.join(','); // для логов
+      const ok = sel.length === correct.length && sel.every((v, i) => v === correct[i]);
+      setStatus(ok ? 'correct' : 'wrong');
+      try { ok ? hapticSuccess() : hapticError(); } catch {}
+      try { ok ? sfx.playCorrect() : sfx.playWrong(); } catch {}
+      // обновим метрики
+      setAnswersTotal((v) => v + 1);
+      if (ok) setAnswersCorrect((v) => v + 1); else setHadAnyMistakes(true);
+
+      // Режим повторов: стрик не считаем, управляем очередью
+      if (mode === 'repeat') {
+        setStreakLocal(0); setStreakFlash(null);
+        lastRepeatOkRef.current = ok;
+        if (ok) {
+          try {
+            const id = (task as any)?.id;
+            if (!solvedRef.current.has(id)) {
+              solvedRef.current.add(id);
+              setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1));
+            }
+          } catch {}
+        }
+        return;
+      }
+
+      if (ok) {
+        setStreakLocal((prev) => {
+          const next = prev + 1;
+          if (next >= 2) {
+            streakKeyRef.current += 1;
+            setStreakFlash({ v: next, key: streakKeyRef.current });
+            if (next === 5 || next === 10) {
+              void streakCtrl.start({ scale: [1, 2.2, 0.9, 1], rotate: [0, -22, 14, 0], y: [-2, -16, -8, -2] }, { type: 'tween', ease: 'easeInOut', duration: 1.05 });
+            } else {
+              void streakCtrl.start({ scale: 1, rotate: 0, y: 0 }, { duration: 0.2 });
+            }
+          }
+          if (next === 5 || next === 10) {
+            try { hapticStreakMilestone(); } catch {}
+            const bonus: 2 | 5 = next === 5 ? 2 : 5;
+            rewardKeyRef.current += 1;
+            setRewardBonus(bonus);
+            setEnergy((prevE) => {
+              const n = Math.max(0, Math.min(25, (prevE || 0) + bonus));
+              try { const cs = cacheGet<any>(CACHE_KEYS.stats) || {}; cacheSet(CACHE_KEYS.stats, { ...cs, energy: n }); window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any)); } catch {}
+              return n;
+            });
+            (async () => { try { const res = await rewardEnergy(bonus); const serverEnergy = res?.energy; if (typeof serverEnergy === 'number') { const clamped = Math.max(0, Math.min(25, Number(serverEnergy))); setEnergy((prevE) => Math.max(prevE || 0, clamped)); } } catch {} })();
+          }
+          return next;
+        });
+        try { const id = (task as any)?.id; if (!solvedRef.current.has(id)) { solvedRef.current.add(id); setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1)); } } catch {}
+      } else {
+        setStreakLocal(0); setStreakFlash(null);
+        setRepeatQueue((prev) => { const exists = prev.some((t) => String((t as any)?.id) === String((task as any)?.id)); return exists ? prev : [...prev, task]; });
+      }
+      return;
+    }
     else if (task.answer_type === 'word_letters') {
       const opts = (task.options || []) as string[];
       user = lettersSel.map(i => opts[i] ?? '').join('');
@@ -344,8 +489,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setText('');
     setLettersSel([]);
     setSelectedCard(null);
+    setMultiSel([]);
     setStatus('idle');
     setStreakFlash(null);
+    setShowT(false);
     setViewKey((k) => k + 1);
   }
 
@@ -513,7 +660,57 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 />
               ) : task ? (
                 <>
-                  <div className="text-sm text-muted">{task.prompt}</div>
+                  {(() => {
+                    const { display, t } = parsePromptT(task.prompt || '');
+                    return (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm text-muted flex-1">
+                          {renderWithBold(display)}
+                        </div>
+                        {t && (
+                          <div className="shrink-0">
+                            <PressOption
+                              active={false}
+                              onClick={() => { try { hapticSelect(); } catch {} setShowT(true); }}
+                              disabled={false}
+                              resolved={null}
+                              size="sm"
+                              fullWidth={false}
+                              variant="black"
+                            >
+                              ТЕКСТ
+                            </PressOption>
+                          </div>
+                        )}
+                        {/* Оверлей для (T) */}
+                        {showT && t && (
+                          <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/95" onClick={() => setShowT(false)} />
+                            <div className="relative z-[10000] max-w-[620px] w-full px-3 py-4">
+                              <div className="rounded-2xl border border-white/10 bg-black">
+                                <div className="flex items-start justify-between p-3 border-b border-white/10">
+                                  <div className="font-extrabold text-white text-sm">ТЕКСТ</div>
+                                  <button
+                                    type="button"
+                                    className="text-white/70 hover:text-white text-xl leading-none px-2"
+                                    onClick={() => setShowT(false)}
+                                    aria-label="Закрыть"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className="p-3 max-h-[60vh] overflow-y-auto">
+                                  <div className="text-white whitespace-pre-wrap leading-relaxed">
+                                    {renderWithBold(t)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="relative overflow-hidden">
                     <AnimatePresence initial={false} mode="wait">
                       <motion.div
@@ -525,8 +722,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         className="card text-left"
                       >
                         <div className="text-lg leading-relaxed">
-                          {partsWithMarkers(task.task_text).map((p, i) => {
-                        if (p.t === 'text') return <span key={i}>{p.v}</span>;
+                          {task.answer_type === 'multiple_choice' ? null : partsWithMarkers(task.task_text).map((p, i) => {
+                        if (p.t === 'text') return <span key={i}>{renderWithBold(p.v || '')}</span>;
                         if (p.t === 'blank') {
                           return (status === 'idle')
                             ? <span key={i} className="px-1 font-semibold">____</span>
@@ -611,6 +808,44 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           </PressOption>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {(task.answer_type === 'multiple_choice') && (
+                    <div className="grid gap-2 mt-auto mb-10">
+                      {(() => {
+                        const opts = parseMcOptions(task.task_text || '');
+                        const correct = parseCorrectIds(task.correct || '');
+                        const selectedSet = new Set<number>(multiSel);
+                        return opts.map(({ id, text }) => {
+                          const isSelected = selectedSet.has(id);
+                          let resolved: 'green' | 'red' | null = null;
+                          if (status !== 'idle') {
+                            if (correct.has(id)) resolved = 'green';
+                            else if (isSelected && !correct.has(id)) resolved = 'red';
+                          }
+                          return (
+                            <PressOption
+                              key={`mc-${id}`}
+                              active={status === 'idle' ? isSelected : false}
+                              resolved={resolved}
+                              size="sm"
+                              onClick={() => {
+                                if (status !== 'idle') return;
+                                setMultiSel((prev) => {
+                                  const has = prev.includes(id);
+                                  const next = has ? prev.filter(x => x !== id) : [...prev, id];
+                                  try { hapticSelect(); } catch {}
+                                  return next;
+                                });
+                              }}
+                              disabled={status !== 'idle'}
+                            >
+                              {renderWithBold(text)}
+                            </PressOption>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
 
@@ -761,10 +996,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
 
 
-function PressOption({ active, children, onClick, disabled }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+function PressOption({ active, children, onClick, disabled, resolved, size = 'md', fullWidth = true, variant = 'default' }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean; resolved?: 'green' | 'red' | null; size?: 'sm' | 'md'; fullWidth?: boolean; variant?: 'default' | 'black' }) {
   const [pressed, setPressed] = useState(false);
-  const base = active ? '#3c73ff' : '#2a3944';
-  const shadowHeight = 6;
+  const isGreen = resolved === 'green';
+  const isRed = resolved === 'red';
+  const base = variant === 'black' ? '#000000' : (isGreen ? '#16a34a' : (isRed ? '#dc2626' : (active ? '#3c73ff' : '#2a3944')));
+  const shadowHeight = size === 'sm' ? 4 : 6;
   function darken(hex: string, amount = 18) {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -782,10 +1019,14 @@ function PressOption({ active, children, onClick, disabled }: { active: boolean;
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => { if (!disabled) onClick(); }}
-      className={`w-full rounded-2xl px-4 py-3 border ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'}`}
+      className={`${fullWidth ? 'w-full' : ''} ${size === 'sm' ? 'rounded-xl px-3 py-2 text-sm' : 'rounded-2xl px-4 py-3'} border ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${
+        isGreen ? 'border-green-500/60 text-green-400'
+        : isRed ? 'border-red-500/60 text-red-400'
+        : (variant === 'black' ? 'border-white/10 text-white' : (active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'))
+      }`}
       animate={{ y: (disabled ? false : pressed) ? shadowHeight : 0, boxShadow: (disabled ? false : pressed) ? `0px 0px 0px ${darken(base, 18)}` : `0px ${shadowHeight}px 0px ${darken(base, 18)}` }}
       transition={{ duration: 0 }}
-      style={{ background: active ? 'rgba(60,115,255,0.10)' : 'rgba(255,255,255,0.05)' }}
+      style={{ background: variant === 'black' ? '#000000' : (isGreen ? 'rgba(34,197,94,0.10)' : (isRed ? 'rgba(220,38,38,0.10)' : (active ? 'rgba(60,115,255,0.10)' : 'rgba(255,255,255,0.05)'))) }}
     >
       {children}
     </motion.button>

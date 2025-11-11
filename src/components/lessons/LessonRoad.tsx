@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
@@ -118,6 +118,19 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
     return { nodeBase: base, nodeInner: darken(base, 22) };
   }, [lessons?.length, currentTopicTitle]);
 
+  // Подсветка первого урока: флаг схлопывания после клика (без персистенции)
+  const [firstPressed, setFirstPressed] = useState<boolean>(false);
+  // Реагируем на закрытие превью — возвращаем пульсацию
+  useEffect(() => {
+    const onPreview = (evt: Event) => {
+      const e = evt as CustomEvent<{ open?: boolean }>;
+      const isOpen = Boolean(e?.detail?.open);
+      if (!isOpen) setFirstPressed(false);
+    };
+    window.addEventListener('exampli:lessonPreview', onPreview as EventListener);
+    return () => window.removeEventListener('exampli:lessonPreview', onPreview as EventListener);
+  }, []);
+
   return (
     <div className="relative overflow-visible" style={{ paddingTop: 0 }}>
       {/* центральную вертикальную линию убрали */}
@@ -152,7 +165,11 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                     baseColor={nodeBase}
                     innerIconBg={nodeInner}
                     dataLessonId={l.id}
-                    onClick={(e?: any) => onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined)}
+                    showPulse={idx === 1}
+                    pulseColor={nodeBase}
+                    pulseCollapsed={idx === 1 ? firstPressed : false}
+                    completed={idx === 0} // тестовая отметка: первый урок отображается «выполненным»
+                    onClick={(e?: any) => { if (idx === 1) setFirstPressed(true); onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined); }}
                   />
                 </motion.div>
               </div>
@@ -206,7 +223,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
               <div className="mb-4 flex justify-center">
                 <div
                   className="inline-flex rounded-xl px-3 py-1 text-[12px] font-extrabold uppercase tracking-[0.08em]"
-                  style={{ color: '#3c73ff', background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)' }}
+                  style={{ color: nodeBase, background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25)' }}
                 >
                   {String(currentTopicTitle)}
                 </div>
@@ -227,7 +244,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                 <div style={{ width: '100vw', marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)' }} className="px-6">
                   <LessonButton
                     text="ПЕРЕЙТИ НА СЛЕДУЮЩУЮ ТЕМУ"
-                    baseColor="#3c73ff"
+                    baseColor={nodeBase}
                     shadowHeight={6}
                     onClick={() => { try { hapticSelect(); } catch {} if (onNextTopic) onNextTopic(); }}
                   />

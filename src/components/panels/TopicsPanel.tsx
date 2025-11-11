@@ -82,6 +82,35 @@ export default function TopicsPanel({ open, onClose }: Props) {
     return () => window.removeEventListener('exampli:courseChanged', onCourseChanged as EventListener);
   }, [open, loadData]);
 
+  // Обновляем выбранную тему при открытии панели (на случай недавнего переключения)
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const saved = localStorage.getItem(CUR_TOPIC_ID_KEY);
+      if (saved) setCurrentTopicId(saved);
+    } catch {}
+  }, [open]);
+
+  // Реакция на глобальное событие смены темы
+  useEffect(() => {
+    const onTopicChanged = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<{ subjectId?: number | string; topicId?: number | string; topicTitle?: string }>;
+        const tid = e.detail?.topicId;
+        if (tid != null) {
+          setCurrentTopicId(tid);
+          return;
+        }
+      } catch {}
+      try {
+        const saved = localStorage.getItem(CUR_TOPIC_ID_KEY);
+        if (saved) setCurrentTopicId(saved);
+      } catch {}
+    };
+    window.addEventListener('exampli:topicChanged', onTopicChanged as EventListener);
+    return () => window.removeEventListener('exampli:topicChanged', onTopicChanged as EventListener);
+  }, []);
+
   const pickTopic = useCallback(async (t: Topic) => {
     // мгновенный локальный эффект
     try {
