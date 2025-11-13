@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input';
   options: string[] | null;
   correct: string;
 };
@@ -302,6 +302,61 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return res;
   }
 
+  // Перенос нумерованных пунктов "1) ... 2) ..." на новую строку
+  function ensureNumberedNewlines(src: string): string {
+    if (!src) return '';
+    // Если перед n) нет переноса строки, но есть пробел — ставим перенос
+    // Пример: "Текст 1) пункт 1  2) пункт 2" -> "Текст\n1) пункт 1\n2) пункт 2"
+    return src.replace(/([^\n])\s+(\d+\))/g, (_m, prev: string, num: string) => `${prev}\n${num}`);
+  }
+
+  // Рендер многострочного текста с сохранением переносов и жирного по *звёздочкам*
+  function renderTextLines(src: string, keyPrefix: string): React.ReactNode[] {
+    const prepared = ensureNumberedNewlines(src);
+    const lines = prepared.split(/\n+/);
+    const out: React.ReactNode[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.trim().length === 0) {
+        out.push(<br key={`${keyPrefix}-br-${i}`} />);
+      } else {
+        out.push(
+          <div key={`${keyPrefix}-ln-${i}`} className="">
+            {renderWithBold(line)}
+          </div>
+        );
+      }
+    }
+    return out;
+  }
+
+  // Нормализация ответа: убираем лишние пробелы и понижаем регистр (ru)
+  function normalizeAnswer(src: string): string {
+    try {
+      return String(src || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLocaleLowerCase('ru');
+    } catch {
+      return String(src || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+  }
+
+  // Разбор корректных ответов: поддержка списка через запятую
+  function parseAnswerList(src: string): string[] {
+    const s = String(src || '').trim();
+    if (!s) return [];
+    // если приходит JSON-массив — попробуем распарсить
+    if ((s.startsWith('[') && s.endsWith(']')) || (s.startsWith('"') && s.endsWith('"'))) {
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr)) return arr.map((x) => String(x || ''));
+      } catch {}
+    }
+    // по умолчанию — разделитель запятая
+    return s.split(',').map((x) => x.trim()).filter(Boolean);
+  }
+
   const canAnswer = useMemo(() => {
     if (!task) return false;
     if (task.answer_type === 'choice') return !!choice;
@@ -309,6 +364,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'word_letters') return (lettersSel.length > 0);
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
+    if (task.answer_type === 'input') return text.trim().length > 0;
     return false;
   }, [task, choice, text, lettersSel, selectedCard, multiSel]);
 
@@ -330,7 +386,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   function check(){
     if (!task) return;
     let user = '';
-    if (task.answer_type === 'text') user = text.trim();
+    if (task.answer_type === 'text' || task.answer_type === 'input') user = text.trim();
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -401,7 +457,19 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const opts = (task.options || []) as string[];
       user = (selectedCard != null) ? (opts[selectedCard] ?? '') : '';
     }
-    const ok = user === (task.correct || '');
+    // Проверка правильности
+    let ok = false;
+    if (task.answer_type === 'text' || task.answer_type === 'input') {
+      const userNorm = normalizeAnswer(user);
+      const variants = parseAnswerList(task.correct || '');
+      if (variants.length > 0) {
+        ok = variants.some((v) => normalizeAnswer(v) === userNorm);
+      } else {
+        ok = userNorm === normalizeAnswer(task.correct || '');
+      }
+    } else {
+      ok = user === (task.correct || '');
+    }
     setStatus(ok ? 'correct' : 'wrong');
     try { ok ? hapticSuccess() : hapticError(); } catch {}
     try { ok ? sfx.playCorrect() : sfx.playWrong(); } catch {}
@@ -719,11 +787,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: '-20%', opacity: 0 }}
                         transition={{ duration: 0.22 }}
-                        className="card text-left"
+                        className={`card text-left`}
                       >
                         <div className="text-lg leading-relaxed">
                           {task.answer_type === 'multiple_choice' ? null : partsWithMarkers(task.task_text).map((p, i) => {
-                        if (p.t === 'text') return <span key={i}>{renderWithBold(p.v || '')}</span>;
+                        if (p.t === 'text') return renderTextLines(p.v || '', `t-${i}`);
                         if (p.t === 'blank') {
                           return (status === 'idle')
                             ? <span key={i} className="px-1 font-semibold">____</span>
@@ -942,6 +1010,33 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       disabled={status !== 'idle'}
                       className="w-full rounded-2xl px-4 py-3 bg-white/5 border border-white/10 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                     />
+                  )}
+
+                  {task.answer_type === 'input' && (
+                    <div className="mt-auto mb-10">
+                      <input
+                        value={(() => {
+                          if (status === 'wrong') {
+                            const vars = parseAnswerList(task.correct || '');
+                            const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
+                            return disp;
+                          }
+                          return text;
+                        })()}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Напиши ответ..."
+                        aria-label="Ответ"
+                        disabled={status !== 'idle'}
+                        className={`w-full max-w-[480px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                          status === 'correct'
+                            ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                            : (status === 'wrong'
+                                ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                                : 'bg-white/5 border border-white/10')
+                        }`}
+                        autoFocus
+                      />
+                    </div>
                   )}
 
                   {/* кнопка переехала вниз в фиксированный бар */}
