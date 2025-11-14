@@ -87,11 +87,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     // загрузочный экран и предзагрузка заданий
     setLoading(true);
     (async () => {
-      // сначала попробуем из localStorage (кеш урока)
+      // сначала попробуем из localStorage (кеш урока) — только v3
       let rows: any[] | null = null;
       try {
-        const raw = localStorage.getItem(`exampli:lesson_tasks:v2:${lessonId}`);
-        if (raw) rows = JSON.parse(raw) as any[];
+        const v3Key = `exampli:lesson_tasks:v3:${lessonId}`;
+        const rawV3 = localStorage.getItem(v3Key);
+        if (rawV3) rows = JSON.parse(rawV3) as any[];
       } catch {}
       if (!rows || !Array.isArray(rows) || rows.length === 0) {
         const { data } = await supabase
@@ -108,7 +109,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           if (ao !== bo) return ao - bo;
           return Number(a?.id || 0) - Number(b?.id || 0);
         });
-        try { localStorage.setItem(`exampli:lesson_tasks:v2:${lessonId}`, JSON.stringify(rows)); } catch {}
+        try { localStorage.setItem(`exampli:lesson_tasks:v3:${lessonId}`, JSON.stringify(rows)); } catch {}
       }
       setTasks(rows as any);
       const base = (rows as any[]).slice(0, Math.min(PLANNED_COUNT, (rows as any[]).length));
@@ -1011,7 +1012,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
                   {/* ответы */}
                   {(task.answer_type === 'choice') && (
-                    <div className="grid gap-2 mt-auto mb-10">
+                    <div className="grid gap-2 mt-auto mb-16">
                       {(task.options || []).map((opt) => {
                         const active = choice === opt;
                         return (
@@ -1024,7 +1025,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {(task.answer_type === 'multiple_choice') && (
-                    <div className="grid gap-2 mt-auto mb-10">
+                    <div className="grid gap-2 mt-auto mb-16">
                       {(() => {
                         const opts = parseMcOptions(task.task_text || '');
                         const correct = parseCorrectIds(task.correct || '');
@@ -1062,7 +1063,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {task.answer_type === 'word_letters' && (
-                    <div className="mt-auto mb-10">
+                    <div className="mt-auto mb-16">
                       <div className="rounded-2xl bg-white/5 border border-white/10 p-2 space-y-3" style={{ overflowX: 'hidden' }}>
                       {(() => {
                         const opts = ((task.options || []) as string[]) || [];
@@ -1104,7 +1105,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {task.answer_type === 'cards' && (
-                    <div className="mt-auto mb-10">
+                    <div className="mt-auto mb-16">
                       <div className="rounded-2xl bg-white/5 border border-white/10 p-2" style={{ overflowX: 'hidden' }}>
                       {(() => {
                         const opts = ((task.options || []) as string[]) || [];
@@ -1147,7 +1148,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                   )}
 
                   {task.answer_type === 'connections' && (
-                    <div className="mt-auto mb-10">
+                    <div className="mt-auto mb-16">
                       <div ref={connContainerRef} className="relative rounded-2xl bg-white/5 border border-white/10 p-3">
                         {/* Линии */}
                         <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%" style={{ left: 0, top: 0, zIndex: 1 }}>
@@ -1316,7 +1317,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     />
                   </div>
                 )}
-                <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+10px)]">
+                <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+24px)]">
                   {status === 'idle' ? (
                     <LessonButton text="ОТВЕТИТЬ" onClick={check} baseColor="#3c73ff" className={!canAnswer ? 'opacity-60 cursor-not-allowed' : ''} disabled={!canAnswer} />
                   ) : (
@@ -1723,7 +1724,7 @@ function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs
           ); })()}
         </div>
       </div>
-      <div className="w-full px-4 mt-12 mb-40">
+      <div className="w-full px-4 mt-12 mb-56">
         <PressCta text="продолжить" textSizeClass="text-2xl" baseColor="#3c73ff" onClick={() => { try { hapticSelect(); } catch {} onDone(); }} disabled={!canProceed} />
       </div>
     </div>
