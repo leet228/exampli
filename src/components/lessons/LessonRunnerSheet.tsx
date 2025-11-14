@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input';
   options: string[] | null;
   correct: string;
 };
@@ -207,6 +207,121 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updatePos); };
   }, [open, loading, idx, status, streakFlash]);
 
+  // ===== Connections (новый тип ответа) =====
+  const connContainerRef = useRef<HTMLDivElement | null>(null);
+  const connTaskRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const connOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [connActiveTask, setConnActiveTask] = useState<number | null>(null); // индекс задачи слева (0..n-1)
+  const [connMap, setConnMap] = useState<number[]>([]); // для каждой задачи слева → 1-базный индекс опции справа
+  const [connLines, setConnLines] = useState<Array<{ from: { x: number; y: number }; to: { x: number; y: number }; color: string; laneX: number }>>([]);
+
+  const connPalette: string[] = ['#60a5fa', '#34d399', '#f59e0b', '#a78bfa', '#10b981', '#f472b6', '#22d3ee', '#ef4444'];
+
+  function distinctColor(i: number): string {
+    // разнесём оттенки по «золотому углу» — устойчиво разные цвета
+    const hue = (i * 137.508) % 360;
+    return `hsl(${hue}, 70%, 58%)`;
+  }
+
+  function parseCorrectDigits(src: string, expectedLen: number): number[] {
+    const s = String(src || '').trim();
+    const arr: number[] = [];
+    for (let i = 0; i < s.length && arr.length < expectedLen; i++) {
+      const ch = s[i];
+      const d = ch >= '0' && ch <= '9' ? Number(ch) : NaN;
+      if (Number.isFinite(d)) arr.push(d);
+    }
+    while (arr.length < expectedLen) arr.push(0);
+    return arr;
+  }
+
+  function scheduleConnRecompute(tasksCount: number, optsCount: number, statusNow: 'idle' | 'correct' | 'wrong') {
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => {
+        recomputeConnLines(tasksCount, optsCount, statusNow);
+      });
+      // no need to store raf2 id for cancel; this runs immediately
+    });
+    return () => cancelAnimationFrame(raf1);
+  }
+
+  function recomputeConnLines(tasksCount: number, optsCount: number, statusNow: 'idle' | 'correct' | 'wrong') {
+    try {
+      const container = connContainerRef.current;
+      if (!container || tasksCount <= 0 || optsCount <= 0) { setConnLines([]); return; }
+      const cb = container.getBoundingClientRect();
+      const correctMap = parseCorrectDigits(task?.correct || '', tasksCount);
+      const pre: Array<{ from: { x: number; y: number }; to: { x: number; y: number }; color: string; leftIndex: number }> = [];
+      for (let i = 0; i < tasksCount; i++) {
+        const leftEl = connTaskRefs.current[i];
+        if (!leftEl) continue;
+        const lb = leftEl.getBoundingClientRect();
+        let optIndex1Based: number = 0;
+        if (statusNow === 'idle') {
+          optIndex1Based = connMap[i] || 0;
+        } else {
+          optIndex1Based = correctMap[i] || 0;
+        }
+        if (!optIndex1Based) continue;
+        const rightEl = connOptionRefs.current[optIndex1Based - 1];
+        if (!rightEl) continue;
+        const rb = rightEl.getBoundingClientRect();
+        const from = { x: lb.right - cb.left, y: (lb.top + lb.bottom) / 2 - cb.top };
+        const to = { x: rb.left - cb.left, y: (rb.top + rb.bottom) / 2 - cb.top };
+        let color = '#ffffff';
+        if (statusNow !== 'idle') {
+          const isCorrect = (connMap[i] || 0) === (correctMap[i] || 0);
+          color = isCorrect ? '#16a34a' : '#dc2626';
+        } else {
+          // уникальный цвет для каждой линии
+          color = distinctColor(i);
+        }
+        pre.push({ from, to, color, leftIndex: i });
+      }
+      // разложим вертикальные сегменты по «полосам» около центра, чтобы не перекрывались
+      const n = pre.length;
+      const centerX = Math.round(cb.width / 2);
+      const laneSpacing = 4; // более компактное расстояние между вертикальными «полосами»
+      const lines = pre.map((p, idx) => {
+        const offset = (idx - (n - 1) / 2) * laneSpacing;
+        return { ...p, laneX: centerX + offset };
+      });
+      setConnLines(lines);
+    } catch {
+      setConnLines([]);
+    }
+  }
+
+  // Сброс состояния connections при смене вопроса
+  useEffect(() => {
+    if (task?.answer_type !== 'connections') return;
+    setConnActiveTask(null);
+    const left = parseMcOptions(task.task_text || '');
+    setConnMap(new Array(Math.max(0, left.length)).fill(0));
+    setTimeout(() => recomputeConnLines(left.length, (task.options || [])?.length || 0, status), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey, task]);
+
+  // Пересчёт линий при изменениях
+  useEffect(() => {
+    if (task?.answer_type !== 'connections') return;
+    const fx = () => scheduleConnRecompute(parseMcOptions(task.task_text || '').length, (task.options || [])?.length || 0, status);
+    const cancel = fx();
+    window.addEventListener('resize', fx);
+    window.addEventListener('scroll', fx, { passive: true } as any);
+    return () => { cancel && cancel(); window.removeEventListener('resize', fx); window.removeEventListener('scroll', fx as any); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task, connMap, status]);
+
+  // Дополнительно: пересчёт линий после коммита DOM (refs уже на месте)
+  useLayoutEffect(() => {
+    if (task?.answer_type !== 'connections') return;
+    const leftLen = parseMcOptions(task.task_text || '').length;
+    const optsLen = (task.options || [])?.length || 0;
+    const cancel = scheduleConnRecompute(leftLen, optsLen, status);
+    return () => { cancel && cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task, connMap, status, viewKey]);
   // Рендер текста c поддержкой **жирного** и *жирного*
   function renderWithBold(src: string): React.ReactNode[] {
     // Сначала обрабатываем двойные **...**, затем — одинарные *...* в «обычных» фрагментах
@@ -357,6 +472,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return s.split(',').map((x) => x.trim()).filter(Boolean);
   }
 
+  // Разбор вариантов для num_input через |
+  function parseAnswerPipe(src: string): string[] {
+    const s = String(src || '').trim();
+    if (!s) return [];
+    return s.split('|').map((x) => x.trim()).filter(Boolean);
+  }
+
   const canAnswer = useMemo(() => {
     if (!task) return false;
     if (task.answer_type === 'choice') return !!choice;
@@ -365,8 +487,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
     if (task.answer_type === 'input') return text.trim().length > 0;
+  if (task.answer_type === 'num_input') return text.trim().length > 0;
+  if (task.answer_type === 'connections') {
+    const left = parseMcOptions(task.task_text || '');
+    if (left.length === 0) return false;
+    if (connMap.length !== left.length) return false;
+    return connMap.every((v) => Number.isFinite(v) && (v as any) > 0);
+  }
     return false;
-  }, [task, choice, text, lettersSel, selectedCard, multiSel]);
+}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -386,7 +515,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   function check(){
     if (!task) return;
     let user = '';
-    if (task.answer_type === 'text' || task.answer_type === 'input') user = text.trim();
+  if (task.answer_type === 'text' || task.answer_type === 'input') user = text.trim();
+  else if (task.answer_type === 'num_input') user = text.trim().replace(/[^\d]/g, '');
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -456,10 +586,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     } else if (task.answer_type === 'cards') {
       const opts = (task.options || []) as string[];
       user = (selectedCard != null) ? (opts[selectedCard] ?? '') : '';
+  } else if (task.answer_type === 'connections') {
+    const left = parseMcOptions(task.task_text || '');
+    const mapSafe = connMap.slice(0, left.length).map(v => Math.max(0, Number(v) || 0));
+    user = mapSafe.join('');
     }
     // Проверка правильности
     let ok = false;
-    if (task.answer_type === 'text' || task.answer_type === 'input') {
+  if (task.answer_type === 'text' || task.answer_type === 'input') {
       const userNorm = normalizeAnswer(user);
       const variants = parseAnswerList(task.correct || '');
       if (variants.length > 0) {
@@ -467,6 +601,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       } else {
         ok = userNorm === normalizeAnswer(task.correct || '');
       }
+  } else if (task.answer_type === 'num_input') {
+    const variants = parseAnswerPipe(task.correct || '');
+    if (variants.length > 0) {
+      ok = variants.some((v) => String(v).replace(/[^\d]/g, '') === user);
+    } else {
+      ok = user === String(task.correct || '').replace(/[^\d]/g, '');
+    }
     } else {
       ok = user === (task.correct || '');
     }
@@ -558,6 +699,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setLettersSel([]);
     setSelectedCard(null);
     setMultiSel([]);
+    setConnActiveTask(null);
+    setConnMap([]);
+    setConnLines([]);
     setStatus('idle');
     setStreakFlash(null);
     setShowT(false);
@@ -790,7 +934,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         className={`card text-left`}
                       >
                         <div className="text-lg leading-relaxed">
-                          {task.answer_type === 'multiple_choice' ? null : partsWithMarkers(task.task_text).map((p, i) => {
+                          {(task.answer_type === 'multiple_choice' || task.answer_type === 'connections') ? null : partsWithMarkers(task.task_text).map((p, i) => {
                         if (p.t === 'text') return renderTextLines(p.v || '', `t-${i}`);
                         if (p.t === 'blank') {
                           return (status === 'idle')
@@ -1002,6 +1146,108 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
+                  {task.answer_type === 'connections' && (
+                    <div className="mt-auto mb-10">
+                      <div ref={connContainerRef} className="relative rounded-2xl bg-white/5 border border-white/10 p-3">
+                        {/* Линии */}
+                        <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%" style={{ left: 0, top: 0, zIndex: 1 }}>
+                          {connLines.map((ln, i) => {
+                            const cx = ln.laneX;
+                            const pts = `${ln.from.x},${ln.from.y} ${cx},${ln.from.y} ${cx},${ln.to.y} ${ln.to.x},${ln.to.y}`;
+                            return (
+                              <polyline key={`ln-${i}`} points={pts} stroke={ln.color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            );
+                          })}
+                        </svg>
+                        <div className="grid grid-cols-2 gap-6 relative" style={{ zIndex: 2 }}>
+                          {/* Слева: задачи из task_text разметки (1)...(1) */}
+                          <div className="flex flex-col gap-2 pr-2">
+                            {(() => {
+                              const left = parseMcOptions(task.task_text || '');
+                              return left.map(({ id, text: t }, i) => {
+                                const isActive = status === 'idle' && connActiveTask === i;
+                                const isConnected = (connMap[i] || 0) > 0;
+                                const activeVisual = status === 'idle' ? (isActive || isConnected) : false;
+                                let resolved: 'green' | 'red' | null = null;
+                                if (status !== 'idle') {
+                                  const correctMap = parseCorrectDigits(task.correct || '', left.length);
+                                  resolved = (connMap[i] || 0) === (correctMap[i] || 0) ? 'green' : 'red';
+                                }
+                                return (
+                                  <div key={`lt-${id}`} ref={(el) => { connTaskRefs.current[i] = el; }}>
+                                    <PressOption
+                                      active={activeVisual}
+                                      resolved={resolved}
+                                      size="xs"
+                                      onClick={() => {
+                                        if (status !== 'idle') return;
+                                        const leftNow = parseMcOptions(task.task_text || '');
+                                        const optsNow = (task.options || [])?.length || 0;
+                                        if ((connMap[i] || 0) > 0) {
+                                          // Уже подключена: снять соединение и сбросить активность
+                                          setConnMap((prevMap) => {
+                                            const next = prevMap.slice();
+                                            next[i] = 0;
+                                            return next;
+                                          });
+                                          setConnActiveTask(null);
+                                          scheduleConnRecompute(leftNow.length, optsNow, status);
+                                          try { hapticSelect(); } catch {}
+                                          return;
+                                        }
+                                        // Иначе просто активируем/деактивируем для выбора справа
+                                        setConnActiveTask((prev) => (prev === i ? null : i));
+                                        try { hapticSelect(); } catch {}
+                                      }}
+                                      disabled={status !== 'idle'}
+                                    >
+                                      {renderWithBold(t)}
+                                    </PressOption>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                          {/* Справа: опции */}
+                          <div className="flex flex-col gap-2 pl-2">
+                            {(() => {
+                              const opts = ((task.options || []) as string[]) || [];
+                              const left = parseMcOptions(task.task_text || '');
+                              const assigned = new Set<number>((connMap || []).filter(v => (v || 0) > 0));
+                              return opts.map((optText, j) => {
+                                const isAssignedToActive = (connActiveTask != null) && (connMap[connActiveTask] === (j + 1));
+                                const isTaken = assigned.has(j + 1);
+                                return (
+                                  <div key={`rt-${j}`} ref={(el) => { connOptionRefs.current[j] = el; }}>
+                                    <PressOption
+                                      active={status === 'idle' ? (isAssignedToActive || isTaken) : false}
+                                      size="xs"
+                                      onClick={() => {
+                                        if (status !== 'idle') return;
+                                        if (connActiveTask == null) return;
+                                        setConnMap((prev) => {
+                                          const next = prev.slice();
+                                          for (let k = 0; k < next.length; k++) if (k !== connActiveTask && next[k] === (j + 1)) next[k] = 0;
+                                          next[connActiveTask] = j + 1;
+                                          return next;
+                                        });
+                                        try { hapticSelect(); } catch {}
+                                        scheduleConnRecompute(left.length, opts.length, status);
+                                      }}
+                                      disabled={status !== 'idle'}
+                                    >
+                                      {renderWithBold(optText)}
+                                    </PressOption>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {task.answer_type === 'text' && !/(\(input_box\))/.test(task.task_text || '') && (
                     <input
                       value={text}
@@ -1012,32 +1258,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     />
                   )}
 
-                  {task.answer_type === 'input' && (
-                    <div className="mt-auto mb-10">
-                      <input
-                        value={(() => {
-                          if (status === 'wrong') {
-                            const vars = parseAnswerList(task.correct || '');
-                            const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
-                            return disp;
-                          }
-                          return text;
-                        })()}
-                        onChange={(e) => setText(e.target.value)}
-                        placeholder="Напиши ответ..."
-                        aria-label="Ответ"
-                        disabled={status !== 'idle'}
-                        className={`w-full max-w-[480px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
-                          status === 'correct'
-                            ? 'border border-green-500/60 bg-green-600/10 text-green-400'
-                            : (status === 'wrong'
-                                ? 'border border-red-500/60 bg-red-600/10 text-red-400'
-                                : 'bg-white/5 border border-white/10')
-                        }`}
-                        autoFocus
-                      />
-                    </div>
-                  )}
+                  {/* input-ответ перемещён в фиксированный нижний блок */}
 
                   {/* кнопка переехала вниз в фиксированный бар */}
                 </>
@@ -1056,6 +1277,43 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       <span>{status === 'correct' ? '✓' : '✕'}</span>
                       <span>{status === 'correct' ? 'Правильно!' : 'Неправильно'}</span>
                     </div>
+                  </div>
+                )}
+                {task && (task.answer_type === 'input' || task.answer_type === 'num_input') && (
+                  <div className="px-4 mb-2">
+                    <input
+                      value={(() => {
+                        if (status === 'wrong') {
+                          const vars = task.answer_type === 'num_input'
+                            ? parseAnswerPipe(task.correct || '')
+                            : parseAnswerList(task.correct || '');
+                          const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
+                          return disp;
+                        }
+                        return text;
+                      })()}
+                      onChange={(e) => {
+                        const raw = e.target.value || '';
+                        if (task.answer_type === 'num_input') {
+                          const filtered = raw.replace(/[^\d]+/g, '');
+                          setText(filtered);
+                        } else {
+                          setText(raw);
+                        }
+                      }}
+                      placeholder={task.answer_type === 'num_input' ? 'Введи число...' : 'Напиши ответ...'}
+                      aria-label="Ответ"
+                      disabled={status !== 'idle'}
+                      inputMode={task.answer_type === 'num_input' ? ('numeric' as any) : undefined}
+                      pattern={task.answer_type === 'num_input' ? '[0-9]*' : undefined}
+                      className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                        status === 'correct'
+                          ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                          : (status === 'wrong'
+                              ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                              : 'bg-white/5 border border-white/10')
+                      }`}
+                    />
                   </div>
                 )}
                 <div className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+10px)]">
@@ -1091,12 +1349,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
 
 
-function PressOption({ active, children, onClick, disabled, resolved, size = 'md', fullWidth = true, variant = 'default' }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean; resolved?: 'green' | 'red' | null; size?: 'sm' | 'md'; fullWidth?: boolean; variant?: 'default' | 'black' }) {
+function PressOption({ active, children, onClick, disabled, resolved, size = 'md', fullWidth = true, variant = 'default' }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean; resolved?: 'green' | 'red' | null; size?: 'xs' | 'sm' | 'md'; fullWidth?: boolean; variant?: 'default' | 'black' }) {
   const [pressed, setPressed] = useState(false);
   const isGreen = resolved === 'green';
   const isRed = resolved === 'red';
   const base = variant === 'black' ? '#000000' : (isGreen ? '#16a34a' : (isRed ? '#dc2626' : (active ? '#3c73ff' : '#2a3944')));
-  const shadowHeight = size === 'sm' ? 4 : 6;
+  const shadowHeight = size === 'xs' ? 3 : (size === 'sm' ? 4 : 6);
   function darken(hex: string, amount = 18) {
     const h = hex.replace('#', '');
     const full = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
@@ -1114,7 +1372,7 @@ function PressOption({ active, children, onClick, disabled, resolved, size = 'md
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onClick={() => { if (!disabled) onClick(); }}
-      className={`${fullWidth ? 'w-full' : ''} ${size === 'sm' ? 'rounded-xl px-3 py-2 text-sm' : 'rounded-2xl px-4 py-3'} border ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${
+      className={`${fullWidth ? 'w-full' : ''} ${size === 'xs' ? 'rounded-lg px-2 py-1.5 text-xs' : (size === 'sm' ? 'rounded-xl px-3 py-2 text-sm' : 'rounded-2xl px-4 py-3')} border ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${
         isGreen ? 'border-green-500/60 text-green-400'
         : isRed ? 'border-red-500/60 text-red-400'
         : (variant === 'black' ? 'border-white/10 text-white' : (active ? 'border-[#3c73ff] text-[#3c73ff]' : 'border-white/10 text-white'))
