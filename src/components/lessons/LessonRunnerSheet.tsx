@@ -87,12 +87,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     // загрузочный экран и предзагрузка заданий
     setLoading(true);
     (async () => {
-      // сначала попробуем из localStorage (кеш урока) — только v3
+      // сначала попробуем из localStorage (кеш урока) — v4
       let rows: any[] | null = null;
       try {
-        const v3Key = `exampli:lesson_tasks:v3:${lessonId}`;
-        const rawV3 = localStorage.getItem(v3Key);
-        if (rawV3) rows = JSON.parse(rawV3) as any[];
+        const v4Key = `exampli:lesson_tasks:v4:${lessonId}`;
+        const rawV4 = localStorage.getItem(v4Key);
+        if (rawV4) rows = JSON.parse(rawV4) as any[];
       } catch {}
       if (!rows || !Array.isArray(rows) || rows.length === 0) {
         const { data } = await supabase
@@ -109,7 +109,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           if (ao !== bo) return ao - bo;
           return Number(a?.id || 0) - Number(b?.id || 0);
         });
-        try { localStorage.setItem(`exampli:lesson_tasks:v3:${lessonId}`, JSON.stringify(rows)); } catch {}
+        try {
+          // сохраняем в v4 и удаляем старый v3, чтобы не путаться со старыми данными
+          localStorage.setItem(`exampli:lesson_tasks:v4:${lessonId}`, JSON.stringify(rows));
+          try { localStorage.removeItem(`exampli:lesson_tasks:v3:${lessonId}`); } catch {}
+        } catch {}
       }
       setTasks(rows as any);
       const base = (rows as any[]).slice(0, Math.min(PLANNED_COUNT, (rows as any[]).length));
@@ -850,7 +854,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               </div>
             )}
 
-            <div className="p-4 flex flex-col gap-4 pb-16 min-h-[78vh]">
+            <div className="p-4 flex flex-col gap-4 pb-[calc(env(safe-area-inset-bottom)+180px)] min-h-[78vh]">
               {loading ? (
                 <div className="flex flex-col items-center justify-center w-full min-h-[70vh]">
                   <img src="/lessons/loading_lesson.svg" alt="" className="w-full h-auto" />
