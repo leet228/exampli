@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { useEffect, useMemo, useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'painting';
   options: string[] | null;
   correct: string;
 };
@@ -327,6 +327,255 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return () => { cancel && cancel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task, connMap, status, viewKey]);
+
+  // ===== IT CODE editor state =====
+  const [codeLang, setCodeLang] = useState<'python' | 'cpp' | 'csharp' | 'java'>('python');
+  const [codeBy, setCodeBy] = useState<{ python: string; cpp: string; csharp: string; java: string }>({
+    python: '',
+    cpp: '',
+    csharp: '',
+    java: '',
+  });
+  const [codeOut, setCodeOut] = useState<string[]>([]);
+  const [codeRunning, setCodeRunning] = useState<boolean>(false);
+  const pyodideRef = useRef<any>(null);
+  const ensurePyodide = useCallback(async () => {
+    if (pyodideRef.current) return pyodideRef.current;
+    // загрузка скрипта Pyodide один раз
+    if (!(window as any).loadPyodide) {
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Pyodide load failed'));
+        document.head.appendChild(s);
+      });
+    }
+    const py = await (window as any).loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full' });
+    pyodideRef.current = py;
+    return py;
+  }, []);
+
+  // ===== Painting (рисовалка) =====
+  const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const paintBoxRef = useRef<HTMLDivElement | null>(null);
+  const PAINT_WORLD_W = 4096;
+  const PAINT_WORLD_H = 4096;
+  const PAINT_MIN_SCALE = 0.01; // слишком малый масштаб мешал рисованию
+  const PAINT_MAX_SCALE = 256;   // достаточно большой зум
+  const [paintTool, setPaintTool] = useState<'pen' | 'eraser'>('pen');
+  const [paintColor, setPaintColor] = useState<string>('#ffffff');
+  const [paintWidth, setPaintWidth] = useState<number>(4);
+  const [paintHasDraw, setPaintHasDraw] = useState<boolean>(false);
+  const paintDrawingRef = useRef<boolean>(false);
+  const paintLastRef = useRef<{ x: number; y: number } | null>(null);
+  const paintViewRef = useRef<HTMLDivElement | null>(null);
+  const [paintScale, setPaintScale] = useState<number>(1);
+  const [paintTx, setPaintTx] = useState<number>(0);
+  const [paintTy, setPaintTy] = useState<number>(0);
+  const [paintViewportH, setPaintViewportH] = useState<number>(260);
+  const paintPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const paintPinchRef = useRef<{
+    startDist: number;
+    startScale: number;
+    startTx: number;
+    startTy: number;
+    startCx: number;
+    startCy: number;
+  } | null>(null);
+  const paintInitRef = useRef<boolean>(false);
+
+  function resizePaintCanvas() {
+    const canvas = paintCanvasRef.current;
+    const box = paintBoxRef.current;
+    if (!canvas || !box) return;
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    // Рассчитываем высоту видимой области как раньше
+    const vw = Math.max(280, Math.round(box.clientWidth));
+    const vh = Math.max(220, Math.round(Math.min(360, Math.max(240, Math.floor(box.clientWidth * 0.5)))));
+    setPaintViewportH(vh);
+    // Огромный «мир» холста, видим только часть (overflow hidden)
+    const cssWidth = PAINT_WORLD_W;
+    const cssHeight = PAINT_WORLD_H;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
+    // Инициализация масштаба/центровки: показываем «нормальный» старт (как было изначально)
+    if (!paintInitRef.current) {
+      const vw = Math.max(280, Math.round(box.clientWidth));
+      const initScale = 1; // старт без сверхзумов — линии выглядят «не пиксельно»
+      setPaintScale(initScale);
+      const centerX = PAINT_WORLD_W / 2;
+      const centerY = PAINT_WORLD_H / 2;
+      const tx0 = vw / 2 - initScale * centerX;
+      const ty0 = vh / 2 - initScale * centerY;
+      setPaintTx(tx0);
+      setPaintTy(ty0);
+      paintInitRef.current = true;
+    }
+  }
+  function paintPointFromEvent(e: PointerEvent | React.PointerEvent): { x: number; y: number } {
+    const view = paintViewRef.current;
+    if (!view) return { x: 0, y: 0 };
+    const rect = view.getBoundingClientRect();
+    // Переводим координаты экрана в координаты «мира» (делим на масштаб)
+    const xw = (e.clientX - rect.left) / Math.max(0.0000001, paintScale);
+    const yw = (e.clientY - rect.top) / Math.max(0.0000001, paintScale);
+    // Ограничим в пределах канвы, иначе на сверх‑зуме могли уходить «мимо» и ничего не рисовалось
+    const x = Math.max(0, Math.min(PAINT_WORLD_W, xw));
+    const y = Math.max(0, Math.min(PAINT_WORLD_H, yw));
+    return { x, y };
+  }
+  function onPaintDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (status !== 'idle') return;
+    // touch pinch setup
+    if (e.pointerType === 'touch') {
+      paintPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (paintPointersRef.current.size === 2) {
+        const arr = Array.from(paintPointersRef.current.values());
+        const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+        const cx = (arr[0].x + arr[1].x) / 2;
+        const cy = (arr[0].y + arr[1].y) / 2;
+        paintPinchRef.current = { startDist: Math.max(1, d), startScale: paintScale, startTx: paintTx, startTy: paintTy, startCx: cx, startCy: cy };
+        paintDrawingRef.current = false; // во время пинча не рисуем
+        return;
+      }
+    }
+    try { (e.target as Element).setPointerCapture(e.pointerId); } catch {}
+    paintDrawingRef.current = true;
+    const p = paintPointFromEvent(e);
+    paintLastRef.current = p;
+    const ctx = paintCanvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = paintColor;
+    // Делаем толщину визуально постоянной относительно экрана
+    ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }
+  function onPaintMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    // pinch zoom with two fingers
+    if (e.pointerType === 'touch' && paintPointersRef.current.has(e.pointerId)) {
+      paintPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (paintPointersRef.current.size === 2 && paintPinchRef.current) {
+        const arr = Array.from(paintPointersRef.current.values());
+        const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+        const cx = (arr[0].x + arr[1].x) / 2;
+        const cy = (arr[0].y + arr[1].y) / 2;
+        const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * (d / Math.max(1, paintPinchRef.current.startDist))));
+        setPaintScale(nextScale);
+        // Панорамирование по смещению центра жеста
+        setPaintTx(paintPinchRef.current.startTx + (cx - paintPinchRef.current.startCx));
+        setPaintTy(paintPinchRef.current.startTy + (cy - paintPinchRef.current.startCy));
+        e.preventDefault();
+        return;
+      }
+    }
+    if (!paintDrawingRef.current) return;
+    const ctx = paintCanvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const p = paintPointFromEvent(e);
+    const last = paintLastRef.current || p;
+    // Обновляем толщину с учётом масштаба
+    ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    paintLastRef.current = p;
+    setPaintHasDraw(true);
+    e.preventDefault();
+  }
+  function onPaintUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (e.pointerType === 'touch') {
+      paintPointersRef.current.delete(e.pointerId);
+      if (paintPointersRef.current.size < 2) {
+        paintPinchRef.current = null;
+      }
+    }
+    paintDrawingRef.current = false;
+    paintLastRef.current = null;
+  }
+  function getPaintingDataURL(): string {
+    const canvas = paintCanvasRef.current;
+    if (!canvas) return '';
+    try { return canvas.toDataURL('image/png'); } catch { return ''; }
+  }
+  function clearPainting() {
+    const canvas = paintCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    setPaintHasDraw(false);
+  }
+  useEffect(() => {
+    if (task?.answer_type !== 'painting') return;
+    const fx = () => resizePaintCanvas();
+    fx();
+    window.addEventListener('resize', fx);
+    return () => window.removeEventListener('resize', fx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task, viewKey]);
+
+  const onPaintWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (status !== 'idle') return;
+    // Зум только с Alt (как просили); без Alt — игнорируем
+    if (e.altKey) {
+      const cx = e.clientX;
+      const cy = e.clientY;
+      e.preventDefault();
+      const factor = Math.pow(1.001, -e.deltaY);
+      setPaintScale(prev => {
+        const next = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, prev * factor));
+        const k = next / prev;
+        setPaintTx(tx => cx - k * (cx - tx));
+        setPaintTy(ty => cy - k * (cy - ty));
+        return next;
+      });
+    }
+  };
+  // Удалённый запуск через Piston (C++, C#, Java и т.д.)
+  const runRemote = useCallback(async (lang: 'cpp' | 'csharp' | 'java', source: string): Promise<string[]> => {
+    const map: Record<typeof lang, { language: string; filename: string }> = {
+      cpp: { language: 'cpp', filename: 'main.cpp' },
+      csharp: { language: 'csharp', filename: 'Program.cs' },
+      java: { language: 'java', filename: 'Main.java' },
+    } as const;
+    const meta = map[lang];
+    try {
+      const res = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: meta.language,
+          version: '*',
+          files: [{ name: meta.filename, content: source }],
+        }),
+      });
+      if (!res.ok) return [`Ошибка запуска (${lang}): ${res.status} ${res.statusText}`];
+      const data = await res.json();
+      const out: string[] = [];
+      if (data?.compile?.stdout) out.push(String(data.compile.stdout));
+      if (data?.compile?.stderr) out.push(String(data.compile.stderr));
+      if (data?.run?.stdout) out.push(String(data.run.stdout));
+      if (data?.run?.stderr) out.push(String(data.run.stderr));
+      if (out.length === 0) out.push('Готово.');
+      return out;
+    } catch (e: any) {
+      return [String(e?.message || e || 'Не удалось выполнить код удалённо')];
+    }
+  }, []);
   // Рендер текста c поддержкой **жирного** и *жирного*
   function renderWithBold(src: string): React.ReactNode[] {
     // Сначала обрабатываем двойные **...**, затем — одинарные *...* в «обычных» фрагментах
@@ -484,6 +733,49 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return s.split('|').map((x) => x.trim()).filter(Boolean);
   }
 
+  // Извлекаем CSV-таблицы из блоков (table) ... (table)
+  function extractCsvTables(src: string): Array<string[][]> {
+    const s = String(src || '');
+    if (!s) return [];
+    const re = /\(table\)([\s\S]*?)\(table\)/g;
+    const tables: Array<string[][]> = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s))) {
+      const inner = String(m[1] || '');
+      const lines = inner.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length === 0) continue;
+      const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
+      tables.push(rows);
+    }
+    return tables;
+  }
+
+  // Разбиваем task_text на чередующиеся сегменты текста и таблиц
+  function splitTextAndTables(src: string): Array<{ kind: 'text'; text: string } | { kind: 'table'; rows: string[][] }> {
+    const s = String(src || '');
+    if (!s) return [];
+    const re = /\(table\)([\s\S]*?)\(table\)/g;
+    const out: Array<{ kind: 'text'; text: string } | { kind: 'table'; rows: string[][] }> = [];
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s))) {
+      if (m.index > last) {
+        const textChunk = s.slice(last, m.index);
+        if (textChunk.trim().length > 0) out.push({ kind: 'text', text: textChunk });
+      }
+      const inner = String(m[1] || '');
+      const lines = inner.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
+      out.push({ kind: 'table', rows });
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) {
+      const tail = s.slice(last);
+      if (tail.trim().length > 0) out.push({ kind: 'text', text: tail });
+    }
+    return out;
+  }
+
   const canAnswer = useMemo(() => {
     if (!task) return false;
     if (task.answer_type === 'choice') return !!choice;
@@ -492,7 +784,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
     if (task.answer_type === 'input') return text.trim().length > 0;
-  if (task.answer_type === 'num_input') return text.trim().length > 0;
+    if (task.answer_type === 'num_input') return text.trim().length > 0;
+    if (task.answer_type === 'it_code') return text.trim().length > 0;
+    if (task.answer_type === 'painting') return text.trim().length > 0;
   if (task.answer_type === 'connections') {
     const left = parseMcOptions(task.task_text || '');
     if (left.length === 0) return false;
@@ -520,8 +814,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   function check(){
     if (!task) return;
     let user = '';
-  if (task.answer_type === 'text' || task.answer_type === 'input') user = text.trim();
-  else if (task.answer_type === 'num_input') user = text.trim().replace(/[^\d]/g, '');
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
+    else if (task.answer_type === 'num_input') user = text.trim().replace(/[^\d]/g, '');
+    else if (task.answer_type === 'painting') {
+      // для проверки используем текстовый ответ, изображение должно быть нарисовано
+      user = text.trim();
+    }
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -598,7 +896,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     // Проверка правильности
     let ok = false;
-  if (task.answer_type === 'text' || task.answer_type === 'input') {
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
       const userNorm = normalizeAnswer(user);
       const variants = parseAnswerList(task.correct || '');
       if (variants.length > 0) {
@@ -613,6 +911,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     } else {
       ok = user === String(task.correct || '').replace(/[^\d]/g, '');
     }
+    } else if (task.answer_type === 'painting') {
+      ok = paintHasDraw;
     } else {
       ok = user === (task.correct || '');
     }
@@ -710,6 +1010,20 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setStatus('idle');
     setStreakFlash(null);
     setShowT(false);
+    // Сброс редактора кода для нового вопроса
+    setCodeLang('python');
+    setCodeBy({ python: '', cpp: '', csharp: '', java: '' });
+    setCodeOut([]);
+    setCodeRunning(false);
+    // Сброс рисовалки
+    clearPainting();
+    setPaintTool('pen');
+    setPaintColor('#ffffff');
+    setPaintWidth(4);
+    setPaintScale(1);
+    setPaintTx(0);
+    setPaintTy(0);
+    paintInitRef.current = false;
     setViewKey((k) => k + 1);
   }
 
@@ -877,7 +1191,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                 />
               ) : task ? (
                 <>
-                  {(() => {
+                  {task.answer_type !== 'it_code' && (() => {
                     const { display, t } = parsePromptT(task.prompt || '');
                     return (
                       <div className="flex items-start justify-between gap-2">
@@ -939,7 +1253,33 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         className={`card text-left`}
                       >
                         <div className="text-lg leading-relaxed">
-                          {(task.answer_type === 'multiple_choice' || task.answer_type === 'connections') ? null : partsWithMarkers(task.task_text).map((p, i) => {
+                          {task.answer_type === 'it_code' ? (
+                            <div className="space-y-3">
+                              {(() => {
+                                const segs = splitTextAndTables(task.task_text || '');
+                                if (segs.length === 0) return renderTextLines(task.task_text || '', 'itc-empty');
+                                return segs.map((seg, i) => {
+                                  if (seg.kind === 'text') {
+                                    return (
+                                      <div key={`itc-t-${i}`} className="">
+                                        {renderTextLines(seg.text, `itc-t-${i}`)}
+                                      </div>
+                                    );
+                                  }
+                                  return <ItCodeTable key={`itc-tab-${i}`} rows={seg.rows} status={status} kind="task" />;
+                                });
+                              })()}
+                              {status !== 'idle' && (() => {
+                                const corrTables = extractCsvTables(task.correct || '');
+                                if (corrTables.length > 0) {
+                                  return corrTables.map((rows, ci) => (
+                                    <ItCodeTable key={`itc-c-${ci}`} rows={rows} status={status} kind="correct" />
+                                  ));
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          ) : ((task.answer_type === 'multiple_choice' || task.answer_type === 'connections') ? null : partsWithMarkers(task.task_text).map((p, i) => {
                         if (p.t === 'text') return renderTextLines(p.v || '', `t-${i}`);
                         if (p.t === 'blank') {
                           return (status === 'idle')
@@ -1008,7 +1348,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           );
                         }
                         return null;
-                        })}
+                        }))}
                         </div>
                       </motion.div>
                     </AnimatePresence>
@@ -1253,6 +1593,137 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
+                  {task.answer_type === 'painting' && (
+                    <div className="mt-auto mb-16">
+                      <div className="rounded-2xl bg-white/5 border border-white/10">
+                        {/* Панель инструментов */}
+                        <div className="flex items-center gap-2 p-2 border-b border-white/10 flex-wrap">
+                          <PressOption
+                            active={paintTool === 'pen'}
+                            onClick={() => setPaintTool('pen')}
+                            disabled={status !== 'idle'}
+                            resolved={null}
+                            size="xs"
+                            fullWidth={false}
+                            variant="default"
+                          >
+                            КАРАНДАШ
+                          </PressOption>
+                          <PressOption
+                            active={paintTool === 'eraser'}
+                            onClick={() => setPaintTool('eraser')}
+                            disabled={status !== 'idle'}
+                            resolved={null}
+                            size="xs"
+                            fullWidth={false}
+                            variant="default"
+                          >
+                            ЛАСТИК
+                          </PressOption>
+                          <div className="mx-1 h-6 w-px bg-white/10" />
+                          {['#ffffff', '#f87171', '#f59e0b', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa'].map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => { setPaintColor(c); setPaintTool('pen'); }}
+                              disabled={status !== 'idle'}
+                              aria-label={`Цвет ${c}`}
+                              className={`w-6 h-6 rounded-full border ${paintColor === c ? 'border-white' : 'border-white/20'} ${status !== 'idle' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              style={{ background: c }}
+                            />
+                          ))}
+                          <div className="ml-auto flex items-center gap-2">
+                            <span className="text-xs text-white/60">Толщина</span>
+                            {[2, 4, 6].map((w) => (
+                              <button
+                                key={`w-${w}`}
+                                type="button"
+                                onClick={() => setPaintWidth(w)}
+                                disabled={status !== 'idle'}
+                                className={`rounded-full border ${paintWidth === w ? 'border-white' : 'border-white/15'} px-2 py-1 text-xs ${status !== 'idle' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              >
+                                {w}px
+                              </button>
+                            ))}
+                            <div className="mx-1 h-6 w-px bg-white/10" />
+                            <PressOption
+                              active={false}
+                              onClick={() => { if (status === 'idle') clearPainting(); }}
+                              disabled={status !== 'idle'}
+                              resolved={null}
+                              size="xs"
+                              fullWidth={false}
+                              variant="default"
+                            >
+                              ОЧИСТИТЬ
+                            </PressOption>
+                          </div>
+                        </div>
+                        {/* Холст */}
+                        <div ref={paintBoxRef} className="p-2" onWheel={onPaintWheel}>
+                          <div className="rounded-xl border border-white/10 bg-black/40 overflow-hidden" style={{ height: paintViewportH }}>
+                            <div
+                              ref={paintViewRef}
+                              style={{ transform: `translate(${paintTx}px, ${paintTy}px) scale(${paintScale})`, transformOrigin: '0 0' }}
+                            >
+                              <canvas
+                                ref={paintCanvasRef}
+                                onPointerDown={onPaintDown}
+                                onPointerMove={onPaintMove}
+                                onPointerUp={onPaintUp}
+                                onPointerCancel={onPaintUp}
+                                className={`${status !== 'idle' ? 'pointer-events-none opacity-80' : ''}`}
+                                style={{ touchAction: 'none', display: 'block' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Редактор кода для it_code */}
+                  {task.answer_type === 'it_code' && (
+                    <div className="mt-4 mb-20">
+                      <CodeEditorPanel
+                        lang={codeLang}
+                        setLang={setCodeLang}
+                        code={codeBy[codeLang] || ''}
+                        onChange={(val) => setCodeBy(prev => ({ ...prev, [codeLang]: val }))}
+                        onRun={async () => {
+                          if (codeRunning) return;
+                          const currentCode = (codeBy[codeLang] || '').trim();
+                          setCodeOut([]);
+                          setCodeRunning(true);
+                          if (!currentCode) {
+                            setCodeOut([`Ошибка: код пуст.`, `Укажи решение и попробуй снова.`]);
+                            setCodeRunning(false);
+                            return;
+                          }
+                          if (codeLang === 'python') {
+                            try {
+                              const py = await ensurePyodide();
+                              // перенаправим stdout/stderr в консоль
+                              py.setStdout({ batched: (s: string) => { if (s) setCodeOut(prev => [...prev, s]); } });
+                              py.setStderr({ batched: (s: string) => { if (s) setCodeOut(prev => [...prev, s]); } });
+                              await py.runPythonAsync(currentCode);
+                            } catch (e: any) {
+                              setCodeOut(prev => [...prev, String(e?.message || e)]);
+                            } finally {
+                              setCodeRunning(false);
+                            }
+                          } else {
+                            const out = await runRemote(codeLang as any, currentCode);
+                            setCodeOut(out);
+                            setCodeRunning(false);
+                          }
+                        }}
+                        running={codeRunning}
+                        consoleLines={codeOut}
+                      />
+                    </div>
+                  )}
+
                   {task.answer_type === 'text' && !/(\(input_box\))/.test(task.task_text || '') && (
                     <input
                       value={text}
@@ -1284,12 +1755,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   </div>
                 )}
-                {task && (task.answer_type === 'input' || task.answer_type === 'num_input') && (
+                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code' || task.answer_type === 'painting') && (
                   <div className="px-4 mb-2">
                     <input
                       value={(() => {
                         if (status === 'wrong') {
-                          const vars = task.answer_type === 'num_input'
+                          const vars = (task.answer_type === 'num_input' || task.answer_type === 'painting')
                             ? parseAnswerPipe(task.correct || '')
                             : parseAnswerList(task.correct || '');
                           const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
@@ -1299,18 +1770,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       })()}
                       onChange={(e) => {
                         const raw = e.target.value || '';
-                        if (task.answer_type === 'num_input') {
+                        if (task.answer_type === 'num_input' || task.answer_type === 'painting') {
                           const filtered = raw.replace(/[^\d]+/g, '');
                           setText(filtered);
                         } else {
                           setText(raw);
                         }
                       }}
-                      placeholder={task.answer_type === 'num_input' ? 'Введи число...' : 'Напиши ответ...'}
+                      placeholder={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? 'Введи число...' : 'Напиши ответ...'}
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
-                      inputMode={task.answer_type === 'num_input' ? ('numeric' as any) : undefined}
-                      pattern={task.answer_type === 'num_input' ? '[0-9]*' : undefined}
+                      inputMode={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? ('numeric' as any) : undefined}
+                      pattern={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? '[0-9]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
@@ -1653,6 +2124,409 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
   );
 }
 
+// Текст, который автоматически подбирает размер шрифта под ширину контейнера
+function FitWidthText({ text, maxPx = 14, minPx = 10, className = '' }: { text: string; maxPx?: number; minPx?: number; className?: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const spanRef = useRef<HTMLSpanElement | null>(null);
+  const [fontPx, setFontPx] = useState<number>(maxPx);
+  const [nowrap, setNowrap] = useState<boolean>(true);
+
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    const span = spanRef.current;
+    if (!container || !span) return;
+    // Начинаем с максимального размера и уменьшаем пока не влезет в ширину
+    let size = maxPx;
+    setNowrap(true);
+    span.style.whiteSpace = 'nowrap';
+    span.style.wordBreak = 'normal';
+    span.style.fontSize = `${size}px`;
+    // ограничим кол-во итераций
+    let guard = 20;
+    while (guard-- > 0 && size > minPx && span.scrollWidth > container.clientWidth) {
+      size = Math.max(minPx, size - 1);
+      span.style.fontSize = `${size}px`;
+    }
+    setFontPx(size);
+    // Если даже на минимальном не влезает — разрешаем перенос слов
+    if (span.scrollWidth > container.clientWidth) {
+      setNowrap(false);
+      span.style.whiteSpace = 'normal';
+      span.style.wordBreak = 'break-word';
+    }
+  }, [maxPx, minPx, text]);
+
+  useLayoutEffect(() => { measure(); }, [measure, text]);
+  useEffect(() => {
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [measure]);
+
+  return (
+    <div ref={containerRef} className={className} style={{ width: '100%', overflow: 'hidden' }}>
+      <span
+        ref={spanRef}
+        style={{ display: 'block', fontSize: `${fontPx}px`, lineHeight: 1.2, whiteSpace: nowrap ? 'nowrap' : 'normal', wordBreak: nowrap ? 'normal' : 'break-word' }}
+        title={text}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+// Рендер CSV-таблицы для it_code
+function ItCodeTable({ rows, status, kind = 'task' }: { rows: string[][]; status: 'idle' | 'correct' | 'wrong'; kind?: 'task' | 'correct' }) {
+  if (!rows || rows.length === 0) return null as any;
+  const cols = rows.reduce((m, r) => Math.max(m, r?.length || 0), 0);
+  const resolvedClass = (kind === 'correct' && status !== 'idle')
+    ? (status === 'correct'
+        ? 'border-green-500/60 bg-green-600/10 text-green-400'
+        : 'border-red-500/60 bg-red-600/10 text-red-400')
+    : 'border-white/10 bg-white/5';
+  const header = rows[0] || [];
+  const body = rows.slice(1);
+  return (
+    <div className={`rounded-2xl border ${resolvedClass} p-2 overflow-x-auto block w-full`}>
+      <table className="w-full text-sm border-separate border-spacing-0 table-fixed">
+        <colgroup>
+          {new Array(cols).fill(0).map((_, i) => (
+            <col key={`col-${i}`} style={{ width: `${(100 / Math.max(1, cols)).toFixed(4)}%` }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            {new Array(cols).fill(0).map((_, i) => (
+              <th key={`h-${i}`} className="px-2 py-1 bg-white/10 border border-white/10 text-left align-top">
+                <FitWidthText text={(header[i] ?? '')} maxPx={14} minPx={10} className="font-extrabold" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((r, ri) => (
+            <tr key={`r-${ri}`}>
+              {new Array(cols).fill(0).map((_, ci) => (
+                <td key={`c-${ri}-${ci}`} className="px-2 py-1 border border-white/10 align-top whitespace-normal break-all">
+                  {(r[ci] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ========= Простой редактор кода с подсветкой и нумерацией строк =========
+function CodeEditorPanel({
+  lang, setLang, code, onChange, onRun, running, consoleLines,
+}: {
+  lang: 'python' | 'cpp' | 'csharp' | 'java';
+  setLang: (l: 'python' | 'cpp' | 'csharp' | 'java') => void;
+  code: string;
+  onChange: (v: string) => void;
+  onRun: () => void;
+  running: boolean;
+  consoleLines: string[];
+}) {
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
+  const preRef = useRef<HTMLPreElement | null>(null);
+  const gutterRef = useRef<HTMLPreElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState<number>(0);
+  const [scrollLeft, setScrollLeft] = useState<number>(0);
+  const measureRef = useRef<HTMLSpanElement | null>(null);
+  const [charWidth, setCharWidth] = useState<number>(8);
+  const lineHeight = 22;
+  const editorHeight = 320;
+  const [sel, setSel] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+
+  const lineCount = Math.max(1, (code.match(/\n/g)?.length || 0) + 1);
+  const gutterLines = useMemo(() => new Array(lineCount).fill(0).map((_, i) => String(i + 1)), [lineCount]);
+  const gutterDigits = useMemo(() => Math.max(2, String(lineCount).length), [lineCount]);
+  const gutterWidth = useMemo(() => Math.max(28, Math.round(charWidth * gutterDigits + 12)), [charWidth, gutterDigits]);
+
+  const setScroll = (st: number, sl: number) => {
+    setScrollTop(st);
+    setScrollLeft(sl);
+  };
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setScroll(el.scrollTop, el.scrollLeft);
+  };
+
+  const highlighted = useMemo(() => {
+    return highlightCode(lang, code);
+  }, [lang, code]);
+
+  // Измеряем ширину символа для корректной отрисовки выделения
+  useLayoutEffect(() => {
+    const m = measureRef.current;
+    if (!m) return;
+    const sample = 'MMMMMMMMMM';
+    m.textContent = sample;
+    const w = m.getBoundingClientRect().width / sample.length;
+    if (Number.isFinite(w) && w > 0) setCharWidth(w);
+  }, [lang]);
+
+  // Работа с выделением текста
+  const captureSelection = () => {
+    const el = textRef.current;
+    if (!el) return;
+    const start = Math.max(0, el.selectionStart || 0);
+    const end = Math.max(0, el.selectionEnd || 0);
+    setSel(start <= end ? { start, end } : { start: end, end: start });
+  };
+  const onKeyUp = () => captureSelection();
+  const onMouseUp = () => captureSelection();
+  const onSelect = () => captureSelection();
+
+  const selectionRects = useMemo(() => {
+    if (!code || sel.start === sel.end) return [] as Array<{ top: number; left: number; width: number }>;
+    const lines = code.split('\n');
+    const rects: Array<{ top: number; left: number; width: number }> = [];
+    const toLineCol = (offset: number): { line: number; col: number } => {
+      let rem = offset;
+      for (let i = 0; i < lines.length; i++) {
+        const len = (lines[i] ?? '').length;
+        if (rem <= len) return { line: i, col: rem };
+        rem -= (len + 1);
+      }
+      return { line: lines.length - 1, col: (lines[lines.length - 1] ?? '').length };
+    };
+    const a = toLineCol(sel.start);
+    const b = toLineCol(sel.end);
+    const startLine = Math.min(a.line, b.line);
+    const endLine = Math.max(a.line, b.line);
+    const startCol = (a.line <= b.line) ? a.col : b.col;
+    const endCol = (a.line <= b.line) ? b.col : a.col;
+    for (let li = startLine; li <= endLine; li++) {
+      const isFirst = li === startLine;
+      const isLast = li === endLine;
+      const lineText = lines[li] ?? '';
+      const fromCol = isFirst ? startCol : 0;
+      const toCol = isLast ? endCol : lineText.length;
+      if (toCol > fromCol) {
+        rects.push({
+          top: li * lineHeight,
+          left: fromCol * charWidth,
+          width: (toCol - fromCol) * charWidth,
+        });
+      }
+    }
+    return rects;
+  }, [code, sel, charWidth]);
+
+  // Прокрутка контейнера так, чтобы каретка была видна; при alignLeft=true возвращаем горизонталь влево
+  function ensureCaretVisible(text: string, pos: number, alignLeft = false) {
+    const container = scrollRef.current;
+    if (!container) return;
+    const before = text.slice(0, pos);
+    const lineIndex = (before.match(/\n/g) || []).length;
+    const lineTop = lineIndex * lineHeight;
+    const lineBottom = lineTop + lineHeight;
+    let nextTop = container.scrollTop;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + editorHeight;
+    if (lineTop < viewTop) nextTop = lineTop;
+    else if (lineBottom > viewBottom) nextTop = lineBottom - editorHeight;
+    const nextLeft = alignLeft ? 0 : container.scrollLeft;
+    container.scrollTo({ top: nextTop, left: nextLeft, behavior: 'auto' });
+    setScroll(nextTop, nextLeft);
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5">
+      {/* Tabs */}
+      <div className="flex items-center gap-2 p-2 border-b border-white/10">
+        {(['python','cpp','csharp','java'] as const).map((l) => (
+          <PressOption
+            key={l}
+            active={lang === l}
+            onClick={() => setLang(l)}
+            disabled={false}
+            resolved={null}
+            size="xs"
+            fullWidth={false}
+            variant="default"
+          >
+            {l === 'python' ? 'Python' : (l === 'cpp' ? 'C++' : (l === 'csharp' ? 'C#' : 'Java'))}
+          </PressOption>
+        ))}
+      </div>
+      {/* Editor */}
+      <div className="relative" style={{ height: editorHeight }}>
+        <div ref={scrollRef} className="absolute inset-0 overflow-auto" onScroll={onScroll}>
+          <div className="grid min-w-full" style={{ gridTemplateColumns: `${gutterWidth}px 1fr` }}>
+            {/* Line numbers gutter */}
+            <pre
+              ref={gutterRef}
+              className="m-0 p-3 pr-1 text-right border-r border-white/10 text-white/60 select-none"
+              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace', lineHeight: '22px' }}
+            >
+              {gutterLines.join('\n')}
+            </pre>
+            {/* Code column */}
+            <div className="relative">
+              {/* local highlight styles */}
+              <style
+                dangerouslySetInnerHTML={{ __html: `.hl-str{color:#34d399}.hl-cmt{color:#9ca3af}.hl-num{color:#f59e0b}.hl-kw{color:#60a5fa;font-weight:600}` }}
+              />
+              <pre
+                ref={preRef}
+                className="m-0 p-3"
+                style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace', lineHeight: '22px', whiteSpace: 'pre' }}
+                dangerouslySetInnerHTML={{ __html: highlighted }}
+              />
+              {/* selection overlay */}
+              <div className="absolute inset-0 pointer-events-none" style={{ padding: 12 }}>
+                {selectionRects.map((r, i) => (
+                  <div key={`sel-${i}`} style={{ position: 'absolute', top: r.top, left: r.left, width: r.width, height: lineHeight, background: 'rgba(60,115,255,0.28)' }} />
+                ))}
+              </div>
+              {/* input layer */}
+              <textarea
+                ref={textRef}
+                value={code}
+                onChange={(e) => { onChange(e.target.value); captureSelection(); }}
+                onKeyDown={(e) => {
+                  const el = textRef.current;
+                  if (!el) return;
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = el.selectionStart || 0;
+                    const end = el.selectionEnd || 0;
+                    const insert = '  ';
+                    const next = code.slice(0, start) + insert + code.slice(end);
+                    onChange(next);
+                    requestAnimationFrame(() => { try { el.setSelectionRange(start + insert.length, start + insert.length); } catch {} });
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const start = el.selectionStart || 0;
+                    const before = code.slice(0, start);
+                    const after = code.slice(el.selectionEnd || start);
+                    const prevLineStart = before.lastIndexOf('\n') + 1;
+                    const prevLine = before.slice(prevLineStart);
+                    const baseIndentMatch = prevLine.match(/^[\\t ]*/);
+                    let indent = baseIndentMatch ? baseIndentMatch[0] : '';
+                    const trimmed = prevLine.trim();
+                    if (lang === 'python') {
+                      if (/[=:]\\s*$/.test(prevLine) || trimmed.endsWith(':')) indent += '  ';
+                    } else {
+                      if (trimmed.endsWith('{')) indent += '  ';
+                      if (/^\\}/.test(after)) indent = indent.replace(/ {1,2}$/, '');
+                    }
+                    const insert = '\n' + indent;
+                    const next = before + insert + after;
+                    onChange(next);
+                    requestAnimationFrame(() => {
+                      const pos = start + insert.length;
+                      try { el.setSelectionRange(pos, pos); } catch {}
+                      try { ensureCaretVisible(next, pos, true); } catch {}
+                    });
+                  }
+                }}
+                onKeyUp={onKeyUp}
+                onMouseUp={onMouseUp}
+                onSelect={onSelect}
+                spellCheck={false}
+                className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none border-0 text-transparent caret-white p-3"
+                wrap="off"
+                style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace', lineHeight: '22px', whiteSpace: 'pre', overflow: 'hidden' }}
+              />
+              <span ref={measureRef} className="invisible absolute left-0 top-0" aria-hidden style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Run button */}
+      <div className="p-2 border-t border-white/10">
+        <div className="max-w-[640px] mx-auto">
+          <PressCta text={running ? 'запуск...' : 'запустить'} onClick={() => { if (!running) onRun(); }} baseColor="#3c73ff" disabled={running} />
+        </div>
+      </div>
+      {/* Console */}
+      <div className="p-2 pt-0">
+        <div className="rounded-2xl border border-white/10 bg-black/60 p-3 min-h-[80px] max-h-[220px] overflow-auto font-mono text-sm">
+          {consoleLines.length === 0 ? (
+            <div className="text-white/40">Консоль пуста. Нажми «запустить», чтобы увидеть вывод.</div>
+          ) : (
+            <pre className="whitespace-pre-wrap break-words m-0">{consoleLines.join('\n')}</pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function highlightCode(lang: 'python' | 'cpp' | 'csharp' | 'java', code: string): string {
+  const raw = String(code ?? '');
+  // 1) Выносим строки и комментарии в плейсхолдеры (чтобы внутри них не подсвечивать ключевые слова/числа)
+  const strings: string[] = [];
+  const comments: string[] = [];
+  let masked = raw.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, (m) => {
+    strings.push(m);
+    const tok = String.fromCharCode(0xe000 + (strings.length - 1)); // приватный диапазон Юникода
+    return tok;
+  });
+  if (lang === 'python') {
+    masked = masked.replace(/#.*$/gm, (m) => {
+      comments.push(m);
+      const tok = String.fromCharCode(0xe100 + (comments.length - 1));
+      return tok;
+    });
+  } else {
+    masked = masked
+      .replace(/\/\/.*$/gm, (m) => {
+        comments.push(m);
+        const tok = String.fromCharCode(0xe100 + (comments.length - 1));
+        return tok;
+      })
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => {
+        comments.push(m);
+        const tok = String.fromCharCode(0xe100 + (comments.length - 1));
+        return tok;
+      });
+  }
+  // 2) Экранируем HTML
+  let src = escapeHtml(masked);
+  // 3) Подсвечиваем ключевые слова и числа (теперь плейсхолдеры не мешают)
+  const kw = (() => {
+    if (lang === 'python') return ['class','def','return','if','else','elif','for','while','try','except','import','from','as','with','lambda','pass','break','continue','yield','True','False','None'];
+    if (lang === 'cpp') return ['int','float','double','char','bool','void','auto','string','class','struct','return','if','else','for','while','switch','case','break','continue','new','delete','public','private','protected','virtual','static','const','using','namespace','include'];
+    if (lang === 'csharp') return ['int','string','var','class','struct','enum','interface','using','namespace','public','private','protected','internal','static','const','readonly','void','return','new','if','else','for','foreach','while','switch','case','break','continue','try','catch','finally'];
+    return ['int','double','float','char','boolean','void','class','interface','enum','package','import','public','private','protected','static','final','new','return','if','else','for','while','switch','case','break','continue','try','catch','finally'];
+  })();
+  const kwRe = new RegExp(`\\b(${kw.join('|')})\\b`, 'g');
+  src = src.replace(kwRe, (_m, k) => `<span class="hl-kw">${k}</span>`);
+  src = src.replace(/\b(\d+(?:\.\d+)?)\b/g, (_m, d) => `<span class="hl-num">${d}</span>`);
+  // 4) Возвращаем строки и комментарии на место с подсветкой
+  for (let i = 0; i < strings.length; i++) {
+    const tok = String.fromCharCode(0xe000 + i);
+    const html = `<span class="hl-str">${escapeHtml(strings[i])}</span>`;
+    src = src.split(tok).join(html);
+  }
+  for (let i = 0; i < comments.length; i++) {
+    const tok = String.fromCharCode(0xe100 + i);
+    const html = `<span class="hl-cmt">${escapeHtml(comments[i])}</span>`;
+    src = src.split(tok).join(html);
+  }
+  return src || '&nbsp;';
+}
 /* ===== Экран завершения урока ===== */
 function FinishOverlay({ answersTotal, answersCorrect, hadAnyMistakes, elapsedMs, onDone, onReady, canProceed }: { answersTotal: number; answersCorrect: number; hadAnyMistakes: boolean; elapsedMs: number; onDone: () => void; onReady: () => void; canProceed: boolean }) {
   // Проигрываем звук завершения при показе экрана результатов
