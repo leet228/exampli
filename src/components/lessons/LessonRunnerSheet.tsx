@@ -901,7 +901,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let ok = false;
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') {
       const userNorm = normalizeAnswer(user);
-      const variants = parseAnswerList(task.correct || '');
+      let variants = parseAnswerList(task.correct || '');
+      // Для it_code поддерживаем и разделитель "|" на случай разных форматов
+      if (task.answer_type === 'it_code') {
+        const pipe = parseAnswerPipe(task.correct || '');
+        if (pipe.length > 0) {
+          const set = new Set<string>(variants.map(v => v));
+          for (const p of pipe) if (!set.has(p)) variants.push(p);
+        }
+      }
       if (variants.length > 0) {
         ok = variants.some((v) => normalizeAnswer(v) === userNorm);
       } else {
@@ -1695,8 +1703,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
-                  {/* Редактор кода для it_code */}
-                  {task.answer_type === 'it_code' && (
+                  {/* Редактор кода для it_code / it_code_2 */}
+                  {(task.answer_type === 'it_code' || task.answer_type === 'it_code_2') && (
                     <div className="mt-4 mb-20">
                       <CodeEditorPanel
                         lang={codeLang}
@@ -1737,60 +1745,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
-                  {/* Два поля ответа для it_code_2 */}
-                  {task.answer_type === 'it_code_2' && (
-                    <div className="mt-4 mb-20">
-                      <div className="grid gap-3 max-w-[640px] mx-auto">
-                        <input
-                          value={status === 'idle' ? itc2Top : (() => {
-                            const parts = String(task.correct || '').split('&');
-                            return String(parts[0] || '').trim().replace(/[^\d]+/g, '');
-                          })()}
-                          onChange={(e) => {
-                            const raw = e.target.value || '';
-                            const filtered = raw.replace(/[^\d]+/g, '');
-                            setItc2Top(filtered);
-                          }}
-                          placeholder="Верхний ответ..."
-                          aria-label="Верхний ответ"
-                          disabled={status !== 'idle'}
-                          inputMode={'numeric' as any}
-                          pattern={'[0-9]*'}
-                          className={`w-full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
-                            status === 'correct'
-                              ? 'border border-green-500/60 bg-green-600/10 text-green-400'
-                              : (status === 'wrong'
-                                  ? 'border border-red-500/60 bg-red-600/10 text-red-400'
-                                  : 'bg-white/5 border border-white/10')
-                          }`}
-                        />
-                        <input
-                          value={status === 'idle' ? itc2Bottom : (() => {
-                            const parts = String(task.correct || '').split('&');
-                            return String(parts[1] || '').trim().replace(/[^\d]+/g, '');
-                          })()}
-                          onChange={(e) => {
-                            const raw = e.target.value || '';
-                            const filtered = raw.replace(/[^\d]+/g, '');
-                            setItc2Bottom(filtered);
-                          }}
-                          placeholder="Нижний ответ..."
-                          aria-label="Нижний ответ"
-                          disabled={status !== 'idle'}
-                          inputMode={'numeric' as any}
-                          pattern={'[0-9]*'}
-                          className={`w-full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
-                            status === 'correct'
-                              ? 'border border-green-500/60 bg-green-600/10 text-green-400'
-                              : (status === 'wrong'
-                                  ? 'border border-red-500/60 bg-red-600/10 text-red-400'
-                                  : 'bg-white/5 border border-white/10')
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  )}
-
                   {task.answer_type === 'text' && !/(\(input_box\))/.test(task.task_text || '') && (
                     <input
                       value={text}
@@ -1827,9 +1781,19 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     <input
                       value={(() => {
                         if (status === 'wrong') {
-                          const vars = (task.answer_type === 'num_input')
-                            ? parseAnswerPipe(task.correct || '')
-                            : parseAnswerList(task.correct || '');
+                          let vars: string[] = [];
+                          if (task.answer_type === 'num_input') {
+                            vars = parseAnswerPipe(task.correct || '');
+                          } else if (task.answer_type === 'it_code') {
+                            const list = parseAnswerList(task.correct || '');
+                            const pipe = parseAnswerPipe(task.correct || '');
+                            const set = new Set<string>();
+                            for (const v of list) { const vv = v.trim(); if (vv) set.add(vv); }
+                            for (const v of pipe) { const vv = v.trim(); if (vv) set.add(vv); }
+                            vars = Array.from(set);
+                          } else {
+                            vars = parseAnswerList(task.correct || '');
+                          }
                           const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
                           return disp;
                         }
@@ -1850,6 +1814,56 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       inputMode={(task.answer_type === 'num_input') ? ('numeric' as any) : undefined}
                       pattern={(task.answer_type === 'num_input') ? '[0-9]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                        status === 'correct'
+                          ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                          : (status === 'wrong'
+                              ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                              : 'bg-white/5 border border-white/10')
+                      }`}
+                    />
+                  </div>
+                )}
+                {task && task.answer_type === 'it_code_2' && (
+                  <div className="px-4 mb-2 max-w-[640px] mx-auto grid gap-2">
+                    <input
+                      value={status === 'idle' ? itc2Top : (() => {
+                        const parts = String(task.correct || '').split('&');
+                        return String(parts[0] || '').trim().replace(/[^\d]+/g, '');
+                      })()}
+                      onChange={(e) => {
+                        const raw = e.target.value || '';
+                        const filtered = raw.replace(/[^\d]+/g, '');
+                        setItc2Top(filtered);
+                      }}
+                      placeholder="Верхний ответ..."
+                      aria-label="Верхний ответ"
+                      disabled={status !== 'idle'}
+                      inputMode={'numeric' as any}
+                      pattern={'[0-9]*'}
+                      className={`w-full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                        status === 'correct'
+                          ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                          : (status === 'wrong'
+                              ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                              : 'bg-white/5 border border-white/10')
+                      }`}
+                    />
+                    <input
+                      value={status === 'idle' ? itc2Bottom : (() => {
+                        const parts = String(task.correct || '').split('&');
+                        return String(parts[1] || '').trim().replace(/[^\d]+/g, '');
+                      })()}
+                      onChange={(e) => {
+                        const raw = e.target.value || '';
+                        const filtered = raw.replace(/[^\d]+/g, '');
+                        setItc2Bottom(filtered);
+                      }}
+                      placeholder="Нижний ответ..."
+                      aria-label="Нижний ответ"
+                      disabled={status !== 'idle'}
+                      inputMode={'numeric' as any}
+                      pattern={'[0-9]*'}
+                      className={`w/full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
                           : (status === 'wrong'
