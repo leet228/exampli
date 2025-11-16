@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'painting';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'it_code_2' | 'painting';
   options: string[] | null;
   correct: string;
 };
@@ -128,6 +128,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setProgress(0);
       setChoice(null);
       setText('');
+      setItc2Top('');
+      setItc2Bottom('');
       setLettersSel([]);
       setSelectedCard(null);
       setCardBoxRect(null);
@@ -339,6 +341,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [codeOut, setCodeOut] = useState<string[]>([]);
   const [codeRunning, setCodeRunning] = useState<boolean>(false);
   const pyodideRef = useRef<any>(null);
+  // it_code_2: два поля ввода (верх/низ)
+  const [itc2Top, setItc2Top] = useState<string>('');
+  const [itc2Bottom, setItc2Bottom] = useState<string>('');
   const ensurePyodide = useCallback(async () => {
     if (pyodideRef.current) return pyodideRef.current;
     // загрузка скрипта Pyodide один раз
@@ -460,6 +465,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
+    try { e.preventDefault(); } catch {}
   }
   function onPaintMove(e: React.PointerEvent<HTMLCanvasElement>) {
     // pinch zoom with two fingers
@@ -786,7 +792,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'input') return text.trim().length > 0;
     if (task.answer_type === 'num_input') return text.trim().length > 0;
     if (task.answer_type === 'it_code') return text.trim().length > 0;
-    if (task.answer_type === 'painting') return text.trim().length > 0;
+    if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
+    if (task.answer_type === 'painting') return paintHasDraw;
   if (task.answer_type === 'connections') {
     const left = parseMcOptions(task.task_text || '');
     if (left.length === 0) return false;
@@ -794,7 +801,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return connMap.every((v) => Number.isFinite(v) && (v as any) > 0);
   }
     return false;
-}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap]);
+}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -816,10 +823,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
     else if (task.answer_type === 'num_input') user = text.trim().replace(/[^\d]/g, '');
-    else if (task.answer_type === 'painting') {
-      // для проверки используем текстовый ответ, изображение должно быть нарисовано
-      user = text.trim();
-    }
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -896,7 +899,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     // Проверка правильности
     let ok = false;
-    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') {
       const userNorm = normalizeAnswer(user);
       const variants = parseAnswerList(task.correct || '');
       if (variants.length > 0) {
@@ -911,6 +914,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     } else {
       ok = user === String(task.correct || '').replace(/[^\d]/g, '');
     }
+    } else if (task.answer_type === 'it_code_2') {
+      const san = (s: string) => String(s || '').trim().replace(/[^\d]+/g, '');
+      const parts = String(task.correct || '').split('&');
+      const expTop = san(parts[0] || '');
+      const expBot = san(parts[1] || '');
+      const userTop = san(itc2Top);
+      const userBot = san(itc2Bottom);
+      ok = (userTop === expTop) && (userBot === expBot);
     } else if (task.answer_type === 'painting') {
       ok = paintHasDraw;
     } else {
@@ -1001,6 +1012,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     setChoice(null);
     setText('');
+    setItc2Top('');
+    setItc2Bottom('');
     setLettersSel([]);
     setSelectedCard(null);
     setMultiSel([]);
@@ -1253,7 +1266,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         className={`card text-left`}
                       >
                         <div className="text-lg leading-relaxed">
-                          {task.answer_type === 'it_code' ? (
+                          {(task.answer_type === 'it_code' || task.answer_type === 'it_code_2') ? (
                             <div className="space-y-3">
                               {(() => {
                                 const segs = splitTextAndTables(task.task_text || '');
@@ -1724,6 +1737,60 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   )}
 
+                  {/* Два поля ответа для it_code_2 */}
+                  {task.answer_type === 'it_code_2' && (
+                    <div className="mt-4 mb-20">
+                      <div className="grid gap-3 max-w-[640px] mx-auto">
+                        <input
+                          value={status === 'idle' ? itc2Top : (() => {
+                            const parts = String(task.correct || '').split('&');
+                            return String(parts[0] || '').trim().replace(/[^\d]+/g, '');
+                          })()}
+                          onChange={(e) => {
+                            const raw = e.target.value || '';
+                            const filtered = raw.replace(/[^\d]+/g, '');
+                            setItc2Top(filtered);
+                          }}
+                          placeholder="Верхний ответ..."
+                          aria-label="Верхний ответ"
+                          disabled={status !== 'idle'}
+                          inputMode={'numeric' as any}
+                          pattern={'[0-9]*'}
+                          className={`w-full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                            status === 'correct'
+                              ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                              : (status === 'wrong'
+                                  ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                                  : 'bg-white/5 border border-white/10')
+                          }`}
+                        />
+                        <input
+                          value={status === 'idle' ? itc2Bottom : (() => {
+                            const parts = String(task.correct || '').split('&');
+                            return String(parts[1] || '').trim().replace(/[^\d]+/g, '');
+                          })()}
+                          onChange={(e) => {
+                            const raw = e.target.value || '';
+                            const filtered = raw.replace(/[^\d]+/g, '');
+                            setItc2Bottom(filtered);
+                          }}
+                          placeholder="Нижний ответ..."
+                          aria-label="Нижний ответ"
+                          disabled={status !== 'idle'}
+                          inputMode={'numeric' as any}
+                          pattern={'[0-9]*'}
+                          className={`w-full rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
+                            status === 'correct'
+                              ? 'border border-green-500/60 bg-green-600/10 text-green-400'
+                              : (status === 'wrong'
+                                  ? 'border border-red-500/60 bg-red-600/10 text-red-400'
+                                  : 'bg-white/5 border border-white/10')
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {task.answer_type === 'text' && !/(\(input_box\))/.test(task.task_text || '') && (
                     <input
                       value={text}
@@ -1755,12 +1822,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   </div>
                 )}
-                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code' || task.answer_type === 'painting') && (
+                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code') && (
                   <div className="px-4 mb-2">
                     <input
                       value={(() => {
                         if (status === 'wrong') {
-                          const vars = (task.answer_type === 'num_input' || task.answer_type === 'painting')
+                          const vars = (task.answer_type === 'num_input')
                             ? parseAnswerPipe(task.correct || '')
                             : parseAnswerList(task.correct || '');
                           const disp = (vars.length > 0 ? vars : [task.correct || '']).filter(Boolean).join(' | ');
@@ -1770,18 +1837,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       })()}
                       onChange={(e) => {
                         const raw = e.target.value || '';
-                        if (task.answer_type === 'num_input' || task.answer_type === 'painting') {
+                        if (task.answer_type === 'num_input') {
                           const filtered = raw.replace(/[^\d]+/g, '');
                           setText(filtered);
                         } else {
                           setText(raw);
                         }
                       }}
-                      placeholder={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? 'Введи число...' : 'Напиши ответ...'}
+                      placeholder={(task.answer_type === 'num_input') ? 'Введи число...' : 'Напиши ответ...'}
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
-                      inputMode={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? ('numeric' as any) : undefined}
-                      pattern={(task.answer_type === 'num_input' || task.answer_type === 'painting') ? '[0-9]*' : undefined}
+                      inputMode={(task.answer_type === 'num_input') ? ('numeric' as any) : undefined}
+                      pattern={(task.answer_type === 'num_input') ? '[0-9]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
