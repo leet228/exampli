@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       online = fallbackCount || 0
     }
 
-    // new24h: created_at within 24h
+    // new24h: created_at within 24hasdasd
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { count: new24h, error: e3 } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', dayAgo)
     if (e3) { res.status(500).json({ error: e3.message }); return }
