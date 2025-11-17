@@ -394,7 +394,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const canvas = paintCanvasRef.current;
     const box = paintBoxRef.current;
     if (!canvas || !box) return;
-    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    // Важно: держим DPR=1 для огромного холста 4096x4096, чтобы не вылетать за лимиты iOS/Telegram WebView
+    // 4096*4096 уже ~16.7М пикселей; при DPR>1 будет слишком много памяти, и рисование может «не отображаться»
+    const dpr = 1;
     // Рассчитываем высоту видимой области как раньше
     const vw = Math.max(280, Math.round(box.clientWidth));
     const vh = Math.max(220, Math.round(Math.min(360, Math.max(240, Math.floor(box.clientWidth * 0.5)))));
@@ -411,6 +413,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      ctx.strokeStyle = paintColor;
+      ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
     }
     // Инициализация масштаба/центровки: показываем «нормальный» старт (как было изначально)
     if (!paintInitRef.current) {
