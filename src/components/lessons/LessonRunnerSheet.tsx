@@ -479,6 +479,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
+    // Нарисуем минимальную «точку», чтобы штрих был виден сразу
+    ctx.lineTo(p.x + 0.001, p.y + 0.001);
+    ctx.stroke();
     try { e.preventDefault(); } catch {}
   }
   function onPaintMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -506,7 +509,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const last = paintLastRef.current || p;
     // Обновляем толщину с учётом масштаба
     ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.strokeStyle = paintColor;
     ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    // Рисуем отрезок last→p, чтобы штрих всегда был виден
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
     paintLastRef.current = p;
@@ -548,6 +555,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
+    // Мини-точка для момента касания
+    ctx.lineTo(p.x + 0.001, p.y + 0.001);
+    ctx.stroke();
     e.preventDefault();
   }
   function onTouchMoveCanvas(e: React.TouchEvent<HTMLCanvasElement>) {
@@ -570,7 +580,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const p = paintPointFromClient(t.clientX, t.clientY);
     const last = paintLastRef.current || p;
     ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.strokeStyle = paintColor;
     ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    // Рисуем отрезок last→p
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
     paintLastRef.current = p;
@@ -871,7 +885,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'num_input') return text.trim().length > 0;
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
-    if (task.answer_type === 'painting') return paintHasDraw;
+    if (task.answer_type === 'painting') return text.trim().length > 0;
   if (task.answer_type === 'connections') {
     const left = parseMcOptions(task.task_text || '');
     if (left.length === 0) return false;
@@ -974,10 +988,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const left = parseMcOptions(task.task_text || '');
     const mapSafe = connMap.slice(0, left.length).map(v => Math.max(0, Number(v) || 0));
     user = mapSafe.join('');
-    }
+  } else if (task.answer_type === 'painting') {
+      user = text.trim();
+  }
     // Проверка правильности
     let ok = false;
-    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') {
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
       const userNorm = normalizeAnswer(user);
       let variants = parseAnswerList(task.correct || '');
       // Для it_code поддерживаем и разделитель "|" на случай разных форматов
@@ -1008,8 +1024,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const userTop = san(itc2Top);
       const userBot = san(itc2Bottom);
       ok = (userTop === expTop) && (userBot === expBot);
-    } else if (task.answer_type === 'painting') {
-      ok = paintHasDraw;
     } else {
       ok = user === (task.correct || '');
     }
@@ -1858,7 +1872,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   </div>
                 )}
-                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code') && (
+                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code' || task.answer_type === 'painting') && (
                   <div className="px-4 mb-2">
                     <input
                       value={(() => {
