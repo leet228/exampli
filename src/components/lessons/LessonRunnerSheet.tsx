@@ -453,7 +453,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         return;
       }
     }
-    try { (e.target as Element).setPointerCapture(e.pointerId); } catch {}
+    // На iOS/Android pointer capture для touch иногда ломает доставку move-событий.
+    // Для мыши оставляем, для touch — не используем.
+    try { if (e.pointerType !== 'touch') (e.target as Element).setPointerCapture(e.pointerId); } catch {}
     paintDrawingRef.current = true;
     const p = paintPointFromEvent(e);
     paintLastRef.current = p;
@@ -1681,11 +1683,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           </div>
                         </div>
                         {/* Холст */}
-                        <div ref={paintBoxRef} className="p-2" onWheel={onPaintWheel}>
-                          <div className="rounded-xl border border-white/10 bg-black/40 overflow-hidden" style={{ height: paintViewportH }}>
+                        <div ref={paintBoxRef} className="p-2" onWheel={onPaintWheel} style={{ touchAction: 'none' }}>
+                          <div className="rounded-xl border border-white/10 bg-black/40 overflow-hidden" style={{ height: paintViewportH, touchAction: 'none' }}>
                             <div
                               ref={paintViewRef}
-                              style={{ transform: `translate(${paintTx}px, ${paintTy}px) scale(${paintScale})`, transformOrigin: '0 0' }}
+                              style={{ transform: `translate(${paintTx}px, ${paintTy}px) scale(${paintScale})`, transformOrigin: '0 0', touchAction: 'none' }}
                             >
                               <canvas
                                 ref={paintCanvasRef}

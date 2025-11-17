@@ -79,17 +79,19 @@ export default async function handler(req, res) {
 
     const maxAtMsk = maxAtIso ? formatTimeMsk(maxAtIso) : null
 
-    // Revenue today (RUB)
-    let grossToday = 0
+  // Revenue this month (RUB)
+  // Старт текущего месяца в МСК
+  const monthIsoMsk = `${y}-${pad(m)}-01T00:00:00+03:00`
+  let grossMonth = 0
     try {
       const { data } = await supabase
         .from('payments')
         .select('amount_rub,status,test,created_at,captured_at')
         .eq('status','succeeded')
         .eq('test', false)
-        .gte('created_at', todayIsoMsk)
+      .gte('created_at', monthIsoMsk)
         .limit(5000)
-      for (const p of (data||[])) grossToday += Number(p.amount_rub||0)
+    for (const p of (data||[])) grossMonth += Number(p.amount_rub||0)
     } catch {}
 
     // Logs summary (prefer drain table, fallback 0)
@@ -127,7 +129,7 @@ export default async function handler(req, res) {
       `🆕 Новые сегодня: <b>${(newToday||0).toLocaleString('ru-RU')}</b>`,
       `\n⭐ PLUS активные: <b>${(plusActive||0).toLocaleString('ru-RU')}</b>`,
       `🤖 AI+ активные: <b>${(aiPlusActive||0).toLocaleString('ru-RU')}</b>`,
-      `\n💰 Доход сегодня: <b>${Math.round(grossToday).toLocaleString('ru-RU')} ₽</b>`,
+    `\n💰 Доход за месяц: <b>${Math.round(grossMonth).toLocaleString('ru-RU')} ₽</b>`,
       `🪵 Логи ошибок сегодня: <b>${errorsToday}</b>`,
       `\n📟 IQSMS баланс: <b>${iq?.ok ? `${(iq.balance||0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${iq.currency || 'RUB'}` : 'н/д'}</b>`
     ].join('\n')
