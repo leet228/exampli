@@ -438,6 +438,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const y = Math.max(0, Math.min(PAINT_WORLD_H, yw));
     return { x, y };
   }
+  function paintPointFromClient(clientX: number, clientY: number): { x: number; y: number } {
+    const view = paintViewRef.current;
+    if (!view) return { x: 0, y: 0 };
+    const rect = view.getBoundingClientRect();
+    // Переводим координаты экрана в координаты «мира» (делим на масштаб)
+    const xw = (clientX - rect.left) / Math.max(0.0000001, paintScale);
+    const yw = (clientY - rect.top) / Math.max(0.0000001, paintScale);
+    // Ограничим в пределах канвы, иначе на сверх‑зуме могли уходить «мимо» и ничего не рисовалось
+    const x = Math.max(0, Math.min(PAINT_WORLD_W, xw));
+    const y = Math.max(0, Math.min(PAINT_WORLD_H, yw));
+    return { x, y };
+  }
   function onPaintDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (status !== 'idle') return;
     // touch pinch setup
@@ -510,6 +522,70 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     paintDrawingRef.current = false;
     paintLastRef.current = null;
+  }
+  // Touch fallback (iOS/Telegram WebView) — явная поддержка жестов
+  function onTouchStartCanvas(e: React.TouchEvent<HTMLCanvasElement>) {
+    if (status !== 'idle') return;
+    if (e.touches.length >= 2) {
+      const a = e.touches[0], b = e.touches[1];
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const cx = (a.clientX + b.clientX) / 2;
+      const cy = (a.clientY + b.clientY) / 2;
+      paintPinchRef.current = { startDist: Math.max(1, d), startScale: paintScale, startTx: paintTx, startTy: paintTy, startCx: cx, startCy: cy };
+      paintDrawingRef.current = false;
+      e.preventDefault();
+      return;
+    }
+    // одиночное касание — рисование
+    paintDrawingRef.current = true;
+    const t = e.touches[0];
+    const p = paintPointFromClient(t.clientX, t.clientY);
+    paintLastRef.current = p;
+    const ctx = paintCanvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = paintColor;
+    ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    e.preventDefault();
+  }
+  function onTouchMoveCanvas(e: React.TouchEvent<HTMLCanvasElement>) {
+    if (e.touches.length >= 2 && paintPinchRef.current) {
+      const a = e.touches[0], b = e.touches[1];
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const cx = (a.clientX + b.clientX) / 2;
+      const cy = (a.clientY + b.clientY) / 2;
+      const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * (d / Math.max(1, paintPinchRef.current.startDist))));
+      setPaintScale(nextScale);
+      setPaintTx(paintPinchRef.current.startTx + (cx - paintPinchRef.current.startCx));
+      setPaintTy(paintPinchRef.current.startTy + (cy - paintPinchRef.current.startCy));
+      e.preventDefault();
+      return;
+    }
+    if (!paintDrawingRef.current || e.touches.length === 0) return;
+    const ctx = paintCanvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const t = e.touches[0];
+    const p = paintPointFromClient(t.clientX, t.clientY);
+    const last = paintLastRef.current || p;
+    ctx.lineWidth = Math.max(0.5, paintWidth / Math.max(0.0000001, paintScale));
+    ctx.globalCompositeOperation = (paintTool === 'eraser') ? 'destination-out' : 'source-over';
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    paintLastRef.current = p;
+    setPaintHasDraw(true);
+    e.preventDefault();
+  }
+  function onTouchEndCanvas(e: React.TouchEvent<HTMLCanvasElement>) {
+    if (e.touches.length < 2) {
+      paintPinchRef.current = null;
+    }
+    if (e.touches.length === 0) {
+      paintDrawingRef.current = false;
+      paintLastRef.current = null;
+    }
+    e.preventDefault();
   }
   function getPaintingDataURL(): string {
     const canvas = paintCanvasRef.current;
@@ -1695,6 +1771,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                                 onPointerMove={onPaintMove}
                                 onPointerUp={onPaintUp}
                                 onPointerCancel={onPaintUp}
+                                onTouchStart={onTouchStartCanvas}
+                                onTouchMove={onTouchMoveCanvas}
+                                onTouchEnd={onTouchEndCanvas}
+                                onTouchCancel={onTouchEndCanvas}
                                 className={`${status !== 'idle' ? 'pointer-events-none opacity-80' : ''}`}
                                 style={{ touchAction: 'none', display: 'block' }}
                               />
