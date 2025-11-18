@@ -932,8 +932,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'connections') {
       const left = parseMcOptions(task.task_text || '');
       if (left.length === 0) return false;
-      if (connMap.length !== left.length) return false;
-      return connMap.every((v) => Number.isFinite(v) && (v as any) > 0);
+      if (!connMap || connMap.length === 0) return false;
+      // Достаточно подключить хотя бы одну связь
+      return connMap.some((v) => Number.isFinite(v) && (v as any) > 0);
     }
     if (task.answer_type === 'position') {
       return parsePositionItems(task.task_text || '').length > 0;
@@ -1045,8 +1046,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
       const userNorm = normalizeAnswer(user);
       let variants = parseAnswerList(task.correct || '');
-      // Для it_code поддерживаем и разделитель "|" на случай разных форматов
-      if (task.answer_type === 'it_code') {
+      // Для it_code и input поддерживаем и разделитель "|" на случай разных форматов
+      if (task.answer_type === 'it_code' || task.answer_type === 'input') {
         const pipe = parseAnswerPipe(task.correct || '');
         if (pipe.length > 0) {
           const set = new Set<string>(variants.map(v => v));
@@ -1753,7 +1754,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                                         if (connActiveTask == null) return;
                                         setConnMap((prev) => {
                                           const next = prev.slice();
-                                          for (let k = 0; k < next.length; k++) if (k !== connActiveTask && next[k] === (j + 1)) next[k] = 0;
+                                          // Разрешаем присоединять несколько задач к одной опции (many-to-one)
                                           next[connActiveTask] = j + 1;
                                           return next;
                                         });
