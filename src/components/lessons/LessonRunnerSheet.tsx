@@ -15,7 +15,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'it_code_2' | 'painting';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'it_code_2' | 'painting' | 'position';
   options: string[] | null;
   correct: string;
 };
@@ -42,6 +42,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [status, setStatus] = useState<'idle' | 'correct' | 'wrong'>('idle');
   // Multiple choice (новый тип)
   const [multiSel, setMultiSel] = useState<number[]>([]); // выбранные номера (1..n)
+  // Position (упорядочивание)
+  const [posOrder, setPosOrder] = useState<number[]>([]); // текущий порядок id (сверху вниз)
+  const [posCorrectIds, setPosCorrectIds] = useState<Set<number>>(new Set()); // какие id стояли на «своём» месте до проверки
   // Prompt (T) overlay
   const [showT, setShowT] = useState<boolean>(false);
   const [streakLocal, setStreakLocal] = useState<number>(0);
@@ -497,11 +500,16 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
         const cx = (arr[0].x + arr[1].x) / 2;
         const cy = (arr[0].y + arr[1].y) / 2;
-        const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * (d / Math.max(1, paintPinchRef.current.startDist))));
+        // Рассчитываем масштаб с порогом чувствительности: если дельта <2% — считаем, что это панорама без зума
+        const ratioRaw = d / Math.max(1, paintPinchRef.current.startDist);
+        const scaleEps = 0.03; // 2%
+        const ratio = (Math.abs(ratioRaw - 1) < scaleEps) ? 1 : ratioRaw;
+        const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * ratio));
         setPaintScale(nextScale);
-        // Панорамирование по смещению центра жеста
-        setPaintTx(paintPinchRef.current.startTx + (cx - paintPinchRef.current.startCx));
-        setPaintTy(paintPinchRef.current.startTy + (cy - paintPinchRef.current.startCy));
+        // Масштаб вокруг текущего центра жеста: удерживаем под пальцами тот же «мировой» пиксель
+        const k = nextScale / Math.max(0.0000001, paintPinchRef.current.startScale);
+        setPaintTx(cx - k * (paintPinchRef.current.startCx - paintPinchRef.current.startTx));
+        setPaintTy(cy - k * (paintPinchRef.current.startCy - paintPinchRef.current.startTy));
         e.preventDefault();
         return;
       }
@@ -570,10 +578,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
       const cx = (a.clientX + b.clientX) / 2;
       const cy = (a.clientY + b.clientY) / 2;
-      const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * (d / Math.max(1, paintPinchRef.current.startDist))));
+      const ratioRaw = d / Math.max(1, paintPinchRef.current.startDist);
+      const scaleEps = 0.02;
+      const ratio = (Math.abs(ratioRaw - 1) < scaleEps) ? 1 : ratioRaw;
+      const nextScale = Math.max(PAINT_MIN_SCALE, Math.min(PAINT_MAX_SCALE, paintPinchRef.current.startScale * ratio));
       setPaintScale(nextScale);
-      setPaintTx(paintPinchRef.current.startTx + (cx - paintPinchRef.current.startCx));
-      setPaintTy(paintPinchRef.current.startTy + (cy - paintPinchRef.current.startCy));
+      const k = nextScale / Math.max(0.0000001, paintPinchRef.current.startScale);
+      setPaintTx(cx - k * (paintPinchRef.current.startCx - paintPinchRef.current.startTx));
+      setPaintTy(cy - k * (paintPinchRef.current.startCy - paintPinchRef.current.startTy));
       e.preventDefault();
       return;
     }
@@ -627,6 +639,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     fx();
     window.addEventListener('resize', fx);
     return () => window.removeEventListener('resize', fx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task, viewKey]);
+
+  // Сброс состояния position при смене вопроса и установка стартового порядка
+  useEffect(() => {
+    if (task?.answer_type !== 'position') return;
+    const items = parsePositionItems(task.task_text || '');
+    setPosOrder(items.map(it => it.id));
+    setPosCorrectIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task, viewKey]);
 
@@ -754,6 +775,24 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const n = Number(m[1]); if (Number.isFinite(n)) s.add(n);
     }
     return s;
+  }
+
+  // position: извлекаем элементы в исходном порядке появления (без сортировки по id)
+  function parsePositionItems(src: string): Array<{ id: number; text: string }> {
+    const res: Array<{ id: number; text: string }> = [];
+    if (!src) return res;
+    const re = /\((\d+)\)([\s\S]*?)\(\1\)/g;
+    const seen = new Set<number>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const id = Number(m[1]);
+      if (!Number.isFinite(id)) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const text = String(m[2] || '').trim();
+      res.push({ id, text });
+    }
+    return res;
   }
 
   function partsWithMarkers(src: string): Array<{ t: 'text' | 'blank' | 'letterbox' | 'inputbox' | 'cardbox'; v?: string }>{
@@ -890,12 +929,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
-  if (task.answer_type === 'connections') {
-    const left = parseMcOptions(task.task_text || '');
-    if (left.length === 0) return false;
-    if (connMap.length !== left.length) return false;
-    return connMap.every((v) => Number.isFinite(v) && (v as any) > 0);
-  }
+    if (task.answer_type === 'connections') {
+      const left = parseMcOptions(task.task_text || '');
+      if (left.length === 0) return false;
+      if (connMap.length !== left.length) return false;
+      return connMap.every((v) => Number.isFinite(v) && (v as any) > 0);
+    }
+    if (task.answer_type === 'position') {
+      return parsePositionItems(task.task_text || '').length > 0;
+    }
     return false;
 }, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw]);
 
@@ -994,6 +1036,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     user = mapSafe.join('');
   } else if (task.answer_type === 'painting') {
       user = text.trim();
+  } else if (task.answer_type === 'position') {
+      // строка из цифр по текущему порядку
+      user = posOrder.join('');
   }
     // Проверка правильности
     let ok = false;
@@ -1028,6 +1073,21 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const userTop = san(itc2Top);
       const userBot = san(itc2Bottom);
       ok = (userTop === expTop) && (userBot === expBot);
+    } else if (task.answer_type === 'position') {
+      const items = parsePositionItems(task.task_text || '');
+      const exp = parseCorrectDigits(task.correct || '', items.length);
+      const userArr = posOrder.slice(0, items.length);
+      // Подсветка: какие id стояли на «своём» месте до проверки
+      const correctSet = new Set<number>();
+      for (let i = 0; i < items.length; i++) {
+        if ((userArr[i] || 0) === (exp[i] || 0)) correctSet.add(userArr[i] || 0);
+      }
+      setPosCorrectIds(correctSet);
+      ok = (userArr.length === exp.length) && userArr.every((v, i) => v === exp[i]);
+      // Если неверно — переставим элементы в правильный порядок
+      if (!ok) {
+        setPosOrder(exp.slice(0, items.length));
+      }
     } else {
       ok = user === (task.correct || '');
     }
@@ -1124,6 +1184,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setConnActiveTask(null);
     setConnMap([]);
     setConnLines([]);
+    setPosOrder([]);
+    setPosCorrectIds(new Set());
     setStatus('idle');
     setStreakFlash(null);
     setShowT(false);
@@ -1397,6 +1459,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                               })()}
                             </div>
                           ) : ((task.answer_type === 'multiple_choice' || task.answer_type === 'connections') ? null : partsWithMarkers(task.task_text).map((p, i) => {
+                        // для position не показываем task_text как текст — элементы будут ниже как список
+                        if (task.answer_type === 'position') return null;
                         if (p.t === 'text') return renderTextLines(p.v || '', `t-${i}`);
                         if (p.t === 'blank') {
                           return (status === 'idle')
@@ -1706,6 +1770,35 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             })()}
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(task.answer_type === 'position') && (
+                    <div className="mt-auto mb-16">
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-2">
+                        {(() => {
+                          const items = parsePositionItems(task.task_text || '');
+                          // карта id -> текст
+                          const map = new Map<number, string>(items.map(it => [it.id, it.text]));
+                          const ordered = (posOrder.length > 0 ? posOrder : items.map(it => it.id))
+                            .map((id) => ({ id, text: map.get(id) || '' }))
+                            .filter(x => x.id != null);
+                          const resolvedMap: Record<number, 'green' | 'red' | null> = {};
+                          if (status !== 'idle') {
+                            for (const { id } of ordered) {
+                              resolvedMap[id] = posCorrectIds.has(id) ? 'green' : 'red';
+                            }
+                          }
+                          return (
+                            <PositionList
+                              items={ordered}
+                              onReorder={(nextIds) => { if (status === 'idle') setPosOrder(nextIds); }}
+                              disabled={status !== 'idle'}
+                              resolvedMap={resolvedMap}
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                   )}
@@ -2301,6 +2394,126 @@ function DraggableCard({ text, disabled, onDropToBox, getBoxRect }: { text: stri
           {text}
         </div>
       )}
+    </div>
+  );
+}
+
+// Упорядочивание: вертикальный список с перетаскиванием пальцем/мышью
+function PositionList({
+  items,
+  onReorder,
+  disabled,
+  resolvedMap,
+}: {
+  items: Array<{ id: number; text: string }>;
+  onReorder: (nextIds: number[]) => void;
+  disabled: boolean;
+  resolvedMap: Record<number, 'green' | 'red' | null>;
+}) {
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const origin = useRef<{ id: number; offsetX: number; offsetY: number } | null>(null);
+  const itemRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
+
+  const setItemRef = (id: number) => (el: HTMLDivElement | null) => {
+    itemRefs.current.set(id, el);
+  };
+
+  useEffect(() => {
+    if (!draggingId) return;
+    const move = (e: PointerEvent) => {
+      if (!origin.current) return;
+      setPos({ x: e.clientX - origin.current.offsetX, y: e.clientY - origin.current.offsetY });
+      // Подбор целевого индекса по центрам элементов
+      const orderIds = items.map((it) => it.id);
+      const centers: Array<{ id: number; cy: number }> = [];
+      for (const it of items) {
+        const el = itemRefs.current.get(it.id);
+        const r = el?.getBoundingClientRect();
+        if (!r) continue;
+        centers.push({ id: it.id, cy: (r.top + r.bottom) / 2 });
+      }
+      const y = e.clientY;
+      let targetIndex = -1;
+      for (let i = 0; i < centers.length; i++) {
+        if (y < centers[i].cy) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) targetIndex = orderIds.length;
+      const fromIndex = orderIds.indexOf(origin.current.id);
+      if (fromIndex === -1) return;
+      // Корректируем вставку, если двигаем вниз
+      const insertIndex = targetIndex > fromIndex ? targetIndex - 1 : targetIndex;
+      if (insertIndex === fromIndex) return;
+      const next = orderIds.slice();
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(insertIndex, 0, moved);
+      onReorder(next);
+    };
+    const up = () => {
+      setDraggingId(null);
+      setPos(null);
+      origin.current = null;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [draggingId, items, onReorder]);
+
+  const onDown = (id: number) => (e: React.PointerEvent) => {
+    if (disabled) return;
+    try { e.preventDefault(); } catch {}
+    const el = itemRefs.current.get(id);
+    const rect = el?.getBoundingClientRect();
+    const offX = (e.clientX - (rect?.left || 0));
+    const offY = (e.clientY - (rect?.top || 0));
+    origin.current = { id, offsetX: offX, offsetY: offY };
+    setDraggingId(id);
+    setPos({ x: e.clientX - offX, y: e.clientY - offY });
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map(({ id, text }) => {
+        const isDragging = draggingId === id;
+        const resolved = resolvedMap[id] || null;
+        const stateClass =
+          resolved === 'green'
+            ? 'border-green-500/60 bg-green-600/10 text-green-400'
+            : resolved === 'red'
+            ? 'border-red-500/60 bg-red-600/10 text-red-400'
+            : 'border-white/10 bg-white/5 text-white';
+        return (
+          <div key={`pos-${id}`} className="relative">
+            <div
+              ref={setItemRef(id)}
+              onPointerDown={onDown(id)}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold select-none w-full ${stateClass} ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'} ${isDragging ? 'opacity-0' : 'opacity-100'}`}
+              style={{ minHeight: 44, touchAction: 'none' }}
+            >
+              {text}
+            </div>
+            {isDragging && pos && (
+              <div
+                className="fixed pointer-events-none rounded-xl border border-white/10 bg-white/10 backdrop-blur px-3 py-2 text-sm font-semibold"
+                style={{ left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px)`, zIndex: 9999, minWidth: 80, minHeight: 36 }}
+              >
+                {text}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
