@@ -1,6 +1,14 @@
-// ESM serverless function: Telegram bot dialog using OpenAI (gpt-5-mini)
-// Env: ASSISTANT_API_KEY, TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or ANON)
+// ESM serverless function: Telegram bot dialog using Vercel AI Gateway (OpenAI provider)
+// Env required:
+//   TELEGRAM_BOT_TOKEN
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY (or ANON for dev)
+//   AI_GATEWAY_BOT_API_KEY  ← ключ для AI Gateway (бот)
+//   AI_GATEWAY_URL          ← общий endpoint AI Gateway
 import { createClient } from '@supabase/supabase-js';
+import { generateText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { kvAvailable, getRedis } from './_kv.mjs';
 
 export default async function handler(req, res) {
   try {
@@ -16,10 +24,11 @@ export default async function handler(req, res) {
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const openaiKey = process.env.ASSISTANT_API_KEY;
+    const gatewayKey = process.env.AI_GATEWAY_BOT_API_KEY || '';
+    const gatewayUrl = process.env.AI_GATEWAY_URL || process.env.VERCEL_AI_GATEWAY_URL || '';
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if (!botToken || !supabaseUrl || !serviceKey) {
+    if (!botToken || !supabaseUrl || !serviceKey || !gatewayKey || !gatewayUrl) {
       res.status(500).json({ error: 'missing_env' });
       return;
     }
@@ -78,11 +87,29 @@ export default async function handler(req, res) {
     const historyText = '';
 
     const system = buildSystemPrompt({ plusActive, aiPlusActive });
-    let reply = await genReply({ openaiKey, system, userText: text, history: historyText });
+    const modelName = process.env.OPENAI_BOT_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini';
+    // Загружаем и обновляем историю из Redis (короткая лента последних сообщений)
+    const histKey = `tg:hist:v1:${chatId}`;
+    let historyFromKv = '';
+    if (kvAvailable()) {
+      try {
+        const r = getRedis();
+        const arr = await r.lrange(histKey, 0, 39); // последние 40 записей (новые в начале)
+        const items = (arr || []).map((s) => { try { return JSON.parse(typeof s === 'string' ? s : String(s)); } catch { return { role: 'assistant', content: String(s || '') }; } });
+        const lines = items.slice().reverse().map((it) => `[${it?.role === 'user' ? 'USER' : 'ASSISTANT'}] ${String(it?.content || '').trim()}`);
+        historyFromKv = lines.join('\n').slice(0, 1000);
+      } catch {}
+      // Запишем входящее сообщение пользователя сразу
+      try { const r = getRedis(); await r.lpush(histKey, JSON.stringify({ role: 'user', content: text, at: Date.now() })); await r.ltrim(histKey, 0, 39); } catch {}
+    }
+    const systemHistory = historyText || historyFromKv || '';
+    let reply = await genReplyGateway({ gatewayKey, gatewayUrl, modelName, system, userText: text, history: systemHistory });
     const currentCount = dbCount != null ? dbCount : 1;
     if (currentCount >= 3) reply = `${reply}\n\nЛадно, мне ещё другим написать — завтра поболтаем.`;
 
     await tgSend(botToken, chatId, reply);
+    // Сохраняем ответ ассистента в историю
+    if (kvAvailable()) { try { const r = getRedis(); await r.lpush(histKey, JSON.stringify({ role: 'assistant', content: reply, at: Date.now() })); await r.ltrim(histKey, 0, 39); } catch {} }
 
     // Ничего не сохраняем в users.metadata (колонки нет)
 
@@ -148,26 +175,25 @@ function buildSystemPrompt(ctx) {
   ].join(' ');
 }
 
-async function genReply({ openaiKey, system, userText, history }) {
+async function genReplyGateway({ gatewayKey, gatewayUrl, modelName, system, userText, history }) {
   try {
-    if (!openaiKey) return ruleBasedFallback(userText, history);
-    const body = {
-      model: 'gpt-5-mini',
-      messages: [
-        { role: 'system', content: system },
-        ...(history ? [{ role: 'system', content: `Краткая история диалога:\n${history.slice(0, 1200)}` }] : []),
-        { role: 'user', content: userText.slice(0, 2000) }
-      ],
+    const openai = createOpenAI({ apiKey: gatewayKey, baseURL: gatewayUrl });
+    const prompt =
+      [
+        system,
+        history ? `\n[SYSTEM] Краткая история диалога:\n${String(history).slice(0, 1000)}` : '',
+        `\n[USER]\n${String(userText || '').slice(0, 2000)}`,
+      ].join('');
+    const { text } = await generateText({
+      model: openai(modelName),
+      prompt,
       temperature: 1,
-      stream: false
-    };
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` }, body: JSON.stringify(body)
     });
-    const j = await r.json();
-    const txt = j?.choices?.[0]?.message?.content || '';
-    return postProcess(txt);
-  } catch { return ruleBasedFallback(userText, history); }
+    return postProcess(text);
+  } catch {
+    // Фолбэк без внешних API — короткий rule-based, чтобы бот ответил хоть чем-то
+    return ruleBasedFallback(userText, history);
+  }
 }
 
 function postProcess(s) {

@@ -243,9 +243,65 @@ export default function AI() {
         const detail = await safeText(response as any);
         throw new Error(detail || `Request failed with ${response.status}`);
       }
-      const { content } = await response.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: String(content || '') }]);
-      try { hapticSelect(); } catch {}
+      const ct = response.headers.get('content-type') || '';
+      // Стриминговый ответ (text/plain): читаем body по кусочкам
+      if (ct.includes('text/plain') && response.body) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        // Микро‑хаптики во время «печати»: паттерн с разными интервалами
+        // пример: 10× по ~150мс → 5× по ~250мс → 15× по ~200мс (с лёгким джиттером)
+        let stopTypingHaptics = false;
+        (function runTypingPattern() {
+          const schedule = [
+            { count: 10, delay: 150 },
+            { count: 5,  delay: 250 },
+            { count: 15, delay: 200 },
+          ];
+          let phase = 0;
+          let left = schedule[phase].count;
+          const tick = () => {
+            if (stopTypingHaptics) return;
+            try { hapticTypingTick(); } catch {}
+            left -= 1;
+            if (left <= 0) {
+              phase = (phase + 1) % schedule.length;
+              left = schedule[phase].count;
+            }
+            const base = schedule[phase].delay;
+            const jitter = Math.round((Math.random() * 0.25 - 0.125) * base); // ±12.5%
+            const next = Math.max(60, base + jitter);
+            window.setTimeout(tick, next);
+          };
+          window.setTimeout(tick, schedule[0].delay);
+        })();
+        while (!done) {
+          const { value, done: d } = await reader.read();
+          done = d;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            if (chunk) {
+              setMessages((prev) => {
+                const out = prev.slice();
+                const i = out.length - 1;
+                const cur = out[i];
+                if (cur && cur.role === 'assistant' && typeof cur.content === 'string') {
+                  out[i] = { ...cur, content: String(cur.content) + chunk };
+                }
+                return out;
+              });
+            }
+          }
+        }
+        stopTypingHaptics = true;
+        try { hapticSelect(); } catch {}
+      } else {
+        // Старый путь: целиком JSON
+        const { content } = await response.json();
+        setMessages((prev) => [...prev, { role: 'assistant', content: String(content || '') }]);
+        try { hapticSelect(); } catch {}
+      }
     } catch (e: any) {
       setError(e?.message ? String(e.message) : 'Не удалось получить ответ.');
     } finally {

@@ -1,6 +1,8 @@
 // ESM serverless function for Vercel to call DeepSeek Chat Completions
 // Compatible with "type": "module" projects
 import { createClient } from '@supabase/supabase-js';
+import { streamText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit, acquireLock, releaseLock } from './_kv.mjs';
 import { createHash } from 'node:crypto';
 
@@ -20,9 +22,11 @@ export default async function handler(req, res) {
             return;
         }
 
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-            res.status(500).json({ error: 'Missing OPENAI_API_KEY on the server' });
+        // Prefer Vercel AI Gateway; fallback к прямому OpenAI
+        const gatewayKey = process.env.AI_GATEWAY_API_KEY || '';
+        const gatewayUrl = process.env.AI_GATEWAY_URL || process.env.VERCEL_AI_GATEWAY_URL || '';
+        if (!gatewayKey || !gatewayUrl) {
+            res.status(500).json({ error: 'Missing AI Gateway env', detail: 'Set AI_GATEWAY_API_KEY and AI_GATEWAY_URL' });
             return;
         }
 
@@ -74,7 +78,7 @@ export default async function handler(req, res) {
 
         // Prepare messages for OpenAI (multimodal). If Supabase env is set, we can upload data URLs; otherwise keep data URLs inline.
         const openAiPrepared = await buildOpenAIMessages(messages);
-        const model = process.env.OPENAI_MODEL || 'gpt-5-mini';
+        const modelName = process.env.OPENAI_MODEL || 'gpt-5-mini';
         const prepared = trimMessagesByChars([
             { role: 'system', content: systemPrompt },
             ...openAiPrepared
@@ -111,42 +115,72 @@ export default async function handler(req, res) {
             if (!ok) { res.status(429).json({ error: 'busy' }); return; }
         }
 
-        // Timeout controller
-        const controller = new AbortController();
+        // Стриминговый ответ через Vercel AI Gateway (AI SDK v4)
         const timeoutMs = 25000;
-        timeoutId = setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
+        timeoutId = setTimeout(() => {
+            try { res.end(); } catch {}
+        }, timeoutMs);
 
-        const dsResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model,
-                messages: prepared,
-                temperature: 1,
-                stream: false,
-            }),
-            signal: controller.signal
+        // Краткая история + текущий запрос (как в боте)
+        const { textOnlyMessages } = await flattenMessagesWithPublicImageUrls(messages);
+        let history = '';
+        let lastUserText = '';
+        try {
+            const lines = [];
+            for (let i = 0; i < textOnlyMessages.length; i++) {
+                const m = textOnlyMessages[i];
+                const role = (m?.role === 'assistant' ? 'ASSISTANT' : (m?.role === 'user' ? 'USER' : 'SYSTEM'));
+                lines.push(`[${role}] ${String(m?.content || '').trim()}`);
+            }
+            const lastUserIdx = [...textOnlyMessages].map((m, idx) => ({ role: m.role, idx })).reverse().find(x => x.role === 'user')?.idx ?? -1;
+            if (lastUserIdx >= 0) {
+                lastUserText = String(textOnlyMessages[lastUserIdx]?.content || '');
+                history = lines.slice(0, lastUserIdx).join('\n').slice(0, 1200);
+            } else {
+                history = lines.join('\n').slice(0, 1200);
+                lastUserText = String(textOnlyMessages[textOnlyMessages.length - 1]?.content || '');
+            }
+        } catch {}
+        const prompt = [
+            systemPrompt,
+            history ? `\n[SYSTEM] Краткая история диалога:\n${history}` : '',
+            `\n[USER]\n${lastUserText}`
+        ].join('');
+
+        // Настройка заголовков для стриминга
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-Accel-Buffering', 'no');
+        // CORS заголовки (на всякий случай)
+        if (!res.getHeader('Access-Control-Allow-Origin')) res.setHeader('Access-Control-Allow-Origin', '*');
+
+        let acc = '';
+        let billedTokens = 0;
+
+        const openai = createOpenAI({
+            apiKey: gatewayKey,
+            baseURL: gatewayUrl,
         });
 
-        if (!dsResponse.ok) {
-            const errorText = await safeText(dsResponse);
-            res.status(dsResponse.status).json({ error: 'OpenAI error', detail: errorText });
-            return;
+        const result = await streamText({
+            model: openai(modelName),
+            prompt,
+            temperature: 1,
+        });
+
+        for await (const chunk of result.textStream) {
+            acc += chunk;
+            try { res.write(chunk); } catch {}
         }
-        const json = await dsResponse.json();
-        const content = json?.choices?.[0]?.message?.content || '';
+
         try {
-            const usedTokens = (json?.usage?.total_tokens) || (json?.usage?.prompt_tokens || 0) + (json?.usage?.completion_tokens || 0) || 0;
-            await trackUsage({ userId, usedTokens });
+            const usage = await result.usage;
+            billedTokens = Number(usage?.totalTokens || (usage?.inputTokens || 0) + (usage?.outputTokens || 0) || 0);
         } catch {}
-        // Cache response for dedup window
-        try {
-            if (dedupKey) { await cacheSetJSON(dedupKey, { content }, 30); }
-        } catch {}
-        res.status(200).json({ content });
+
+        try { if (billedTokens) await trackUsage({ userId, usedTokens: billedTokens }); } catch {}
+        try { if (dedupKey && acc) await cacheSetJSON(dedupKey, { content: acc }, 30); } catch {}
+        try { res.end(); } catch {}
     } catch (error) {
         console.error('[api/chat] Unhandled error:', error);
         res.status(500).json({ error: 'Internal error', detail: String(error && error.message || error) });

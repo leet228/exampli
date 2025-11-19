@@ -122,6 +122,15 @@ export default async function handler(req, res) {
           await tgSend(botToken, tg, text);
         }
         sent++;
+        // Записываем в KV краткую историю бота для чатов Telegram (чтобы bot_chat «помнил» рассылки)
+        try {
+          if (canKv && r) {
+            const histKey = `tg:hist:v1:${tg}`;
+            const payload = photo ? (text ? `${text} [photo:${photo}]` : `[photo:${photo}]`) : text;
+            await r.lpush(histKey, JSON.stringify({ role: 'assistant', content: String(payload || ''), at: Date.now(), kind: kind || 'notify' }));
+            await r.ltrim(histKey, 0, 39);
+          }
+        } catch {}
       } catch {}
     }
     res.status(200).json({ ok: true, sent });
