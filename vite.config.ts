@@ -52,6 +52,8 @@ export default defineConfig(() => {
         display: 'standalone',
       },
       workbox: {
+        // Исключаем тяжёлый чанк plotly из precache, чтобы не валить сборку Workbox (2 MiB лимит)
+        globIgnores: ['**/react-plotly-*.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
@@ -59,6 +61,15 @@ export default defineConfig(() => {
             options: {
               cacheName: 'supabase-cache',
               expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
+            },
+          },
+          // Кэшируем крупный vendor‑чанк plotly по запросу в рантайме
+          {
+            urlPattern: /\/react-plotly-.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'big-vendor',
+              expiration: { maxEntries: 4, maxAgeSeconds: 30 * 24 * 60 * 60 },
             },
           },
           {
