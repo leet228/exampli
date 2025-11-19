@@ -33,57 +33,63 @@ export default defineConfig(() => {
   ];
 
   // Compression для Brotli и Gzip
-  plugins.push(
-    compression({ algorithms: ['brotliCompress'], threshold: 1024 }),
-    compression({ algorithms: ['gzip'], threshold: 1024 })
-  );
+  // На Vercel CDN уже сжимает ответы; предсжатие заметно замедляет сборку.
+  // Включайте только при необходимости: PRECOMPRESS=1
+  if (process.env.PRECOMPRESS === '1') {
+    plugins.push(
+      compression({ algorithms: ['brotliCompress'], threshold: 1024 }),
+      compression({ algorithms: ['gzip'], threshold: 1024 })
+    );
+  }
 
   // PWA с Service Worker для offline-first
-  plugins.push(
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['**/*.svg', '**/*.png', '**/*.wav'],
-      manifest: {
-        name: 'Exampli',
-        short_name: 'Exampli',
-        description: 'Учи предметы эффективно',
-        theme_color: '#0b1220',
-        background_color: '#0b1220',
-        display: 'standalone',
-      },
-      workbox: {
-        // Исключаем тяжёлый чанк plotly из precache, чтобы не валить сборку Workbox (2 MiB лимит)
-        globIgnores: ['**/react-plotly-*.js'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
+  if (process.env.ENABLE_PWA !== '0') {
+    plugins.push(
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['**/*.svg', '**/*.png', '**/*.wav'],
+        manifest: {
+          name: 'Exampli',
+          short_name: 'Exampli',
+          description: 'Учи предметы эффективно',
+          theme_color: '#0b1220',
+          background_color: '#0b1220',
+          display: 'standalone',
+        },
+        workbox: {
+          // Исключаем тяжёлый чанк plotly из precache, чтобы не валить сборку Workbox (2 MiB лимит)
+          globIgnores: ['**/react-plotly-*.js'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'supabase-cache',
+                expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
+              },
             },
-          },
-          // Кэшируем крупный vendor‑чанк plotly по запросу в рантайме
-          {
-            urlPattern: /\/react-plotly-.*\.js$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'big-vendor',
-              expiration: { maxEntries: 4, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            // Кэшируем крупный vendor‑чанк plotly по запросу в рантайме
+            {
+              urlPattern: /\/react-plotly-.*\.js$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'big-vendor',
+                expiration: { maxEntries: 4, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              },
             },
-          },
-          {
-            urlPattern: /\.(svg|png|jpg|jpeg|wav)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'static-assets',
-              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            {
+              urlPattern: /\.(svg|png|jpg|jpeg|wav)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'static-assets',
+                expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              },
             },
-          },
-        ],
-      },
-    })
-  );
+          ],
+        },
+      })
+    );
+  }
 
   return {
     plugins,
@@ -101,7 +107,7 @@ export default defineConfig(() => {
       }
     },
     build: {
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 6000,
       // Оптимизация code splitting
       rollupOptions: {
         output: {
@@ -121,15 +127,8 @@ export default defineConfig(() => {
           },
         },
       },
-      // Минификация для production
-      minify: 'terser' as const,
-      terserOptions: {
-        compress: {
-          drop_console: true, // удалить console.log в production
-          drop_debugger: true,
-          pure_funcs: ['console.log', 'console.debug'],
-        },
-      },
+      // Минификация: используем быстрый esbuild по умолчанию (значительно ускоряет билд)
+      // Дополнительная очистка логов сделана через esbuild-плагины не требуется
       // Source maps для debugging (можно отключить в production)
       sourcemap: process.env.NODE_ENV !== 'production',
     },

@@ -46,12 +46,31 @@ function loadMermaid() {
   return mermaidPromise;
 }
 
-// Lazy loader для Plotly: подключаем только при наличии блока ```plotly
+// Lazy loader для Plotly: грузим React-обёртку и сам Plotly с CDN, чтобы не раздувать бандл
 let plotlyComponentPromise: Promise<any> | null = null;
-function loadPlotly() {
-  if (!plotlyComponentPromise) {
-    plotlyComponentPromise = import('react-plotly.js').then((mod) => (mod as any).default || (mod as any));
-  }
+async function loadPlotly() {
+  if (plotlyComponentPromise) return plotlyComponentPromise;
+  plotlyComponentPromise = (async () => {
+    // 1) Динамически подключаем React-фабрику
+    const factory = (await import('react-plotly.js/factory')).default as any;
+    // 2) Грузим «basic» сборку Plotly с CDN один раз (без включения в бандл)
+    if (!(window as any).Plotly) {
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.plot.ly/plotly-basic-2.35.3.min.js';
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('plotly cdn load failed'));
+          document.head.appendChild(s);
+        } catch (e) {
+          reject(e as any);
+        }
+      });
+    }
+    const Plotly = (window as any).Plotly;
+    return factory(Plotly);
+  })();
   return plotlyComponentPromise;
 }
 
