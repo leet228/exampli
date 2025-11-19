@@ -13,8 +13,8 @@ export default function Subscription() {
   // Общие утилиты для кнопок с «нижней полоской»
   const accentColor = '#3c73ff';
   const shadowHeight = 6;
-  // Для тестов: все цены показываем как 1 ⭐
-  const toStars = (_rub: number): number => 1;
+  // Конвертер в звезды: используем значение как есть (цены заданы в звездах)
+  const toStars = (stars: number): number => Math.max(0, Math.floor(Number(stars || 0)));
   // Цвет фона карточек монет (сама кнопка)
   const coinButtonColor = '#121923';
   const darken = (hex: string, amount = 18) => {
@@ -26,17 +26,17 @@ export default function Subscription() {
     return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
   };
   const plans: Plan[] = [
-    { id: 'm1', months: 1,  price: 499,  title: 'КУРСИК' },
-    { id: 'm6', months: 6,  price: 2699, title: 'КУРСИК' },
+    { id: 'm1', months: 1,  price: 449,  title: 'КУРСИК' },
+    { id: 'm6', months: 6,  price: 2299, title: 'КУРСИК' },
     { id: 'm12', months: 12, price: 4999, title: 'КУРСИК' },
   ];
   const gems = [
-    { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 499 },
-    { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 999 },
-    { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1999 },
+    { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 400 },
+    { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 900 },
+    { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1800 },
   ];
   const aiTokens = [
-    { id: 'ai_plus', icon: '/ai/ai_www.svg', rub: 500, tokens: 0, label: 'КУРСИК AI +', description: 'Месячная подписка!\n+500000 токенов на месяц' },
+    { id: 'ai_plus', icon: '/ai/ai_www.svg', rub: 449, tokens: 0, label: 'КУРСИК AI +', description: 'Месячная подписка!\n+500000 токенов на месяц' },
   ];
   const freezes = [
     { id: 's1', icon: '/shop/streak_1.svg', label: '1 день', coins: 425 },

@@ -27,24 +27,23 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Conversion: RUB -> Stars (XTR). Configure RUB_PER_STAR env if needed (default 1).
-    // For testing: force all prices to 1 Star
-    const toStars = () => 1;
+    // Для XTR (Telegram Stars) возвращаем переданное число как есть
+    const toStars = (n) => Number(n);
 
     // Server-side price/metadata map
     const PRODUCTS = {
       plan: {
-        m1:  { stars: toStars(499),  months: 1,  title: 'КУРСИК PLUS' },
-        m6:  { stars: toStars(2699), months: 6,  title: 'КУРСИК PLUS' },
+        m1:  { stars: toStars(449),  months: 1,  title: 'КУРСИК PLUS' },
+        m6:  { stars: toStars(2299), months: 6,  title: 'КУРСИК PLUS' },
         m12: { stars: toStars(4999), months: 12, title: 'КУРСИК PLUS' },
       },
       gems: {
-        g1: { stars: toStars(499),  coins: 1200, title: 'Монеты' },
-        g2: { stars: toStars(999),  coins: 3000, title: 'Монеты' },
-        g3: { stars: toStars(1999), coins: 6500, title: 'Монеты' },
+        g1: { stars: toStars(400),  coins: 1200, title: 'Монеты' },
+        g2: { stars: toStars(900),  coins: 3000, title: 'Монеты' },
+        g3: { stars: toStars(1800), coins: 6500, title: 'Монеты' },
       },
       ai_tokens: {
-        ai_plus: { stars: toStars(500), rub: 500, title: 'КУРСИК AI +', months: 1 },
+        ai_plus: { stars: toStars(449), rub: 449, title: 'КУРСИК AI +', months: 1 },
       }
     };
 
