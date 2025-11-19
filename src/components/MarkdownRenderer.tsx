@@ -10,6 +10,27 @@ type MarkdownRendererProps = {
   className?: string;
 };
 
+// Lazy load KaTeX CSS только когда встречаем math
+function loadKatexStyles() {
+  if (document.querySelector('link[href*="katex"]')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+  link.crossOrigin = 'anonymous';
+  link.integrity = 'sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+';
+  document.head.appendChild(link);
+}
+
+// Lazy load Highlight.js CSS только когда встречаем code
+function loadHighlightStyles() {
+  if (document.querySelector('link[href*="highlight"]')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css';
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+}
+
 // Lazy loader для mermaid, чтобы не тянуть его сразу
 let mermaidPromise: Promise<any> | null = null;
 function loadMermaid() {
@@ -115,6 +136,17 @@ const PlotlyBlock: React.FC<{ code: string }> = ({ code }) => {
 };
 
 export default function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+  // Загружаем стили при первом рендере (если есть math или code)
+  React.useEffect(() => {
+    try {
+      const hasCode = content.includes('```') || content.includes('`');
+      if (hasCode) loadHighlightStyles();
+      
+      const hasMath = content.includes('$') || content.includes('\\(') || content.includes('\\[');
+      if (hasMath) loadKatexStyles();
+    } catch {}
+  }, [content]);
+
   // Нормализуем математику: одиночные строки с \( ... \) → $$ ... $$, а также
   // случаи вида ": \( ... \)." в конце строки переносим в блочную запись ниже
   const normalized = React.useMemo(() => {

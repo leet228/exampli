@@ -1,30 +1,102 @@
-// src/pages/AppRouter.tsx (или твой путь)
+// src/pages/AppRouter.tsx - оптимизировано с code splitting
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 
-import Home from './Home';
-import Subscription from './Subscription';
-import Profile from './Profile';
-import Quests from './Quests';
-import Battle from './Battle';
-import AI from './AI';
-import SubscriptionGate from './SubscriptionGate';
-import SubscriptionOpening from './SubscriptionOpening';
-import PostLesson from './PostLesson';
+// Lazy load всех страниц для уменьшения initial bundle
+const Home = lazy(() => import('./Home'));
+const Subscription = lazy(() => import('./Subscription'));
+const Profile = lazy(() => import('./Profile'));
+const Quests = lazy(() => import('./Quests'));
+const Battle = lazy(() => import('./Battle'));
+const AI = lazy(() => import('./AI'));
+const SubscriptionGate = lazy(() => import('./SubscriptionGate'));
+const SubscriptionOpening = lazy(() => import('./SubscriptionOpening'));
+const PostLesson = lazy(() => import('./PostLesson'));
+
+// Легковесный loader для страниц
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin w-12 h-12 border-4 border-accent border-t-transparent rounded-full" />
+  </div>
+);
 
 const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { path: '/',            element: <Home /> },
-      { path: '/quests',      element: <Quests /> },
-      { path: '/battle',      element: <Battle /> },
-      { path: '/ai',          element: <AI /> },
-      { path: '/subscription-gate', element: <SubscriptionGate /> },
-      { path: '/subscription-opening', element: <SubscriptionOpening /> },
-      { path: '/post-lesson', element: <PostLesson /> },
-      { path: '/subscription',element: <Subscription /> },
-      { path: '/profile',     element: <Profile /> },
+      { 
+        path: '/', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <Home />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/quests', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <Quests />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/battle', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <Battle />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/ai', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AI />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/subscription-gate', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SubscriptionGate />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/subscription-opening', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SubscriptionOpening />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/post-lesson', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <PostLesson />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/subscription', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <Subscription />
+          </Suspense>
+        ) 
+      },
+      { 
+        path: '/profile', 
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <Profile />
+          </Suspense>
+        ) 
+      },
     ],
   },
 ]);

@@ -170,7 +170,8 @@ export default function Profile() {
   async function openQrInvite() {
     try {
       setQrLoading(true);
-      setQrImgUrl('');
+      setQrOpen(true); // Открываем сразу, показываем loading
+      
       const ensureInviteUrl = async (): Promise<string> => {
         try {
           // попробуем из кэша (короткий TTL 1 день)
@@ -201,16 +202,148 @@ export default function Profile() {
         try { cacheSet(CACHE_KEYS.inviteUrl, inviteUrl, 24 * 60 * 60 * 1000); } catch {}
         return inviteUrl;
       };
+      
       const url = await ensureInviteUrl();
-      const big = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(url)}`;
-      setQrImgUrl(big);
-      setQrOpen(true);
+      
+      // Проверяем кеш QR изображения (по URL)
+      try {
+        const cachedQr = cacheGet<string>(CACHE_KEYS.inviteQrLarge);
+        const cachedQrUrl = cacheGet<string>('inviteQrUrl'); // URL для которого был создан QR
+        if (cachedQr && cachedQrUrl === url) {
+          // Используем кешированный QR моментально
+          setQrImgUrl(cachedQr);
+          setQrLoading(false);
+          return;
+        }
+      } catch {}
+      
+      // Генерируем новый QR (размер 320x320 вместо 512x512 - быстрее грузится)
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${encodeURIComponent(url)}`;
+      
+      // Загружаем QR с timeout
+      const loadQrWithTimeout = async (url: string, timeoutMs = 10000): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          const timer = setTimeout(() => {
+            img.src = '';
+            reject(new Error('QR load timeout'));
+          }, timeoutMs);
+          
+          img.onload = () => {
+            clearTimeout(timer);
+            // Конвертируем в canvas → data URL для кеширования
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                const dataUrl = canvas.toDataURL('image/png', 0.9);
+                resolve(dataUrl);
+              } else {
+                resolve(url); // fallback к обычному URL
+              }
+            } catch {
+              resolve(url);
+            }
+          };
+          
+          img.onerror = () => {
+            clearTimeout(timer);
+            reject(new Error('QR load failed'));
+          };
+          
+          img.crossOrigin = 'anonymous';
+          img.src = url;
+        });
+      };
+      
+      try {
+        const qrDataUrl = await loadQrWithTimeout(qrUrl);
+        setQrImgUrl(qrDataUrl);
+        // Кешируем на 7 дней
+        try {
+          cacheSet(CACHE_KEYS.inviteQrLarge, qrDataUrl, 7 * 24 * 60 * 60 * 1000);
+          cacheSet('inviteQrUrl', url, 7 * 24 * 60 * 60 * 1000);
+        } catch {}
+      } catch (err) {
+        // Fallback: показываем URL напрямую без кеширования
+        setQrImgUrl(qrUrl);
+      }
     } catch {
       // игнорируем тихо
     } finally {
       setQrLoading(false);
     }
   }
+
+  // Предзагрузка QR в фоне при открытии профиля
+  useEffect(() => {
+    const preloadQr = async () => {
+      try {
+        const myId: string | undefined = (() => {
+          try { return (u?.id as string) || (window as any)?.__exampliBoot?.user?.id; } catch { return undefined; }
+        })();
+        if (!myId) return;
+        
+        // Проверяем есть ли уже кеш
+        const cachedQr = cacheGet<string>(CACHE_KEYS.inviteQrLarge);
+        if (cachedQr) return; // Уже есть
+        
+        // Генерируем в фоне (через 2 секунды, чтобы не мешать основной загрузке)
+        setTimeout(async () => {
+          try {
+            // Получаем URL
+            let url = cacheGet<string>(CACHE_KEYS.inviteUrl);
+            if (!url) {
+              let token: string | null = null;
+              try {
+                let r = await supabase.rpc('rpc_invite_create', { caller: myId } as any);
+                if (r.error) r = await supabase.rpc('rpc_invite_create', {} as any);
+                const d: any = r.data;
+                if (typeof d === 'string') token = d;
+                else if (Array.isArray(d) && d.length && d[0]?.token) token = String(d[0].token);
+                else if (d?.token) token = String(d.token);
+              } catch {}
+              if (!token) return;
+              
+              let bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined;
+              if (bot && bot.startsWith('@')) bot = bot.slice(1);
+              const paramEnv = String((import.meta as any).env?.VITE_TG_INVITE_PARAM || '').trim().toLowerCase();
+              const param = (paramEnv === 'start' || paramEnv === 'startattach') ? paramEnv : 'startapp';
+              url = bot
+                ? `https://t.me/${bot}?${param}=${encodeURIComponent(token)}`
+                : `${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
+              cacheSet(CACHE_KEYS.inviteUrl, url, 24 * 60 * 60 * 1000);
+            }
+            
+            // Предзагружаем QR
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${encodeURIComponent(url)}`;
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0);
+                  const dataUrl = canvas.toDataURL('image/png', 0.9);
+                  cacheSet(CACHE_KEYS.inviteQrLarge, dataUrl, 7 * 24 * 60 * 60 * 1000);
+                  cacheSet('inviteQrUrl', url, 7 * 24 * 60 * 60 * 1000);
+                }
+              } catch {}
+            };
+            img.src = qrUrl;
+          } catch {}
+        }, 2000);
+      } catch {}
+    };
+    
+    preloadQr();
+  }, [u?.id]);
 
   useEffect(() => {
     (async () => {
@@ -1485,21 +1618,32 @@ export default function Profile() {
               >
                 {/* QR картинка */}
                 {qrImgUrl && (
-                  <img src={qrImgUrl} alt="QR" className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
+                  <img 
+                    src={qrImgUrl} 
+                    alt="QR" 
+                    className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+                    loading="eager"
+                    fetchPriority="high"
+                  />
+                )}
+                {/* Loading skeleton */}
+                {qrLoading && !qrImgUrl && (
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse">
+                    <div className="absolute inset-0 grid place-items-center">
+                      <div className="text-gray-600 font-medium">Загрузка QR...</div>
+                    </div>
+                  </div>
                 )}
                 {/* Аватар в центре */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-xl overflow-hidden border border-black/10 shadow">
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-lg bg-white">
                   {photoUrl || u?.photo_url ? (
                     <img src={(photoUrl || u?.photo_url) as string} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className="w-full h-full grid place-items-center text-xl font-bold">
+                    <div className="w-full h-full grid place-items-center text-xl font-bold text-gray-700">
                       {initials}
                     </div>
                   )}
                 </div>
-                {qrLoading && (
-                  <div className="absolute inset-0 grid place-items-center text-black/60">Генерация…</div>
-                )}
               </motion.div>
             </div>
           </motion.div>

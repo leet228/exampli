@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import FullScreenSheet from '../sheets/FullScreenSheet';
-import { cacheSet, CACHE_KEYS } from '../../lib/cache';
+import { cacheSet, cacheGet, CACHE_KEYS } from '../../lib/cache';
 import { hapticTiny, hapticSelect, hapticSlideReveal, hapticSlideClose } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 import { precacheTopicsForSubject } from '../../lib/boot';
@@ -96,66 +96,154 @@ export default function AddCourseSheet({
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
+  // Retry helper с экспоненциальной задержкой
+  const retryWithBackoff = async <T,>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T | null> => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (err) {
+        if (i === maxRetries - 1) {
+          console.warn('[AddCourse] Max retries reached:', err);
+          return null;
+        }
+        const delay = baseDelay * Math.pow(2, i);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    return null;
+  };
+
   const save = async () => {
     if (!picked) return;
+    
+    // СРАЗУ обновляем локальный кеш (оптимистично)
+    try {
+      const prev = JSON.parse(localStorage.getItem('exampli:' + 'user') || '{}');
+      localStorage.setItem('exampli:' + 'user', JSON.stringify({ 
+        v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, 
+        e: null 
+      }));
+    } catch {}
+    
     // запишем выбранный курс в users.added_course и сразу выберем первую тему
     const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (tgId) {
-      const { data: user } = await supabase
-        .from('users')
-        .select('id, plus_until')
-        .eq('tg_id', String(tgId))
-        .single();
-      if (user?.id) {
-        // Управление списком выбранных курсов: если есть PLUS — добавляем через RPC; без подписки не трогаем chosen
-        try {
-          const plusActive = Boolean(user?.plus_until && new Date(String(user.plus_until)).getTime() > Date.now());
-          if (plusActive) {
-            await supabase.rpc('rpc_chosen_add', { p_user_id: user.id, p_subject_id: picked.id });
-          }
-        } catch {}
-        // first topic of this subject
-        const { data: topics } = await supabase
-          .from('topics')
-          .select('id,title')
-          .eq('subject_id', picked.id)
-          .order('order_index', { ascending: true })
-          .limit(1);
-        const firstTopic = (topics as any[])?.[0] || null;
-        await supabase
+      // Получаем user с retry
+      const userResult = await retryWithBackoff(async () => {
+        const { data, error } = await supabase
           .from('users')
-          .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null })
-          .eq('id', user.id);
-        // lessons for first topic — cache & notify
+          .select('id, plus_until')
+          .eq('tg_id', String(tgId))
+          .single();
+        if (error) throw error;
+        return data;
+      });
+      
+      const user = userResult;
+      
+      if (user?.id) {
+        // Сначала пробуем загрузить темы из кеша
+        let firstTopic: any = null;
         try {
-          if (firstTopic?.id) {
-            const { data: lessons } = await supabase
-              .from('lessons')
-              .select('id, topic_id, order_index')
-              .eq('topic_id', firstTopic.id)
-              .order('order_index', { ascending: true });
-            const list = (lessons as any[]) || [];
-            cacheSet(CACHE_KEYS.lessonsByTopic(firstTopic.id), list as any);
-            try { window.dispatchEvent(new Event('exampli:lessonsChanged')); } catch {}
+          const cachedTopics = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(picked.id));
+          if (cachedTopics && cachedTopics.length) {
+            firstTopic = cachedTopics[0];
           }
         } catch {}
-        // cache local selection for immediate UI
-        try {
-          if (firstTopic?.id) {
+        
+        // Если нет в кеше - грузим с сервера с retry
+        if (!firstTopic) {
+          const topicsResult = await retryWithBackoff(async () => {
+            const { data, error } = await supabase
+              .from('topics')
+              .select('id,title,order_index')
+              .eq('subject_id', picked.id)
+              .order('order_index', { ascending: true })
+              .limit(1);
+            if (error) throw error;
+            return data;
+          });
+          firstTopic = (topicsResult as any[])?.[0] || null;
+        }
+        
+        // Параллельно: обновление users + добавление в chosen (если PLUS)
+        await Promise.allSettled([
+          // Обновить users с retry
+          retryWithBackoff(async () => {
+            const { error } = await supabase
+              .from('users')
+              .update({ added_course: picked.id, current_topic: firstTopic?.id ?? null })
+              .eq('id', user.id);
+            if (error) throw error;
+          }),
+          
+          // Добавить в chosen (если есть PLUS)
+          (async () => {
+            try {
+              const plusActive = Boolean(user?.plus_until && new Date(String(user.plus_until)).getTime() > Date.now());
+              if (plusActive) {
+                await retryWithBackoff(async () => {
+                  const { error } = await supabase.rpc('rpc_chosen_add', { 
+                    p_user_id: user.id, 
+                    p_subject_id: picked.id 
+                  });
+                  if (error) throw error;
+                });
+              }
+            } catch {}
+          })(),
+        ]);
+        
+        // Загружаем уроки с retry и кешируем
+        if (firstTopic?.id) {
+          // Сначала пробуем из кеша
+          let lessons: any[] = [];
+          try {
+            const cachedLessons = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(firstTopic.id));
+            if (cachedLessons && cachedLessons.length) {
+              lessons = cachedLessons;
+            }
+          } catch {}
+          
+          // Если нет - грузим с сервера
+          if (!lessons.length) {
+            const lessonsResult = await retryWithBackoff(async () => {
+              const { data, error } = await supabase
+                .from('lessons')
+                .select('id, topic_id, order_index')
+                .eq('topic_id', firstTopic.id)
+                .order('order_index', { ascending: true });
+              if (error) throw error;
+              return data;
+            });
+            lessons = (lessonsResult as any[]) || [];
+          }
+          
+          // Кешируем уроки
+          try {
+            if (lessons.length) {
+              cacheSet(CACHE_KEYS.lessonsByTopic(firstTopic.id), lessons as any);
+              window.dispatchEvent(new Event('exampli:lessonsChanged'));
+            }
+          } catch {}
+          
+          // cache local selection for immediate UI
+          try {
             localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
             localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
-          }
-        } catch {}
-        try {
-          if (firstTopic?.title) {
-            window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title } } as any));
-          }
-        } catch {}
+          } catch {}
+          try {
+            window.dispatchEvent(new CustomEvent('exampli:topicBadge', { 
+              detail: { topicTitle: firstTopic?.title } 
+            } as any));
+          } catch {}
+        }
       }
     }
 
     onAdded(picked);
     onClose();
+    
     // Сразу обновим глобальный снапшот boot, чтобы шторка курсов увидела новый курс без перезагрузки
     try {
       const boot: any = (window as any).__exampliBoot || {};
@@ -180,15 +268,10 @@ export default function AddCourseSheet({
         subjectsAll: hasInAll ? listAll : [...(listAll || []), picked],
       };
     } catch {}
+    
     // оповестим UI (и сохраним снимок) через store
     window.dispatchEvent(new CustomEvent('exampli:subjectsChanged'));
     storeSetActiveCourse({ code: picked.code, title: picked.title });
-    // обновим кеш пользователя (added_course обновился)
-    try {
-      const prev = JSON.parse(localStorage.getItem('exampli:' + 'user') || '{}');
-      // бессрочная запись без поля e
-      localStorage.setItem('exampli:' + 'user', JSON.stringify({ v: { ...(prev?.v||{}), id: (prev?.v?.id||null), added_course: picked.id }, e: null }));
-    } catch {}
 
     // (сплэш и прогрев теперь вызываются в onClick — здесь не трогаем)
   };
