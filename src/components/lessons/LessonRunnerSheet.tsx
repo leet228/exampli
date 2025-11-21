@@ -852,6 +852,26 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
+  // Нормализуем десятичное число: допускаем "1,5" и "1.5", пробелы, знак
+  // Возвращает каноничную строку числа или null, если строка не является числом
+  function normalizeDecimalString(src: string): string | null {
+    const raw = String(src || '').trim();
+    if (!raw) return null;
+    const compact = raw.replace(/\s+/g, '');
+    // Заменяем запятую на точку; допускаем один десятичный разделитель
+    const unified = compact.replace(/,/g, '.');
+    if (!/^[-+]?\d+(?:\.\d+)?$/.test(unified)) return null;
+    const num = Number(unified);
+    if (!Number.isFinite(num)) return null;
+    return String(num);
+  }
+
+  function decimalEquals(a: string, b: string): boolean {
+    const na = normalizeDecimalString(a);
+    const nb = normalizeDecimalString(b);
+    return na != null && nb != null && na === nb;
+  }
+
   // Разбор корректных ответов: поддержка списка через запятую
   function parseAnswerList(src: string): string[] {
     const s = String(src || '').trim();
@@ -961,7 +981,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (!task) return;
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
-    else if (task.answer_type === 'num_input') user = text.trim().replace(/[^\d]/g, '');
+    else if (task.answer_type === 'num_input') user = text.trim();
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -1045,8 +1065,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let ok = false;
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
       const userNorm = normalizeAnswer(user);
-      let variants = parseAnswerList(task.correct || '');
-      // Для it_code и input поддерживаем и разделитель "|" на случай разных форматов
+      // Для input не используем список через запятую, чтобы не ломать десятичные числа вида "1,5"
+      let variants = (task.answer_type === 'input') ? [] : parseAnswerList(task.correct || '');
+      // Для it_code и input поддерживаем разделитель "|"
       if (task.answer_type === 'it_code' || task.answer_type === 'input') {
         const pipe = parseAnswerPipe(task.correct || '');
         if (pipe.length > 0) {
@@ -1055,16 +1076,19 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         }
       }
       if (variants.length > 0) {
-        ok = variants.some((v) => normalizeAnswer(v) === userNorm);
+        ok = variants.some((v) => {
+          if (task.answer_type === 'input' && decimalEquals(v, user)) return true;
+          return normalizeAnswer(v) === userNorm;
+        });
       } else {
-        ok = userNorm === normalizeAnswer(task.correct || '');
+        ok = (userNorm === normalizeAnswer(task.correct || '')) || (task.answer_type === 'input' && decimalEquals(task.correct || '', user));
       }
   } else if (task.answer_type === 'num_input') {
     const variants = parseAnswerPipe(task.correct || '');
     if (variants.length > 0) {
-      ok = variants.some((v) => String(v).replace(/[^\d]/g, '') === user);
+      ok = variants.some((v) => decimalEquals(String(v), user));
     } else {
-      ok = user === String(task.correct || '').replace(/[^\d]/g, '');
+      ok = decimalEquals(String(task.correct || ''), user);
     }
     } else if (task.answer_type === 'it_code_2') {
       const san = (s: string) => String(s || '').trim().replace(/[^\d]+/g, '');
@@ -1985,6 +2009,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             for (const v of list) { const vv = v.trim(); if (vv) set.add(vv); }
                             for (const v of pipe) { const vv = v.trim(); if (vv) set.add(vv); }
                             vars = Array.from(set);
+                          } else if (task.answer_type === 'input') {
+                            // Для input показываем варианты из pipe, чтобы не путать запятую в десятичной дроби со списком
+                            vars = parseAnswerPipe(task.correct || '');
                           } else {
                             vars = parseAnswerList(task.correct || '');
                           }
@@ -1996,7 +2023,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       onChange={(e) => {
                         const raw = e.target.value || '';
                         if (task.answer_type === 'num_input') {
-                          const filtered = raw.replace(/[^\d]+/g, '');
+                          // Разрешаем цифры, пробелы, знак и десятичные разделители "." и ","
+                          const filtered = raw.replace(/[^\d.,+\-\s]/g, '');
                           setText(filtered);
                         } else {
                           setText(raw);
@@ -2006,7 +2034,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
                       inputMode={(task.answer_type === 'num_input') ? ('numeric' as any) : undefined}
-                      pattern={(task.answer_type === 'num_input') ? '[0-9]*' : undefined}
+                      pattern={(task.answer_type === 'num_input') ? '[0-9.,+-]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
