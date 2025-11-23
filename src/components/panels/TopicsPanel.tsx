@@ -1,5 +1,5 @@
 // src/components/panels/TopicsPanel.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 import { motion } from 'framer-motion';
@@ -20,7 +20,9 @@ export default function TopicsPanel({ open, onClose }: Props) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [pressedId, setPressedId] = useState<string | number | null>(null);
-  const [lessonCounts, setLessonCounts] = useState<Record<string | number, number>>({});
+  const [lessonTotals, setLessonTotals] = useState<Record<string | number, number>>({});
+  const [lessonDone, setLessonDone] = useState<Record<string, number>>({});
+  const completedIdsRef = useRef<Set<string>>(new Set());
   const [currentTopicId, setCurrentTopicId] = useState<string | number | null>(null);
 
   const readActiveCode = useCallback(() => {
@@ -64,9 +66,8 @@ export default function TopicsPanel({ open, onClose }: Props) {
 
   useEffect(() => { void loadData(); }, [loadData]);
   
-  // Подгружаем количество уроков только из локального кэша (без БД)
-  useEffect(() => {
-    if (!Array.isArray(topics) || !topics.length) { setLessonCounts({}); return; }
+  const recomputeTotals = useCallback(() => {
+    if (!Array.isArray(topics) || !topics.length) { setLessonTotals({}); return; }
     const res: Record<string | number, number> = {};
     topics.forEach((t) => {
       try {
@@ -74,8 +75,44 @@ export default function TopicsPanel({ open, onClose }: Props) {
         res[t.id] = Array.isArray(cached) ? cached.length : 0;
       } catch { res[t.id] = 0; }
     });
-    setLessonCounts(res);
+    setLessonTotals(res);
   }, [topics]);
+
+  useEffect(() => { recomputeTotals(); }, [recomputeTotals]);
+  useEffect(() => {
+    const handler = () => recomputeTotals();
+    window.addEventListener('exampli:lessonsChanged', handler as EventListener);
+    return () => window.removeEventListener('exampli:lessonsChanged', handler as EventListener);
+  }, [recomputeTotals]);
+
+  useEffect(() => {
+    const list = cacheGet<any[]>(CACHE_KEYS.lessonProgress) || [];
+    completedIdsRef.current = new Set(list.map((entry: any) => String(entry?.lesson_id)));
+
+    const map: Record<string, number> = {};
+    list.forEach((entry: any) => {
+      const tid = entry?.topic_id;
+      if (!tid) return;
+      const key = String(tid);
+      map[key] = (map[key] || 0) + 1;
+    });
+    setLessonDone(map);
+  }, []);
+
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<any>).detail;
+      if (!detail || detail.lesson_id == null) return;
+      const lessonKey = String(detail.lesson_id);
+      if (completedIdsRef.current.has(lessonKey)) return;
+      completedIdsRef.current.add(lessonKey);
+      const topicKey = detail.topic_id != null ? String(detail.topic_id) : null;
+      if (!topicKey) return;
+      setLessonDone((prev) => ({ ...prev, [topicKey]: (prev[topicKey] || 0) + 1 }));
+    };
+    window.addEventListener('exampli:lessonProgress', handler as EventListener);
+    return () => window.removeEventListener('exampli:lessonProgress', handler as EventListener);
+  }, [completedIdsRef]);
   useEffect(() => {
     const onCourseChanged = () => { void loadData(); };
     window.addEventListener('exampli:courseChanged', onCourseChanged as EventListener);
@@ -225,10 +262,20 @@ export default function TopicsPanel({ open, onClose }: Props) {
               <div className="text-base font-semibold" style={{ color: selected ? accentColor : undefined }}>{t.title}</div>
               {/* Прогресс-бар под названием — старт ровно под началом текста */}
               <div className="mt-2 relative h-5 rounded-2xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.06)' }}>
-                {/* Пустой (но с маленьким стартом) прогресс */}
-                <div className="absolute left-0 top-0 bottom-0 rounded-2xl" style={{ width: 22, background: '#57cc02' }} />
+                <div
+                  className="absolute left-0 top-0 bottom-0 rounded-2xl transition-all"
+                  style={{
+                    background: '#57cc02',
+                    width: (() => {
+                      const total = Number(lessonTotals[t.id] ?? 0);
+                      const done = Number(lessonDone[String(t.id)] ?? 0);
+                      if (!total || total <= 0) return 12;
+                      return `${Math.max(8, Math.min(100, (done / total) * 100))}%`;
+                    })(),
+                  }}
+                />
                 <div className="absolute inset-0 flex items-center justify-center text-[13px] font-extrabold" style={{ color: 'rgba(255,255,255,0.38)' }}>
-                  {`0/${Number(lessonCounts[t.id] ?? 0)}`}
+                  {`${Number(lessonDone[String(t.id)] ?? 0)}/${Number(lessonTotals[t.id] ?? 0)}`}
                 </div>
               </div>
             </div>

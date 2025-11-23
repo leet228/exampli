@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LessonButton from './LessonButton';
-import { hapticSelect } from '../../lib/haptics';
+import { hapticSelect, hapticTiny } from '../../lib/haptics';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
+import type { LessonState } from './LessonRoad';
 
 type Props = {
   open: boolean;
@@ -10,9 +11,10 @@ type Props = {
   title?: string;
   onClose: () => void;
   onStart: () => void;
+  state?: LessonState;
 };
 
-export default function LessonStartPopover({ open, anchorEl, title = 'Урок', onClose, onStart }: Props) {
+export default function LessonStartPopover({ open, anchorEl, title = 'Урок', onClose, onStart, state = 'active' }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [top, setTop] = useState<number>(0);
   const [left, setLeft] = useState<number>(0);
@@ -20,6 +22,8 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
   const [courseTitle, setCourseTitle] = useState<string>('');
   const [progressLabel, setProgressLabel] = useState<string>('Урок 1 из 1');
   const [baseColor, setBaseColor] = useState<string>('#3c73ff');
+  const isLocked = state === 'locked';
+  const panelColor = isLocked ? '#4b5563' : baseColor;
 
   // вычисляем позицию под кнопкой урока и положение стрелки, не вылезая за экран
   useEffect(() => {
@@ -136,15 +140,31 @@ export default function LessonStartPopover({ open, anchorEl, title = 'Урок',
       <div
         aria-hidden
         className="absolute -top-3"
-        style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: `12px solid ${baseColor}` }}
+        style={{ left: arrowLeft - 12, width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: `12px solid ${panelColor}` }}
       />
-      <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: baseColor, color: '#ffffff', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
+      <div className="rounded-3xl" style={{ width: 340, maxWidth: '92vw', background: panelColor, color: '#ffffff', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}>
                 <div className="px-5 pt-4 pb-3">
                   <div className="text-xl font-extrabold">{courseTitle || title}</div>
-                  <div className="text-base opacity-90 mt-1">{progressLabel}</div>
+                  <div className="text-base opacity-90 mt-1">
+                    {isLocked ? 'Пройди предыдущий урок, чтобы открыть этот' : progressLabel}
+                  </div>
                 </div>
                 <div className="px-5 pb-5">
-                  <LessonButton text="НАЧАТЬ" onClick={() => { try { hapticSelect(); } catch {} onStart(); }} baseColor="#ffffff" textColor={baseColor} shadowColorOverride="rgba(0,0,0,0.12)" />
+                  <LessonButton
+                    text="НАЧАТЬ"
+                    onClick={() => {
+                      if (isLocked) {
+                        try { hapticTiny(); } catch {}
+                        return;
+                      }
+                      try { hapticSelect(); } catch {}
+                      onStart();
+                    }}
+                    baseColor="#ffffff"
+                    textColor={panelColor}
+                    shadowColorOverride="rgba(0,0,0,0.12)"
+                    className={isLocked ? 'opacity-80' : ''}
+                  />
                 </div>
               </div>
             </div>

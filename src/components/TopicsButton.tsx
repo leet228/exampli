@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cacheGet, CACHE_KEYS } from '../lib/cache';
 import { hapticTiny } from '../lib/haptics';
 
 export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
   const [topicTitle, setTopicTitle] = useState<string>('Выбрать тему');
   const [pressed, setPressed] = useState(false);
-  const [lessonCount, setLessonCount] = useState<number>(0);
+  const [lessonTotals, setLessonTotals] = useState<{ total: number; done: number }>({ total: 0, done: 0 });
+  const completedIdsRef = useRef<Set<string>>(new Set());
 
   // Базовый цвет кнопки — зависит от порядка текущей темы (1/2/3)
   const baseColor = useMemo(() => {
@@ -63,26 +64,40 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     return darken(baseColor, 18);
   }, [baseColor]);
 
-  // Подтягиваем количество уроков текущей темы из кэша и обновляем по событиям
+  const recomputeCounts = () => {
+    try {
+      const tid = localStorage.getItem('exampli:currentTopicId');
+      if (!tid) { setLessonTotals({ total: 0, done: 0 }); return; }
+      const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(tid));
+      const total = Array.isArray(cached) ? cached.length : 0;
+      const progress = cacheGet<any[]>(CACHE_KEYS.lessonProgress) || [];
+      completedIdsRef.current = new Set(progress.map((entry: any) => String(entry?.lesson_id)));
+      const done = progress.filter((entry: any) => String(entry?.topic_id) === String(tid)).length;
+      setLessonTotals({ total, done });
+    } catch { setLessonTotals({ total: 0, done: 0 }); }
+  };
+
   useEffect(() => {
-    const readCount = () => {
-      try {
-        const tid = localStorage.getItem('exampli:currentTopicId');
-        if (!tid) { setLessonCount(0); return; }
-        const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(tid));
-        setLessonCount(Array.isArray(cached) ? cached.length : 0);
-      } catch { setLessonCount(0); }
+    recomputeCounts();
+    const onLessons = () => recomputeCounts();
+    const onTopic = () => recomputeCounts();
+    const onProgress = (evt: Event) => {
+      const detail = (evt as CustomEvent<any>).detail;
+      if (!detail || detail.lesson_id == null) return;
+      const lessonKey = String(detail.lesson_id);
+      if (completedIdsRef.current.has(lessonKey)) return;
+      completedIdsRef.current.add(lessonKey);
+      recomputeCounts();
     };
-    readCount();
-    const onLessons = () => readCount();
-    const onTopic = () => readCount();
     window.addEventListener('exampli:lessonsChanged', onLessons as EventListener);
     window.addEventListener('exampli:topicChanged', onTopic as EventListener);
+    window.addEventListener('exampli:lessonProgress', onProgress as EventListener);
     return () => {
       window.removeEventListener('exampli:lessonsChanged', onLessons as EventListener);
       window.removeEventListener('exampli:topicChanged', onTopic as EventListener);
+      window.removeEventListener('exampli:lessonProgress', onProgress as EventListener);
     };
-  }, []);
+  }, [completedIdsRef]);
 
   const CUR_TOPIC_TITLE_KEY = 'exampli:currentTopicTitle';
 
@@ -151,7 +166,9 @@ export default function TopicsButton({ onOpen }: { onOpen: () => void }) {
     >
       <div className="text-left leading-tight">
         <div className="text-[18px] font-extrabold leading-tight">{topicTitle}</div>
-        <div className="mt-1 text-[13px] font-extrabold" style={{ color: 'rgba(255,255,255,0.55)' }}>{`0/${lessonCount}`}</div>
+        <div className="mt-1 text-[13px] font-extrabold" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          {`${lessonTotals.done}/${lessonTotals.total}`}
+        </div>
       </div>
       <span className="ml-2 text-[18px] opacity-90">▾</span>
     </motion.button>

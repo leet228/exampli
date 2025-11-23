@@ -104,6 +104,7 @@ export default async function handler(req, res) {
     let profData = null;
     let friendsCnt = 0;
     let subjectAndLessons = { active_id: null, active_code: null, subject: null, lessons: [] };
+    let lessonProgress = [];
     let chosenSubjects = [];
     try {
       // per-user short cache (15-60s)
@@ -179,6 +180,22 @@ export default async function handler(req, res) {
       }
     }
 
+    try {
+      const rpc1 = await supabase.rpc('rpc_boot1', { p_user_id: userRow.id, p_active_code: activeCodeFromClient });
+      if (!rpc1.error) {
+        const base = Array.isArray(rpc1.data) ? (rpc1.data[0] || {}) : (rpc1.data || {});
+        if (Array.isArray(base.lesson_progress)) {
+          lessonProgress = base.lesson_progress;
+        }
+        if ((!subjectAndLessons.lessons || subjectAndLessons.lessons.length === 0) && Array.isArray(base.lessons)) {
+          subjectAndLessons = {
+            ...subjectAndLessons,
+            lessons: base.lessons,
+          };
+        }
+      }
+    } catch {}
+
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
     // Синхронизируем phone_number из профиля в users, чтобы клиентская логика видела номер в users
     try {
@@ -209,6 +226,7 @@ export default async function handler(req, res) {
       lessons: subjectAndLessons.lessons || [],
       active_code: subjectAndLessons.active_code || null,
       active_id: subjectAndLessons.active_id || null,
+      lesson_progress: lessonProgress,
       onboarding,
       invite_token: startParam || null,
       last_streak_day: lastStreakDay,

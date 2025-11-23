@@ -18,6 +18,7 @@ declare
   v_subject jsonb := null;
   v_lessons jsonb := '[]'::jsonb;
   v_current_topic uuid := null;
+  v_lesson_progress jsonb := '[]'::jsonb;
 begin
   select * into v_user from public.users where id = p_user_id;
   if not found then
@@ -72,13 +73,28 @@ begin
     order by l.order_index asc;
   end if;
 
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'lesson_id', lp.lesson_id,
+        'topic_id', lp.topic_id,
+        'subject_id', lp.subject_id,
+        'completed_at', to_char(lp.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+      )
+    ),
+    '[]'::jsonb
+  ) into v_lesson_progress
+  from public.lesson_progress lp
+  where lp.user_id = p_user_id;
+
   return jsonb_build_object(
     'profile', coalesce(v_profile, '{}'::jsonb),
     'friends_count', v_friends_count,
     'active_id', v_active_id,
     'active_code', v_active_code,
     'subject', case when v_subject is null then 'null'::jsonb else v_subject end,
-    'lessons', v_lessons
+    'lessons', v_lessons,
+    'lesson_progress', v_lesson_progress
   );
 end;
 $$;

@@ -157,7 +157,7 @@ export async function addUserSubject(subjectCode: string) {
   } catch {}
 }
 
-export async function finishLesson({ correct, elapsedMs }: { correct: boolean; elapsedMs?: number }) {
+export async function finishLesson({ correct, elapsedMs, lessonId }: { correct: boolean; elapsedMs?: number; lessonId?: string | number }) {
   // Не блокируемся на отсутствии getStats: для стрика достаточно user_id или tg_id
   let u: any = null;
   try { u = await getStats(); } catch {}
@@ -276,7 +276,12 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
       const r = await fetch('/api/streak_finish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // Передаём perfect_inc, чтобы сервер сам инкрементил perfect_lessons и max_streak
-        body: JSON.stringify({ user_id: userId, tg_id: tgId, perfect_inc: (() => { try { return (window as any)?.__exampliLessonPerfect ? 1 : 0; } catch { return 0; } })() })
+        body: JSON.stringify({
+          user_id: userId,
+          tg_id: tgId,
+          lesson_id: lessonId ?? null,
+          perfect_inc: (() => { try { return (window as any)?.__exampliLessonPerfect ? 1 : 0; } catch { return 0; } })(),
+        })
       });
       if (r.ok) {
         let js: any = null;
@@ -296,6 +301,10 @@ export async function finishLesson({ correct, elapsedMs }: { correct: boolean; e
             cacheSet(CACHE_KEYS.user, { ...cu, id: uid, last_active_at: js?.last_active_at ?? cu.last_active_at ?? null, timezone: js?.timezone ?? cu.timezone ?? null, max_streak: newMax, ...(nextPerfectMaybe != null ? { perfect_lessons: nextPerfectMaybe } : {}) });
             if (newMax !== prevMax) {
               window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { max_streak: newMax } } as any));
+            }
+            if (lessonId != null) {
+              const entry = js?.completed_lesson && js.completed_lesson.lesson_id ? js.completed_lesson : { lesson_id: lessonId };
+              syncLessonProgress(entry);
             }
             // Если ачивки изменились — перерендерим и перезагрузим PNG в фоне
             try {
@@ -599,5 +608,25 @@ export async function setUserSubjects(subjectCodes: string[]) {
   try {
     const cached = cacheGet<any>(CACHE_KEYS.user) || {};
     cacheSet(CACHE_KEYS.user, { ...cached, id: user.id, added_course: subj.id });
+  } catch {}
+}
+
+function syncLessonProgress(entry: { lesson_id: string | number; topic_id?: any; subject_id?: any; completed_at?: string }) {
+  try {
+    if (!entry || entry.lesson_id == null) return;
+    const list = cacheGet<any[]>(CACHE_KEYS.lessonProgress) || [];
+    if (!list.some((p) => String(p.lesson_id) === String(entry.lesson_id))) {
+      const next = [...list, entry];
+      cacheSet(CACHE_KEYS.lessonProgress, next);
+    }
+    const boot: any = (window as any).__exampliBoot || {};
+    const prev = Array.isArray(boot.lesson_progress) ? boot.lesson_progress : [];
+    if (!prev.some((p: any) => String(p?.lesson_id) === String(entry.lesson_id))) {
+      const updated = [...prev, entry];
+      (window as any).__exampliBoot = { ...boot, lesson_progress: updated };
+    } else {
+      (window as any).__exampliBoot = { ...boot };
+    }
+    window.dispatchEvent(new CustomEvent('exampli:lessonProgress', { detail: entry } as any));
   } catch {}
 }

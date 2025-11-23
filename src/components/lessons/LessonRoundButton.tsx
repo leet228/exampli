@@ -18,6 +18,7 @@ type Props = {
   disabled?: boolean;
   shadowHeight?: number; // высота нижней «полоски»
   dataLessonId?: string | number; // пробрасываем в data-lesson-id для поповера
+  pressable?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -74,6 +75,7 @@ export default function LessonRoundButton({
   disabled = false,
   shadowHeight = 6,
   dataLessonId,
+  pressable = true,
 }: Props) {
   const [pressed, setPressed] = useState(false);
   const shadowColor = useMemo(() => darken(baseColor, 18), [baseColor]);
@@ -135,7 +137,12 @@ export default function LessonRoundButton({
       data-lesson-id={dataLessonId as any}
       className={`grid place-items-center ${className}`}
       style={style}
-      onPointerDown={() => { setPressed(true); hapticSelect(); }}
+      onPointerDown={() => {
+        if (pressable) {
+          setPressed(true);
+          hapticSelect();
+        }
+      }}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
       onClick={onClick}

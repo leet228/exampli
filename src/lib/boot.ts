@@ -17,6 +17,13 @@ export type LessonRow = {
   order_index: number | string;
 };
 
+export type LessonProgressEntry = {
+  lesson_id: number | string;
+  topic_id?: number | string | null;
+  subject_id?: number | string | null;
+  completed_at?: string | null;
+};
+
 export type BootData = {
   user: any | null;
   stats: { streak: number; energy: number; coins: number };
@@ -32,6 +39,7 @@ export type BootData = {
   current_topic_title?: string | null;
   // предзагруженные данные для мгновенного открытия панели тем
   topicsBySubject?: Record<string, { id: number | string; subject_id: number | string; title: string; order_index: number }[]>;
+  lesson_progress?: LessonProgressEntry[];
 };
 
 const ACTIVE_KEY = 'exampli:activeSubjectCode';
@@ -86,6 +94,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       subjects: step1?.subjects || [],
       lessons: step1?.lessons || [],
       onboarding: step1?.onboarding || { phone_given: false, course_taken: false, boarding_finished: false },
+      lesson_progress: Array.isArray(step1?.lesson_progress) ? step1.lesson_progress : [],
     };
     (window as any).__exampliBoot = boot as any;
     window.dispatchEvent(new CustomEvent('exampli:bootData', { detail: boot } as any));
@@ -102,6 +111,9 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
       cacheSet(CACHE_KEYS.lastStreakDay, String(step1.last_streak_day));
     }
   } catch {}
+  const lessonProgress = Array.isArray(step1?.lesson_progress) ? step1.lesson_progress : [];
+  try { cacheSet(CACHE_KEYS.lessonProgress, lessonProgress); } catch {}
+
   // Отметим признак активной подписки локально (по plus_until > now)
   try {
     const plusUntil = (step1?.user?.plus_until as string) || null;
@@ -560,6 +572,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
     current_topic_id: currentTopicId,
     current_topic_title: currentTopicTitle,
     topicsBySubject,
+    lesson_progress: lessonProgress,
   };
 
   (window as any).__exampliBoot = boot;

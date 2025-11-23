@@ -108,14 +108,27 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         if (rawV4) rows = JSON.parse(rawV4) as any[];
       } catch {}
       if (!rows || !Array.isArray(rows) || rows.length === 0) {
-        const { data } = await supabase
-          .from('tasks')
-          .select('id, lesson_id, prompt, task_text, answer_type, options, correct, order_index')
-          .eq('lesson_id', lessonId)
-          .order('order_index', { ascending: true })
-          .order('id', { ascending: true })
-          .limit(50);
-        rows = (data as any[]) || [];
+        let fetched: any[] | null = null;
+        try {
+          const resp = await fetch(`/api/lesson_tasks?lesson_id=${lessonId}`);
+          if (resp.ok) {
+            const payload = await resp.json();
+            if (payload && Array.isArray(payload.tasks)) {
+              fetched = payload.tasks;
+            }
+          }
+        } catch {}
+        if ((!fetched || fetched.length === 0)) {
+          const { data } = await supabase
+            .from('tasks')
+            .select('id, lesson_id, prompt, task_text, answer_type, options, correct, order_index')
+            .eq('lesson_id', lessonId)
+            .order('order_index', { ascending: true })
+            .order('id', { ascending: true })
+            .limit(50);
+          fetched = (data as any[]) || [];
+        }
+        rows = fetched || [];
         // страховка: отсортировать по order_index, затем id
         rows.sort((a: any, b: any) => {
           const ao = (a?.order_index ?? 0) as number; const bo = (b?.order_index ?? 0) as number;
@@ -1249,7 +1262,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       try { (window as any).__exampliLessonPerfect = !hadAnyMistakes; } catch {}
       try { (window as any).__exampliLessonMs = Math.max(0, Number(Date.now() - lessonStartedAt)); } catch {}
       (async () => {
-        try { await finishLesson({ correct: true, elapsedMs: Math.max(0, Number(Date.now() - lessonStartedAt)) }); } catch {}
+        try { await finishLesson({ correct: true, elapsedMs: Math.max(0, Number(Date.now() - lessonStartedAt)), lessonId }); } catch {}
         finally { try { (window as any).__exampliLessonPerfect = undefined; (window as any).__exampliLessonMs = undefined; } catch {} }
       })();
     }
@@ -2115,21 +2128,37 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
               </div>
             )}
           </motion.div>
-          {/* подтверждение выхода */}
-          <BottomSheet open={confirmExit} onClose={() => setConfirmExit(false)} title="" dimBackdrop panelBg={'var(--bg)'}>
-            <div className="grid gap-4 text-center">
-              <div className="text-lg font-semibold">Если выйдешь, потеряешь прогресс этого урока</div>
-              <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
-              <button
-                type="button"
-                onClick={() => { try { hapticTiny(); } catch {} setConfirmExit(false); setStreakLocal(0); setStreakFlash(null); setTimeout(() => { try { onClose(); } catch {} }, 220); }}
-                className="w-full py-2 text-red-400 font-extrabold"
-                style={{ background: 'transparent' }}
-              >
-                ВЫЙТИ
-              </button>
-            </div>
-          </BottomSheet>
+          {confirmExit && (
+            isPlus ? (
+              <BottomSheet open title="" onClose={() => setConfirmExit(false)} dimBackdrop panelBg={'var(--bg)'}>
+                <div className="grid gap-4 text-center">
+                  <div className="text-lg font-semibold">Если выйдешь, потеряешь прогресс этого урока</div>
+                  <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { hapticTiny(); } catch {}
+                      setConfirmExit(false);
+                      setTimeout(() => { try { onClose(); } catch {} }, 220);
+                    }}
+                    className="w-full py-2 text-red-400 font-extrabold"
+                    style={{ background: 'transparent' }}
+                  >
+                    ВЫЙТИ
+                  </button>
+                </div>
+              </BottomSheet>
+            ) : (
+              <ExitPromo
+                onSkip={() => { try { hapticTiny(); } catch {}; setConfirmExit(false); }}
+                onSubscribe={() => {
+                  try { hapticSelect(); } catch {}
+                  setConfirmExit(false);
+                  try { navigate('/subscription'); } catch {}
+                }}
+              />
+            )
+          )}
         </>
       )}
     </AnimatePresence>
@@ -2137,6 +2166,47 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 }
 
 
+
+function ExitPromo({ onSkip, onSubscribe }: { onSkip: () => void; onSubscribe: () => void }) {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const loop = (t: number) => {
+      const p = Math.min(1, (t - start) / 5000);
+      setPct(p);
+      if (p < 1) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const ready = pct >= 0.999;
+  return (
+    <div className="fixed inset-0 z-[190]" style={{ background: '#01347a' }}>
+      <img src="/subs/sub_pic.svg" alt="PLUS" className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" style={{ transform: 'translateY(100px)' }} />
+      {!ready && (
+        <div className="absolute left-5 w-14 h-14" style={{ top: 120 }}>
+          <div className="relative w-14 h-14 rounded-full" style={{ background: `conic-gradient(#fff ${Math.round(pct * 360)}deg, rgba(255,255,255,0.25) 0)` }}>
+            <div className="absolute inset-1 rounded-full" style={{ background: '#01347a' }} />
+          </div>
+        </div>
+      )}
+      {ready && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-28 w-[min(92%,680px)] px-4">
+          <PressCta text="КУПИТЬ ПОДПИСКУ" onClick={onSubscribe} />
+          <button
+            type="button"
+            className="w-full mt-4 font-extrabold tracking-wider text-[#2f5bff]"
+            onClick={onSkip}
+            style={{ background: 'transparent' }}
+          >
+            НЕТ СПАСИБО
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PressOption({ active, children, onClick, disabled, resolved, size = 'md', fullWidth = true, variant = 'default' }: { active: boolean; children: React.ReactNode; onClick: () => void; disabled?: boolean; resolved?: 'green' | 'red' | null; size?: 'xs' | 'sm' | 'md'; fullWidth?: boolean; variant?: 'default' | 'black' }) {
   const [pressed, setPressed] = useState(false);

@@ -22,6 +22,12 @@ export default async function handler(req, res) {
     const body = await safeJson(req);
     const userId = body?.user_id || null;
     const tgId = body?.tg_id ? String(body.tg_id) : null;
+    const lessonId = (() => {
+      const raw = body?.lesson_id;
+      if (raw === null || raw === undefined || raw === '') return null;
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : null;
+    })();
     if (!userId && !tgId) { res.status(400).json({ error: 'user_id_or_tg_id_required' }); return; }
 
     // Load user row
@@ -50,6 +56,7 @@ export default async function handler(req, res) {
     let hasToday = false;
     let hasYesterdayActive = false;
     let hasYesterdayFreeze = false;
+    let completedLesson = null;
     try {
       const { data: todayRow } = await supabase
         .from('streak_days')
@@ -91,7 +98,20 @@ export default async function handler(req, res) {
             .eq('id', userRow.id);
         } catch {}
       }
-      res.status(200).json({ ok: true, user_id: userRow.id, streak: currentStreak, last_active_at: userRow.last_active_at || null, max_streak: nextMax, perfect_lessons: nextPerfect, timezone: tz, debug: { todayIso, hasToday: true } });
+      if (lessonId != null) {
+        completedLesson = await markLessonCompleted(supabase, userRow.id, lessonId);
+      }
+      res.status(200).json({
+        ok: true,
+        user_id: userRow.id,
+        streak: currentStreak,
+        last_active_at: userRow.last_active_at || null,
+        max_streak: nextMax,
+        perfect_lessons: nextPerfect,
+        timezone: tz,
+        debug: { todayIso, hasToday: true },
+        completed_lesson: completedLesson,
+      });
       return;
     }
 
@@ -155,7 +175,20 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.status(200).json({ ok: true, user_id: userRow.id, streak: Number(updated.streak || 0), last_active_at: updated.last_active_at || null, max_streak: Number(updated && updated.max_streak != null ? updated.max_streak : nextMax), perfect_lessons: Number(updated && updated.perfect_lessons != null ? updated.perfect_lessons : (perfectInc ? nextPerfect : prevPerfect)), timezone: tz, debug: { todayIso, hasToday: false, hasYesterdayActive, hasYesterdayFreeze, currentStreak, computed: newStreak } });
+    if (lessonId != null) {
+      completedLesson = await markLessonCompleted(supabase, userRow.id, lessonId);
+    }
+    res.status(200).json({
+      ok: true,
+      user_id: userRow.id,
+      streak: Number(updated.streak || 0),
+      last_active_at: updated.last_active_at || null,
+      max_streak: Number(updated && updated.max_streak != null ? updated.max_streak : nextMax),
+      perfect_lessons: Number(updated && updated.perfect_lessons != null ? updated.perfect_lessons : (perfectInc ? nextPerfect : prevPerfect)),
+      timezone: tz,
+      debug: { todayIso, hasToday: false, hasYesterdayActive, hasYesterdayFreeze, currentStreak, computed: newStreak },
+      completed_lesson: completedLesson,
+    });
   } catch (e) {
     try { console.error('[api/streak_finish] error', e); } catch {}
     res.status(500).json({ ok: false, code: 'internal', error: 'Internal error' });
@@ -178,6 +211,41 @@ async function safeJson(req) {
     req.on?.('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
     req.on?.('error', () => resolve({}));
   });
+}
+
+async function markLessonCompleted(supabase, userId, lessonId) {
+  try {
+    if (!userId || !Number.isFinite(lessonId)) return null;
+    const { data: lesson } = await supabase
+      .from('lessons')
+      .select('id, topic_id')
+      .eq('id', lessonId)
+      .maybeSingle();
+    if (!lesson?.id) return null;
+    let subjectId = null;
+    if (lesson.topic_id != null) {
+      const { data: topic } = await supabase
+        .from('topics')
+        .select('id, subject_id')
+        .eq('id', lesson.topic_id)
+        .maybeSingle();
+      subjectId = topic?.subject_id ?? null;
+    }
+    const payload = {
+      user_id: userId,
+      lesson_id: lesson.id,
+      topic_id: lesson.topic_id,
+      subject_id: subjectId,
+      completed_at: new Date().toISOString(),
+    };
+    await supabase
+      .from('lesson_progress')
+      .upsert(payload, { onConflict: 'user_id,lesson_id' });
+    return payload;
+  } catch (err) {
+    try { console.error('[streak_finish] markLessonCompleted error', err); } catch {}
+    return null;
+  }
 }
 
 

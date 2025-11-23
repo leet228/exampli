@@ -6,16 +6,19 @@ import { hapticSelect } from '../../lib/haptics';
 import { cacheGet, CACHE_KEYS } from '../../lib/cache';
 
 export type LessonNode = { id: string | number; order_index: number };
+export type LessonState = 'active' | 'locked' | 'completed';
 
 type Props = {
   lessons: LessonNode[];
-  onOpen: (lessonId: string | number, anchorEl: HTMLElement | null) => void;
+  onOpen: (lessonId: string | number, anchorEl: HTMLElement | null, state: LessonState) => void;
   currentTopicTitle?: string | null;
   nextTopicTitle?: string | null;
   onNextTopic?: () => void;
+  completedLessonIds?: Set<string>;
+  activeLessonId?: string | number | null;
 };
 
-export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTopicTitle, onNextTopic }: Props) {
+export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTopicTitle, onNextTopic, completedLessonIds, activeLessonId }: Props) {
   // Горизонтальные смещения
   const small = 40;
   const big = 58;
@@ -119,13 +122,13 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
   }, [lessons?.length, currentTopicTitle]);
 
   // Подсветка первого урока: флаг схлопывания после клика (без персистенции)
-  const [firstPressed, setFirstPressed] = useState<boolean>(false);
+  const [activePulseCollapsed, setActivePulseCollapsed] = useState<boolean>(false);
   // Реагируем на закрытие превью — возвращаем пульсацию
   useEffect(() => {
     const onPreview = (evt: Event) => {
       const e = evt as CustomEvent<{ open?: boolean }>;
       const isOpen = Boolean(e?.detail?.open);
-      if (!isOpen) setFirstPressed(false);
+      if (!isOpen) setActivePulseCollapsed(false);
     };
     window.addEventListener('exampli:lessonPreview', onPreview as EventListener);
     return () => window.removeEventListener('exampli:lessonPreview', onPreview as EventListener);
@@ -156,21 +159,38 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   initial={{ opacity: 0, y: 12, x: 0 }}
                   animate={{ opacity: 1, y: 0, x: offsetX }}
                   transition={{ delay: idx * 0.06 }}
-                  className={`relative`}
+                  className="relative"
                 >
-                  <LessonRoundButton
-                    size={70}
-                    width={74}
-                    icon={'★'}
-                    baseColor={nodeBase}
-                    innerIconBg={nodeInner}
-                    dataLessonId={l.id}
-                    showPulse={idx === 1}
-                    pulseColor={nodeBase}
-                    pulseCollapsed={idx === 1 ? firstPressed : false}
-                    completed={idx === 0} // тестовая отметка: первый урок отображается «выполненным»
-                    onClick={(e?: any) => { if (idx === 1) setFirstPressed(true); onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined); }}
-                  />
+                  {(() => {
+                    const idStr = String(l.id);
+                    const isCompleted = completedLessonIds?.has(idStr) ?? false;
+                    const isActive = !isCompleted && (activeLessonId != null) && String(activeLessonId) === idStr;
+                    const state: LessonState = isCompleted ? 'completed' : (isActive ? 'active' : 'locked');
+                    const base = state === 'locked' ? '#4b5563' : nodeBase;
+                    const inner = state === 'locked' ? '#222831' : nodeInner;
+                    const icon = '★';
+                    const pressable = state !== 'locked';
+                    const pulseCollapsed = state === 'active' ? activePulseCollapsed : false;
+                    return (
+                      <LessonRoundButton
+                        size={70}
+                        width={74}
+                        icon={icon}
+                        baseColor={base}
+                        innerIconBg={inner}
+                        dataLessonId={l.id}
+                        showPulse={state === 'active'}
+                        pulseColor={nodeBase}
+                        pulseCollapsed={pulseCollapsed}
+                        completed={state === 'completed'}
+                        pressable={pressable}
+                        onClick={(e?: any) => {
+                          if (state === 'active') setActivePulseCollapsed(true);
+                          onOpen(l.id, (e?.currentTarget as HTMLElement) ?? undefined, state);
+                        }}
+                      />
+                    );
+                  })()}
                 </motion.div>
               </div>
               {/* Картинка после урока */}

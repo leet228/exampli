@@ -1,10 +1,11 @@
 // src/pages/Home.tsx
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import SkillRoad from '../components/SkillRoad';
 import LessonRoad from '../components/lessons/LessonRoad';
 import LessonStartPopover from '../components/lessons/LessonStartPopover';
+import type { LessonProgressEntry } from '../lib/boot';
 async function pingPresence(event: string) {
   try {
     const boot: any = (window as any).__exampliBoot;
@@ -41,6 +42,16 @@ export default function Home() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [currentTopicTitle, setCurrentTopicTitle] = useState<string | null>(null);
   const [nextTopicTitle, setNextTopicTitle] = useState<string | null>(null);
+  const [lessonProgress, setLessonProgress] = useState<LessonProgressEntry[]>(() => {
+    const cached = cacheGet<LessonProgressEntry[]>(CACHE_KEYS.lessonProgress);
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const boot: any = (window as any).__exampliBoot;
+      if (Array.isArray(boot?.lesson_progress)) return boot.lesson_progress;
+    } catch {}
+    return [];
+  });
+  const [selectedLessonState, setSelectedLessonState] = useState<'active' | 'locked' | 'completed'>('active');
 
   // активный курс
   const [activeCode, setActiveCode] = useState<string | null>(null);
@@ -285,6 +296,42 @@ export default function Home() {
     return () => window.removeEventListener('exampli:courseChanged', onChanged as EventListener);
   }, [fetchLessons, writeActiveToStorage]);
 
+  useEffect(() => {
+    try {
+      cacheSet(CACHE_KEYS.lessonProgress, lessonProgress);
+      const boot: any = (window as any).__exampliBoot || {};
+      (window as any).__exampliBoot = { ...boot, lesson_progress: lessonProgress };
+    } catch {}
+  }, [lessonProgress]);
+
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<LessonProgressEntry>).detail;
+      if (!detail || detail.lesson_id == null) return;
+      setLessonProgress((prev) => {
+        if (prev.some((p) => String(p.lesson_id) === String(detail.lesson_id))) return prev;
+        return [...prev, detail];
+      });
+    };
+    window.addEventListener('exampli:lessonProgress', handler as EventListener);
+    return () => window.removeEventListener('exampli:lessonProgress', handler as EventListener);
+  }, []);
+
+  const completedLessonIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const entry of lessonProgress) {
+      if (entry?.lesson_id != null) set.add(String(entry.lesson_id));
+    }
+    return set;
+  }, [lessonProgress]);
+
+  const activeLessonId = useMemo(() => {
+    for (const l of lessons) {
+      if (!completedLessonIds.has(String(l.id))) return l.id;
+    }
+    return null;
+  }, [lessons, completedLessonIds]);
+
   // ======== рендер =========
   return (
     <div ref={scrollRef} className="main-scroll overflow-x-hidden" style={{ overflowX: 'hidden' }}>
@@ -312,6 +359,8 @@ export default function Home() {
         <div ref={listRef}>
           <LessonRoad
             lessons={lessons}
+            completedLessonIds={completedLessonIds}
+            activeLessonId={activeLessonId}
             currentTopicTitle={currentTopicTitle}
             nextTopicTitle={nextTopicTitle}
             onNextTopic={async () => {
@@ -406,7 +455,7 @@ export default function Home() {
                 } catch {}
               } catch {}
             }}
-            onOpen={(id, el) => {
+            onOpen={(id, el, state) => {
               (async () => {
                 // прокрутим дорогу так, чтобы поповер не перекрывал bottomnav
                 try {
@@ -425,6 +474,7 @@ export default function Home() {
                 } catch {}
                 setCurrentLessonId(id);
                 setAnchorEl(el);
+                setSelectedLessonState(state || 'active');
                 setLessonPreviewOpen(true);
               })();
             }}
@@ -438,6 +488,7 @@ export default function Home() {
       <LessonStartPopover
         open={lessonPreviewOpen}
         anchorEl={anchorEl}
+        state={selectedLessonState}
         onClose={() => { setLessonPreviewOpen(false); try { window.dispatchEvent(new CustomEvent('exampli:lessonPreview', { detail: { open: false } } as any)); } catch {} }}
         title={courseTitle || 'Урок'}
         onStart={() => {
