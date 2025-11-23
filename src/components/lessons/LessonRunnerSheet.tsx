@@ -65,6 +65,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const progressRef = useRef<HTMLDivElement | null>(null);
   const [streakLeft, setStreakLeft] = useState<number>(20);
   const [confirmExit, setConfirmExit] = useState<boolean>(false);
+  const [showExitAd, setShowExitAd] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [energy, setEnergy] = useState<number>(25);
   const [rewardBonus, setRewardBonus] = useState<0 | 2 | 5>(0);
@@ -2129,35 +2130,50 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
             )}
           </motion.div>
           {confirmExit && (
-            isPlus ? (
-              <BottomSheet open title="" onClose={() => setConfirmExit(false)} dimBackdrop panelBg={'var(--bg)'}>
-                <div className="grid gap-4 text-center">
-                  <div className="text-lg font-semibold">Если выйдешь, потеряешь прогресс этого урока</div>
-                  <PressCta onClick={() => { try { hapticSelect(); } catch {} setConfirmExit(false); }} text="ПРОДОЛЖИТЬ" baseColor="#3c73ff" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try { hapticTiny(); } catch {}
-                      setConfirmExit(false);
+            <BottomSheet open title="" onClose={() => setConfirmExit(false)} dimBackdrop panelBg={'var(--bg)'}>
+              <div className="grid gap-4 text-center">
+                <div className="text-lg font-semibold">Если выйдешь, потеряешь прогресс этого урока</div>
+                <PressCta
+                  onClick={() => {
+                    try { hapticSelect(); } catch {}
+                    setConfirmExit(false);
+                  }}
+                  text="ПРОДОЛЖИТЬ"
+                  baseColor="#3c73ff"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { hapticTiny(); } catch {}
+                    setConfirmExit(false);
+                    if (isPlus) {
                       setTimeout(() => { try { onClose(); } catch {} }, 220);
-                    }}
-                    className="w-full py-2 text-red-400 font-extrabold"
-                    style={{ background: 'transparent' }}
-                  >
-                    ВЫЙТИ
-                  </button>
-                </div>
-              </BottomSheet>
-            ) : (
-              <ExitPromo
-                onSkip={() => { try { hapticTiny(); } catch {}; setConfirmExit(false); }}
-                onSubscribe={() => {
-                  try { hapticSelect(); } catch {}
-                  setConfirmExit(false);
-                  try { navigate('/subscription'); } catch {}
-                }}
-              />
-            )
+                    } else {
+                      setShowExitAd(true);
+                    }
+                  }}
+                  className="w-full py-2 text-red-400 font-extrabold"
+                  style={{ background: 'transparent' }}
+                >
+                  ВЫЙТИ
+                </button>
+              </div>
+            </BottomSheet>
+          )}
+          {showExitAd && !isPlus && (
+            <ExitPromo
+              onSkip={() => {
+                try { hapticTiny(); } catch {}
+                setShowExitAd(false);
+                setTimeout(() => { try { onClose(); } catch {} }, 120);
+              }}
+              onSubscribe={() => {
+                try { hapticSelect(); } catch {}
+                setShowExitAd(false);
+                try { navigate('/subscription'); } catch {}
+                setTimeout(() => { try { onClose(); } catch {} }, 0);
+              }}
+            />
           )}
         </>
       )}
