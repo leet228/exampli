@@ -25,8 +25,9 @@ export default async function handler(req, res) {
     const lessonId = (() => {
       const raw = body?.lesson_id;
       if (raw === null || raw === undefined || raw === '') return null;
-      const num = Number(raw);
-      return Number.isFinite(num) ? num : null;
+      if (typeof raw === 'string' && raw.trim()) return raw.trim();
+      if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw);
+      return null;
     })();
     if (!userId && !tgId) { res.status(400).json({ error: 'user_id_or_tg_id_required' }); return; }
 
@@ -215,22 +216,21 @@ async function safeJson(req) {
 
 async function markLessonCompleted(supabase, userId, lessonId) {
   try {
-    if (!userId || !Number.isFinite(lessonId)) return null;
+    if (!userId || !lessonId) return null;
+    const lessonKey = String(lessonId);
     const { data: lesson } = await supabase
       .from('lessons')
       .select('id, topic_id')
-      .eq('id', lessonId)
+      .eq('id', lessonKey)
       .maybeSingle();
-    if (!lesson?.id) return null;
-    let subjectId = null;
-    if (lesson.topic_id != null) {
-      const { data: topic } = await supabase
-        .from('topics')
-        .select('id, subject_id')
-        .eq('id', lesson.topic_id)
-        .maybeSingle();
-      subjectId = topic?.subject_id ?? null;
-    }
+    if (!lesson?.id || !lesson?.topic_id) return null;
+    const { data: topic } = await supabase
+      .from('topics')
+      .select('id, subject_id')
+      .eq('id', lesson.topic_id)
+      .maybeSingle();
+    const subjectId = topic?.subject_id;
+    if (!subjectId) return null;
     const payload = {
       user_id: userId,
       lesson_id: lesson.id,
