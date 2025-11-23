@@ -6,6 +6,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit, acquireLock, releaseLock } from './_kv.mjs';
 import { createHash } from 'node:crypto';
 
+const TOKEN_BILLING_MULTIPLIER = 2;
+
 export default async function handler(req, res) {
     let timeoutId = null;
     let lockKey = null;
@@ -88,7 +90,7 @@ export default async function handler(req, res) {
         let dedupKey = null;
         if (kvAvailable()) {
             try {
-                const h = createHash('sha1').update(JSON.stringify({ model, prepared, userId: userId || 'anon' })).digest('hex');
+                const h = createHash('sha1').update(JSON.stringify({ model: modelName, prepared, userId: userId || 'anon' })).digest('hex');
                 dedupKey = `chat:resp:v1:${userId || 'anon'}:${h}`;
                 const cached = await cacheGetJSON(dedupKey);
                 if (cached && typeof cached.content === 'string') {
@@ -175,7 +177,8 @@ export default async function handler(req, res) {
 
         try {
             const usage = await result.usage;
-            billedTokens = Number(usage?.totalTokens || (usage?.inputTokens || 0) + (usage?.outputTokens || 0) || 0);
+            const rawTokens = Number(usage?.totalTokens || (usage?.inputTokens || 0) + (usage?.outputTokens || 0) || 0);
+            billedTokens = Math.ceil(rawTokens * TOKEN_BILLING_MULTIPLIER);
         } catch {}
 
         try { if (billedTokens) await trackUsage({ userId, usedTokens: billedTokens }); } catch {}
