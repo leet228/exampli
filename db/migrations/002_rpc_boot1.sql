@@ -73,19 +73,24 @@ begin
     order by l.order_index asc;
   end if;
 
-  select coalesce(
-    jsonb_agg(
-      jsonb_build_object(
-        'lesson_id', lp.lesson_id,
-        'topic_id', lp.topic_id,
-        'subject_id', lp.subject_id,
-        'completed_at', to_char(lp.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-      )
-    ),
-    '[]'::jsonb
-  ) into v_lesson_progress
-  from public.lesson_progress lp
-  where lp.user_id = p_user_id;
+  if v_active_id is not null then
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'lesson_id', lp.lesson_id,
+          'topic_id', lp.topic_id,
+          'subject_id', lp.subject_id,
+          'completed_at', to_char(lp.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        )
+      ),
+      '[]'::jsonb
+    ) into v_lesson_progress
+    from public.lesson_progress lp
+    where lp.user_id = p_user_id
+      and lp.subject_id = v_active_id;
+  else
+    v_lesson_progress := '[]'::jsonb;
+  end if;
 
   return jsonb_build_object(
     'profile', coalesce(v_profile, '{}'::jsonb),

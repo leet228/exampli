@@ -196,6 +196,33 @@ export default async function handler(req, res) {
       }
     } catch {}
 
+    const activeSubjectId = (() => {
+      const subj = subjectAndLessons?.subject;
+      if (subj && typeof subj === 'object' && subj.id) return String(subj.id);
+      if (subjectAndLessons?.active_id) return String(subjectAndLessons.active_id);
+      if (userRow?.added_course) return String(userRow.added_course);
+      return null;
+    })();
+
+    if (activeSubjectId && lessonProgress.length) {
+      lessonProgress = lessonProgress.filter((entry) => entry && String(entry.subject_id || '') === activeSubjectId);
+    }
+
+    if (activeSubjectId && lessonProgress.length === 0) {
+      try {
+        const { data } = await supabase
+          .from('lesson_progress')
+          .select('lesson_id, topic_id, subject_id, completed_at')
+          .eq('user_id', userRow.id)
+          .eq('subject_id', activeSubjectId);
+        if (Array.isArray(data)) {
+          lessonProgress = data;
+        }
+      } catch {}
+    } else if (!activeSubjectId) {
+      lessonProgress = [];
+    }
+
     const userProfile = profData || { background_color: '#3280c2', background_icon: 'nothing', phone_number: userRow.phone_number ?? null, first_name: null, username: null };
     // Синхронизируем phone_number из профиля в users, чтобы клиентская логика видела номер в users
     try {
