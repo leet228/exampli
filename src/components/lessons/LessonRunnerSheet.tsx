@@ -9,6 +9,16 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
 import { sfx } from '../../lib/sfx';
 
+const isIOSDevice = (() => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const platform = (navigator as any).platform || '';
+  const maxTouchPoints = Number((navigator as any).maxTouchPoints || 0);
+  const appleFamily = /iPad|iPhone|iPod/i.test(ua) || /iPad|iPhone|iPod/i.test(platform);
+  const macTouch = /Mac/i.test(platform) && maxTouchPoints > 1;
+  return appleFamily || macTouch;
+})();
+
 type TaskRow = {
   id: number | string;
   lesson_id: number | string;
@@ -2033,7 +2043,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       placeholder={(task.answer_type === 'num_input') ? 'Введи число...' : 'Напиши ответ...'}
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
-                      inputMode={(task.answer_type === 'num_input') ? ('numeric' as any) : undefined}
+                      inputMode={(task.answer_type === 'num_input') ? ((isIOSDevice ? 'decimal' : 'numeric') as any) : undefined}
                       pattern={(task.answer_type === 'num_input') ? '[0-9.,+-]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
