@@ -8,6 +8,14 @@ import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 import { precacheTopicsForSubject } from '../../lib/boot';
 
 type Subject = { id: number; code: string; title: string; level: string };
+const UPCOMING_CODES = new Set([
+  'ege_german',
+  'ege_spanish',
+  'oge_german',
+  'oge_spanish',
+  'ege_french',
+  'oge_french',
+]);
 
 export default function AddCourseSheet({
   open,
@@ -315,7 +323,9 @@ export default function AddCourseSheet({
                 <div className="rounded-2xl bg-[#101b20] border border-white/10 p-2">
                   <div className="grid gap-2">
                   {items.map((s) => {
-                    const active = s.id === pickedId;
+                    const codeNormalized = String(s.code || '').toLowerCase();
+                    const isUpcoming = UPCOMING_CODES.has(codeNormalized);
+                    const active = !isUpcoming && s.id === pickedId;
                     const imgSrc = `/subjects/${s.code}.svg`;
                     return (
                       <motion.button
@@ -325,13 +335,20 @@ export default function AddCourseSheet({
                         onPointerUp={() => setPressedId(null)}
                         onPointerCancel={() => setPressedId(null)}
                         onClick={() => {
+                          if (isUpcoming) {
+                            try { hapticTiny(); } catch {}
+                            return;
+                          }
                           hapticSelect();
                           setPickedId(s.id);
                         }}
                         className={`w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                           active ? 'bg-white/5' : 'border-white/10 bg-white/5'
                         }`}
-                        style={{ borderColor: active ? accentColor : undefined, backgroundColor: active ? 'rgba(60, 115, 255, 0.10)' : undefined }}
+                        style={{
+                          borderColor: active ? accentColor : undefined,
+                          backgroundColor: active ? 'rgba(60, 115, 255, 0.10)' : undefined,
+                        }}
                         animate={{
                           y: pressedId === s.id ? shadowHeight : 0,
                           boxShadow: pressedId === s.id
@@ -350,10 +367,22 @@ export default function AddCourseSheet({
                             }}
                           />
                           <div className="text-left leading-tight">
-                            <div className={`font-semibold truncate max-w-[60vw]`} style={{ color: active ? accentColor : undefined }}>{s.title}</div>
+                            <div className="flex items-center gap-2 max-w-[60vw]">
+                              <div
+                                className="font-semibold truncate flex-1"
+                                style={{ color: active ? accentColor : undefined }}
+                              >
+                                {s.title}
+                              </div>
+                              {isUpcoming && (
+                                <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-white/40 whitespace-nowrap">
+                                  СКОРО
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: active ? accentColor : 'rgba(255,255,255,0.2)' }} />
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: active ? accentColor : 'rgba(255,255,255,0.2)' }} />
                       </motion.button>
                     );
                   })}

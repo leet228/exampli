@@ -2,11 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
-import FullScreenSheet from '../sheets/FullScreenSheet';
-import { hapticSelect, hapticSlideClose, hapticSlideReveal } from '../../lib/haptics';
+import FullScreenSheet from '../sheets/FullScreenSheet';import { hapticSelect, hapticSlideClose, hapticSlideReveal, hapticTiny } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
 
 type Subject = { id: number; code: string; title: string; level: string };
+const UPCOMING_CODES = new Set([
+  'ege_german',
+  'ege_spanish',
+  'oge_german',
+  'oge_spanish',
+  'ege_french',
+  'oge_french',
+]);
 
 export default function AddCourseBlocking({ open, onPicked }: { open: boolean; onPicked: (s: Subject) => void }){
   const [all, setAll] = useState<Subject[]>([]);
@@ -66,8 +73,10 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                 <div className="rounded-2xl bg-[#101b20] border border-white/10 p-2">
                   <div className="grid gap-2">
                     {items.map(s => {
+                      const codeNormalized = String(s.code || '').toLowerCase();
+                      const isUpcoming = UPCOMING_CODES.has(codeNormalized);
                       const imgSrc = `/subjects/${s.code}.svg`;
-                      const isSel = selectedId === s.id;
+                      const isSel = !isUpcoming && selectedId === s.id;
                       return (
                         <motion.button
                           key={s.id}
@@ -76,6 +85,10 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           onPointerUp={() => setPressedId(null)}
                           onPointerCancel={() => setPressedId(null)}
                           onClick={async () => {
+                            if (isUpcoming) {
+                              try { hapticTiny(); } catch {}
+                              return;
+                            }
                             setSelectedId(s.id);
                             hapticSelect();
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
@@ -120,7 +133,10 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
                             isSel ? 'bg-white/5' : 'border-white/10 bg-white/5 hover:bg-white/10'
                           }`}
-                          style={{ borderColor: isSel ? accentColor : undefined, backgroundColor: isSel ? 'rgba(60,115,255,0.10)' : undefined }}
+                          style={{
+                            borderColor: isSel ? accentColor : undefined,
+                            backgroundColor: isSel ? 'rgba(60,115,255,0.10)' : undefined,
+                          }}
                           animate={{
                             y: pressedId === s.id ? shadowHeight : 0,
                             boxShadow: pressedId === s.id
@@ -137,14 +153,26 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                             />
                             <div className="text-left leading-tight">
-                              <div className={`font-semibold truncate max-w-[60vw]`} style={{ color: isSel ? accentColor : undefined }}>{s.title}</div>
+                              <div className="flex items-center gap-2 max-w-[60vw]">
+                                <div
+                                  className="font-semibold truncate flex-1"
+                                  style={{ color: isSel ? accentColor : undefined }}
+                                >
+                                  {s.title}
+                                </div>
+                                {isUpcoming && (
+                                  <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-white/40 whitespace-nowrap">
+                                    СКОРО
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
                           <div className={`w-2.5 h-2.5 rounded-full ${isSel ? 'bg-[var(--accent)]' : 'bg-white/20'}`} />
 
                           {/* subtle selection flash */}
-                          {isSel && (
+                          {isSel && !isUpcoming && (
                             <motion.span
                               className="absolute inset-0 pointer-events-none"
                               initial={{ backgroundColor: 'rgba(255,255,255,0.0)' }}
