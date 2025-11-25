@@ -25,9 +25,16 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'it_code' | 'it_code_2' | 'painting' | 'position';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'listening' | 'it_code' | 'it_code_2' | 'painting' | 'position';
   options: string[] | null;
   correct: string;
+};
+
+type ListeningMeta = {
+  src: string;
+  topicOrder: number;
+  lessonOrder: number;
+  topicId: string | number;
 };
 
 export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: boolean; onClose: () => void; lessonId: string | number }) {
@@ -88,6 +95,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [finishReady, setFinishReady] = useState<boolean>(false); // все карточки показаны
   const [finishMs, setFinishMs] = useState<number>(0);
   const finishSavedRef = useRef<boolean>(false);
+  // Listening audio player state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [listeningPlaying, setListeningPlaying] = useState<boolean>(false);
+  const [listeningReady, setListeningReady] = useState<boolean>(false);
+  const [listeningProgress, setListeningProgress] = useState<number>(0);
+  const [listeningDuration, setListeningDuration] = useState<number>(0);
+  const [listeningEnded, setListeningEnded] = useState<boolean>(false);
+  const [listeningError, setListeningError] = useState<string | null>(null);
+  const [listeningStarted, setListeningStarted] = useState<boolean>(false);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -240,6 +256,219 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     window.addEventListener('resize', updatePos);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updatePos); };
   }, [open, loading, idx, status, streakFlash]);
+
+  // ===== Listening tasks (аудирование) =====
+  const listeningMeta = useMemo<ListeningMeta | null>(() => {
+    if (!task || task.answer_type !== 'listening') return null;
+    let activeCode: string | null = null;
+    try {
+      activeCode = localStorage.getItem('exampli:activeSubjectCode');
+    } catch {}
+    if (!activeCode) {
+      try {
+        const cached = cacheGet<string>(CACHE_KEYS.activeCourseCode);
+        if (cached) activeCode = cached;
+      } catch {}
+    }
+    if (!activeCode || activeCode.toLowerCase() !== 'ege_english') return null;
+
+    let topicId: string | number | null = null;
+    try {
+      const saved = localStorage.getItem('exampli:currentTopicId');
+      if (saved) topicId = saved;
+    } catch {}
+    if (topicId == null) {
+      try {
+        const boot: any = (window as any)?.__exampliBoot;
+        topicId = boot?.current_topic_id ?? boot?.user?.current_topic ?? null;
+      } catch {}
+    }
+    if (topicId == null) return null;
+
+    const subjectId = (() => {
+      try {
+        const boot: any = (window as any)?.__exampliBoot;
+        const found = (boot?.subjects || []).find((s: any) => s.code === activeCode);
+        if (found?.id != null) return found.id;
+      } catch {}
+      try {
+        const all = cacheGet<any[]>(CACHE_KEYS.subjectsAll) || [];
+        const backup = (all as any[]).find((s: any) => s.code === activeCode);
+        if (backup?.id != null) return backup.id;
+      } catch {}
+      return null;
+    })();
+
+    let topicOrder: number | null = null;
+    try {
+      const storedOrder = localStorage.getItem('exampli:currentTopicOrder');
+      if (storedOrder) {
+        const parsed = Number(storedOrder);
+        if (Number.isFinite(parsed) && parsed > 0) topicOrder = parsed;
+      }
+    } catch {}
+    if ((!topicOrder || !Number.isFinite(topicOrder)) && subjectId != null) {
+      let topics: any[] = [];
+      try {
+        const cached = cacheGet<any[]>(CACHE_KEYS.topicsBySubject(subjectId));
+        if (Array.isArray(cached) && cached.length) topics = cached as any[];
+      } catch {}
+      if (!topics.length) {
+        try {
+          const boot: any = (window as any)?.__exampliBoot;
+          const by = (boot?.topicsBySubject || {}) as Record<string, any[]>;
+          const fallback = by[String(subjectId)] || [];
+          if (Array.isArray(fallback) && fallback.length) topics = fallback;
+        } catch {}
+      }
+      const foundTopic = topics.find((t) => String(t.id) === String(topicId));
+      if (foundTopic?.order_index != null) topicOrder = Number(foundTopic.order_index);
+    }
+    if (!topicOrder || !Number.isFinite(topicOrder) || topicOrder < 1 || topicOrder > 9) return null;
+
+    const lessonOrder = (() => {
+      const candidates: any[][] = [];
+      try {
+        const cachedLessons = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(topicId));
+        if (Array.isArray(cachedLessons) && cachedLessons.length) candidates.push(cachedLessons as any[]);
+      } catch {}
+      try {
+        const bootLessons = (window as any)?.__exampliBoot?.lessons;
+        if (Array.isArray(bootLessons) && bootLessons.length) candidates.push(bootLessons as any[]);
+      } catch {}
+      for (const list of candidates) {
+        const found = list.find((l) => String(l.id) === String(lessonId));
+        if (found?.order_index != null) return Number(found.order_index);
+      }
+      return null;
+    })();
+    if (!lessonOrder || !Number.isFinite(lessonOrder) || lessonOrder < 1) return null;
+
+    const fileName = lessonOrder === 1 ? 'get_file.mp3' : `get_file (${lessonOrder - 1}).mp3`;
+    const src = `/en_ege/${Math.round(topicOrder)}/${encodeURIComponent(fileName)}`;
+    return {
+      src,
+      topicOrder: Math.round(topicOrder),
+      lessonOrder: Math.round(lessonOrder),
+      topicId,
+    };
+  }, [task?.id, task?.answer_type, lessonId, viewKey]);
+
+  const resetListeningState = useCallback(() => {
+    setListeningPlaying(false);
+    setListeningReady(false);
+    setListeningProgress(0);
+    setListeningDuration(0);
+    setListeningEnded(false);
+    setListeningError(null);
+    setListeningStarted(false);
+  }, []);
+
+  const stopListeningAudio = useCallback((resetPosition: boolean = false) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try { audio.pause(); } catch {}
+    if (resetPosition) {
+      try { audio.currentTime = 0; } catch {}
+      setListeningProgress(0);
+    }
+    setListeningPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    if (task?.answer_type !== 'listening') {
+      resetListeningState();
+      stopListeningAudio(true);
+      return;
+    }
+    resetListeningState();
+    stopListeningAudio(true);
+  }, [task?.id, viewKey, task?.answer_type, resetListeningState, stopListeningAudio]);
+
+  useEffect(() => {
+    if (task?.answer_type !== 'listening') return;
+    if (!listeningMeta?.src) {
+      setListeningError('Аудио для этого задания пока недоступно');
+      return;
+    }
+    setListeningError(null);
+    const audio = audioRef.current;
+    if (!audio) return;
+    try { audio.load(); } catch {}
+  }, [task?.answer_type, listeningMeta?.src]);
+
+  useEffect(() => {
+    if (task?.answer_type !== 'listening') return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onLoaded = () => {
+      setListeningReady(true);
+      setListeningDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    };
+    const onTime = () => setListeningProgress(audio.currentTime || 0);
+    const onPlay = () => { setListeningPlaying(true); setListeningStarted(true); setListeningError(null); };
+    const onPause = () => setListeningPlaying(false);
+    const onEnded = () => {
+      setListeningPlaying(false);
+      setListeningEnded(true);
+      setListeningProgress(Number.isFinite(audio.duration) ? audio.duration : audio.currentTime || 0);
+    };
+    const onError = () => setListeningError('Не удалось воспроизвести аудио');
+    audio.addEventListener('loadedmetadata', onLoaded);
+    audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+    };
+  }, [task?.answer_type, listeningMeta?.src]);
+
+  useEffect(() => {
+    if (!open) stopListeningAudio(true);
+  }, [open, stopListeningAudio]);
+
+  useEffect(() => {
+    if (status !== 'idle' && task?.answer_type === 'listening') {
+      stopListeningAudio();
+    }
+  }, [status, task?.answer_type, stopListeningAudio]);
+
+  const handleListeningToggle = useCallback(() => {
+    if (task?.answer_type !== 'listening') return;
+    if (!listeningMeta?.src || listeningEnded) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (listeningPlaying) {
+      audio.pause();
+    } else {
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => setListeningError('Разреши воспроизведение, чтобы послушать аудио'));
+      }
+    }
+  }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying]);
+
+  const listeningProgressPct = useMemo(() => {
+    if (listeningDuration > 0) {
+      return Math.max(0, Math.min(100, (listeningProgress / listeningDuration) * 100));
+    }
+    return listeningEnded ? 100 : (listeningStarted ? 5 : 0);
+  }, [listeningProgress, listeningDuration, listeningEnded, listeningStarted]);
+
+  const formatTime = useCallback((value: number | null | undefined) => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '--:--';
+    const mins = Math.floor(value / 60);
+    const secs = Math.floor(value % 60);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(mins)}:${pad(secs)}`;
+  }, []);
 
   // ===== Connections (новый тип ответа) =====
   const connContainerRef = useRef<HTMLDivElement | null>(null);
@@ -969,7 +1198,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
     if (task.answer_type === 'input') return text.trim().length > 0;
-    if (task.answer_type === 'num_input') return text.trim().length > 0;
+    if (task.answer_type === 'num_input' || task.answer_type === 'listening') return text.trim().length > 0;
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
@@ -1005,7 +1234,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (!task) return;
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
-    else if (task.answer_type === 'num_input') user = text.trim();
+    else if (task.answer_type === 'num_input' || task.answer_type === 'listening') user = text.trim();
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -1107,7 +1336,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       } else {
         ok = (userNorm === normalizeAnswer(task.correct || '')) || (task.answer_type === 'input' && decimalEquals(task.correct || '', user));
       }
-  } else if (task.answer_type === 'num_input') {
+  } else if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
     const variants = parseAnswerPipe(task.correct || '');
     if (variants.length > 0) {
       ok = variants.some((v) => decimalEquals(String(v), user));
@@ -1579,6 +1808,65 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         }
                         return null;
                         }))}
+                        {task.answer_type === 'listening' && (
+                          <div className="mt-4 px-1">
+                            <audio ref={audioRef} src={listeningMeta?.src || undefined} preload="auto" className="hidden" />
+                            {listeningMeta?.src ? (
+                              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#101833] via-[#111c3f] to-[#08162b] p-4 shadow-[0px_20px_35px_rgba(0,0,0,0.45)]">
+                                <div className="flex items-center gap-4">
+                                  <button
+                                    type="button"
+                                    onClick={handleListeningToggle}
+                                    disabled={status !== 'idle' || listeningEnded || !listeningMeta?.src}
+                                    className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold transition-all duration-150 ${
+                                      (status !== 'idle' || listeningEnded || !listeningMeta?.src)
+                                        ? 'opacity-60 cursor-not-allowed bg-white/10 text-white/40'
+                                        : 'bg-white text-[#101833] shadow-[0px_12px_28px_rgba(16,24,51,0.45)]'
+                                    }`}
+                                    aria-label={listeningPlaying ? 'Пауза' : 'Воспроизвести'}
+                                  >
+                                    {listeningPlaying ? '❚❚' : '▶'}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-white/60 font-semibold">
+                                      <span>Аудирование</span>
+                                      <span className="tabular-nums">
+                                        {formatTime(listeningProgress)} / {(listeningReady || listeningEnded) ? formatTime(listeningDuration) : '--:--'}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full transition-all duration-200"
+                                        style={{
+                                          width: `${listeningProgressPct}%`,
+                                          background: 'linear-gradient(90deg, #60efff 0%, #5b8bff 50%, #d889ff 100%)'
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between text-[12px] text-white/70 font-semibold">
+                                      <span>Тема {listeningMeta.topicOrder}, урок {listeningMeta.lessonOrder}</span>
+                                      {!listeningStarted && !listeningEnded && <span className="text-white/50">Без перемотки</span>}
+                                    </div>
+                                    {listeningEnded && (
+                                      <div className="mt-2 text-xs text-amber-200 font-semibold">
+                                        Прослушивание завершено. Повтор недоступен.
+                                      </div>
+                                    )}
+                                    {listeningError && (
+                                      <div className="mt-2 text-xs text-red-200 font-semibold">
+                                        {listeningError}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 text-amber-100 text-sm font-semibold px-4 py-3">
+                                Аудиотрек для этого задания появится позже.
+                              </div>
+                            )}
+                          </div>
+                        )}
                         </div>
                       </motion.div>
                     </AnimatePresence>
@@ -2018,13 +2306,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     </div>
                   </div>
                 )}
-                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'it_code' || task.answer_type === 'painting') && (
+                {task && (task.answer_type === 'input' || task.answer_type === 'num_input' || task.answer_type === 'listening' || task.answer_type === 'it_code' || task.answer_type === 'painting') && (
                   <div className="px-4 mb-2">
                     <input
                       value={(() => {
                         if (status === 'wrong') {
                           let vars: string[] = [];
-                          if (task.answer_type === 'num_input') {
+                          if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
                             vars = parseAnswerPipe(task.correct || '');
                           } else if (task.answer_type === 'it_code') {
                             const list = parseAnswerList(task.correct || '');
@@ -2046,7 +2334,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       })()}
                       onChange={(e) => {
                         const raw = e.target.value || '';
-                        if (task.answer_type === 'num_input') {
+                        if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
                           // Разрешаем цифры, пробелы, знак и десятичные разделители "." и ","
                           const filtered = raw.replace(/[^\d.,+\-\s]/g, '');
                           setText(filtered);
@@ -2054,11 +2342,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           setText(raw);
                         }
                       }}
-                      placeholder={(task.answer_type === 'num_input') ? 'Введи число...' : 'Напиши ответ...'}
+                      placeholder={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? 'Введи число...' : 'Напиши ответ...'}
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
-                      inputMode={(task.answer_type === 'num_input') ? ((isIOSDevice ? 'decimal' : 'numeric') as any) : undefined}
-                      pattern={(task.answer_type === 'num_input') ? '[0-9.,+-]*' : undefined}
+                      inputMode={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? ((isIOSDevice ? 'decimal' : 'numeric') as any) : undefined}
+                      pattern={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? '[0-9.,+-]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
