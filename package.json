@@ -27,6 +27,7 @@
         "ai": "^4.1.0",
         "framer-motion": "^12.23.12",
         "highlight.js": "^11.10.0",
+        "openai": "^4.78.1",
         "katex": "^0.16.11",
         "lottie-react": "^2.4.1",
         "mermaid": "^10.9.2",

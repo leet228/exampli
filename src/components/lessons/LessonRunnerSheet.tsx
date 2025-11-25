@@ -105,6 +105,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [listeningEnded, setListeningEnded] = useState<boolean>(false);
   const [listeningError, setListeningError] = useState<string | null>(null);
   const [listeningStarted, setListeningStarted] = useState<boolean>(false);
+  const [listeningAudioKey, setListeningAudioKey] = useState<number>(0);
+  const [speakingCapable, setSpeakingCapable] = useState<boolean>(false);
+  const [speakingRecording, setSpeakingRecording] = useState<boolean>(false);
+  const [speakingBlob, setSpeakingBlob] = useState<Blob | null>(null);
+  const [speakingUrl, setSpeakingUrl] = useState<string | null>(null);
+  const [speakingDuration, setSpeakingDuration] = useState<number>(0);
+  const [speakingError, setSpeakingError] = useState<string | null>(null);
+  const [speakingLevels, setSpeakingLevels] = useState<number[]>(() => Array.from({ length: 24 }, () => 0));
+  const [speakingUploading, setSpeakingUploading] = useState<boolean>(false);
+  const [speakingFeedback, setSpeakingFeedback] = useState<string | null>(null);
+  const [speakingTranscript, setSpeakingTranscript] = useState<string | null>(null);
+  const speakingRecorderRef = useRef<MediaRecorder | null>(null);
+  const speakingStreamRef = useRef<MediaStream | null>(null);
+  const speakingChunksRef = useRef<Blob[]>([]);
+  const speakingTimerRef = useRef<number | null>(null);
+  const speakingAnimRef = useRef<number | null>(null);
+  const speakingStartRef = useRef<number>(0);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -384,6 +401,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     resetListeningState();
     stopListeningAudio(true);
+    setListeningAudioKey((k) => k + 1);
   }, [task?.id, viewKey, task?.answer_type, resetListeningState, stopListeningAudio]);
 
   useEffect(() => {
@@ -436,6 +454,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   }, [open, stopListeningAudio]);
 
   useEffect(() => {
+    if ((confirmExit || showExitAd) && task?.answer_type === 'listening') {
+      stopListeningAudio();
+    }
+  }, [confirmExit, showExitAd, task?.answer_type, stopListeningAudio]);
+
+  useEffect(() => {
     if (status !== 'idle' && task?.answer_type === 'listening') {
       stopListeningAudio();
     }
@@ -470,6 +494,168 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(mins)}:${pad(secs)}`;
   }, []);
+
+  function formatDurationMs(ms: number): string {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const mins = Math.floor(total / 60).toString().padStart(2, '0');
+    const secs = (total % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  }
+
+  function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  const stopSpeakingRecording = useCallback((flushChunks: boolean = false) => {
+    const recorder = speakingRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch {}
+    }
+    speakingRecorderRef.current = null;
+    const stream = speakingStreamRef.current;
+    if (stream) {
+      try { stream.getTracks().forEach((track) => track.stop()); } catch {}
+      speakingStreamRef.current = null;
+    }
+    if (speakingTimerRef.current) {
+      clearInterval(speakingTimerRef.current);
+      speakingTimerRef.current = null;
+    }
+    if (speakingAnimRef.current) {
+      cancelAnimationFrame(speakingAnimRef.current);
+      speakingAnimRef.current = null;
+    }
+    setSpeakingRecording(false);
+    if (flushChunks) speakingChunksRef.current = [];
+    setSpeakingLevels((prev) => prev.map(() => 0));
+    const duration = Date.now() - (speakingStartRef.current || Date.now());
+    setSpeakingDuration((prev) => (prev > 0 ? prev : Math.max(0, duration)));
+  }, []);
+
+  const resetSpeakingState = useCallback(() => {
+    stopSpeakingRecording(true);
+    speakingChunksRef.current = [];
+    if (speakingUrl) {
+      try { URL.revokeObjectURL(speakingUrl); } catch {}
+    }
+    setSpeakingUrl(null);
+    setSpeakingBlob(null);
+    setSpeakingDuration(0);
+    setSpeakingFeedback(null);
+    setSpeakingTranscript(null);
+    setSpeakingError(null);
+    setSpeakingLevels(Array.from({ length: 24 }, () => 0));
+  }, [speakingUrl, stopSpeakingRecording]);
+
+  const startSpeakingRecording = useCallback(async () => {
+    if (speakingRecording || speakingUploading) return;
+    setSpeakingError(null);
+    if (typeof navigator === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+      setSpeakingError('Браузер не поддерживает запись голоса');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      speakingStreamRef.current = stream;
+      const mimeType = (() => {
+        try {
+          if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            return 'audio/webm;codecs=opus';
+          }
+        } catch {}
+        return undefined;
+      })();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      speakingRecorderRef.current = recorder;
+      speakingChunksRef.current = [];
+      recorder.ondataavailable = (evt) => {
+        if (evt.data && evt.data.size > 0) speakingChunksRef.current.push(evt.data);
+      };
+      recorder.onstop = () => {
+        if (speakingChunksRef.current.length === 0) return;
+        const blob = new Blob(speakingChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        speakingChunksRef.current = [];
+        if (blob.size === 0) return;
+        setSpeakingBlob(blob);
+        setSpeakingFeedback(null);
+        setSpeakingTranscript(null);
+        setSpeakingError(null);
+        setSpeakingUrl((prev) => {
+          if (prev) {
+            try { URL.revokeObjectURL(prev); } catch {}
+          }
+          return URL.createObjectURL(blob);
+        });
+      };
+      recorder.start(250);
+      setSpeakingRecording(true);
+      setSpeakingBlob(null);
+      setSpeakingFeedback(null);
+      setSpeakingTranscript(null);
+      setSpeakingUrl((prev) => {
+        if (prev) { try { URL.revokeObjectURL(prev); } catch {} }
+        return null;
+      });
+      setSpeakingDuration(0);
+      setSpeakingLevels(Array.from({ length: 24 }, () => 0));
+      speakingStartRef.current = Date.now();
+      if (speakingTimerRef.current) clearInterval(speakingTimerRef.current);
+      speakingTimerRef.current = window.setInterval(() => {
+        setSpeakingDuration(Date.now() - speakingStartRef.current);
+      }, 200);
+      const animate = () => {
+        setSpeakingLevels((prev) => prev.map(() => Math.random()));
+        speakingAnimRef.current = requestAnimationFrame(animate);
+      };
+      animate();
+    } catch (err) {
+      console.error('[speaking_record] start error', err);
+      setSpeakingError('Нет доступа к микрофону');
+      stopSpeakingRecording(true);
+    }
+  }, [speakingRecording, speakingUploading, stopSpeakingRecording]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setSpeakingCapable(Boolean(navigator?.mediaDevices?.getUserMedia));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (speakingUrl) {
+        try { URL.revokeObjectURL(speakingUrl); } catch {}
+      }
+    };
+  }, [speakingUrl]);
+
+  useEffect(() => {
+    if (!open && speakingRecording) {
+      stopSpeakingRecording(true);
+    }
+  }, [open, speakingRecording, stopSpeakingRecording]);
+
+  useEffect(() => {
+    if ((confirmExit || showExitAd) && speakingRecording) {
+      stopSpeakingRecording(true);
+    }
+  }, [confirmExit, showExitAd, speakingRecording, stopSpeakingRecording]);
+
+  useEffect(() => {
+    if (task?.answer_type !== 'speaking_text') {
+      resetSpeakingState();
+    }
+  }, [task?.answer_type, resetSpeakingState]);
+
+  useEffect(() => {
+    return () => {
+      resetSpeakingState();
+    };
+  }, [resetSpeakingState]);
 
   const tableColumnCount = useMemo(() => {
     if (task?.answer_type !== 'table_num_input') return 0;
@@ -1257,6 +1443,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'input') return text.trim().length > 0;
     if (task.answer_type === 'num_input' || task.answer_type === 'listening') return text.trim().length > 0;
     if (task.answer_type === 'table_num_input') return tableNums.length > 0 && tableNums.every((v) => v.trim().length === 1);
+    if (task.answer_type === 'speaking_text') return Boolean(speakingBlob) && !speakingUploading && !speakingRecording;
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
@@ -1271,7 +1458,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       return parsePositionItems(task.task_text || '').length > 0;
     }
     return false;
-}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw, tableNums]);
+}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw, tableNums, speakingBlob, speakingUploading, speakingRecording]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -1288,8 +1475,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return [base + (rem > 0 ? 1 : 0), base + (rem > 1 ? 1 : 0), base];
   }
 
-  function check(){
+  async function check(){
     if (!task) return;
+    if (task.answer_type === 'speaking_text') {
+      await submitSpeakingAnswer();
+      return;
+    }
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
     else if (task.answer_type === 'num_input' || task.answer_type === 'listening') user = text.trim();
@@ -1301,60 +1492,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const correct = Array.from(parseCorrectIds(task.correct || '')).sort((a, b) => a - b);
       user = sel.join(','); // для логов
       const ok = sel.length === correct.length && sel.every((v, i) => v === correct[i]);
-      setStatus(ok ? 'correct' : 'wrong');
-      try { ok ? hapticSuccess() : hapticError(); } catch {}
-      try { ok ? sfx.playCorrect() : sfx.playWrong(); } catch {}
-      // обновим метрики
-      setAnswersTotal((v) => v + 1);
-      if (ok) setAnswersCorrect((v) => v + 1); else setHadAnyMistakes(true);
-
-      // Режим повторов: стрик не считаем, управляем очередью
-      if (mode === 'repeat') {
-        setStreakLocal(0); setStreakFlash(null);
-        lastRepeatOkRef.current = ok;
-        if (ok) {
-          try {
-            const id = (task as any)?.id;
-            if (!solvedRef.current.has(id)) {
-              solvedRef.current.add(id);
-              setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1));
-            }
-          } catch {}
-        }
-        return;
-      }
-
-      if (ok) {
-        setStreakLocal((prev) => {
-          const next = prev + 1;
-          if (next >= 2) {
-            streakKeyRef.current += 1;
-            setStreakFlash({ v: next, key: streakKeyRef.current });
-            if (next === 5 || next === 10) {
-              void streakCtrl.start({ scale: [1, 2.2, 0.9, 1], rotate: [0, -22, 14, 0], y: [-2, -16, -8, -2] }, { type: 'tween', ease: 'easeInOut', duration: 1.05 });
-            } else {
-              void streakCtrl.start({ scale: 1, rotate: 0, y: 0 }, { duration: 0.2 });
-            }
-          }
-          if (next === 5 || next === 10) {
-            try { hapticStreakMilestone(); } catch {}
-            const bonus: 2 | 5 = next === 5 ? 2 : 5;
-            rewardKeyRef.current += 1;
-            setRewardBonus(bonus);
-            setEnergy((prevE) => {
-              const n = Math.max(0, Math.min(25, (prevE || 0) + bonus));
-              try { const cs = cacheGet<any>(CACHE_KEYS.stats) || {}; cacheSet(CACHE_KEYS.stats, { ...cs, energy: n }); window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any)); } catch {}
-              return n;
-            });
-            (async () => { try { const res = await rewardEnergy(bonus); const serverEnergy = res?.energy; if (typeof serverEnergy === 'number') { const clamped = Math.max(0, Math.min(25, Number(serverEnergy))); setEnergy((prevE) => Math.max(prevE || 0, clamped)); } } catch {} })();
-          }
-          return next;
-        });
-        try { const id = (task as any)?.id; if (!solvedRef.current.has(id)) { solvedRef.current.add(id); setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1)); } } catch {}
-      } else {
-        setStreakLocal(0); setStreakFlash(null);
-        setRepeatQueue((prev) => { const exists = prev.some((t) => String((t as any)?.id) === String((task as any)?.id)); return exists ? prev : [...prev, task]; });
-      }
+      handleAnswerResult(ok);
       return;
     }
     else if (task.answer_type === 'word_letters') {
@@ -1498,6 +1636,123 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
+  function handleAnswerResult(ok: boolean) {
+    if (!task) return;
+    setStatus(ok ? 'correct' : 'wrong');
+    try { ok ? hapticSuccess() : hapticError(); } catch {}
+    try { ok ? sfx.playCorrect() : sfx.playWrong(); } catch {}
+    setAnswersTotal((v) => v + 1);
+    if (ok) setAnswersCorrect((v) => v + 1); else setHadAnyMistakes(true);
+    if (mode === 'repeat') {
+      setStreakLocal(0); setStreakFlash(null);
+      lastRepeatOkRef.current = ok;
+      if (ok) {
+        try {
+          const id = (task as any)?.id;
+          if (!solvedRef.current.has(id)) {
+            solvedRef.current.add(id);
+            setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1));
+          }
+        } catch {}
+      }
+      return;
+    }
+    if (ok) {
+      setStreakLocal((prev) => {
+        const next = prev + 1;
+        if (next >= 2) {
+          streakKeyRef.current += 1;
+          setStreakFlash({ v: next, key: streakKeyRef.current });
+          if (next === 5 || next === 10) {
+            void streakCtrl.start({ scale: [1, 2.2, 0.9, 1], rotate: [0, -22, 14, 0], y: [-2, -16, -8, -2] }, { type: 'tween', ease: 'easeInOut', duration: 1.05 });
+          } else {
+            void streakCtrl.start({ scale: 1, rotate: 0, y: 0 }, { duration: 0.2 });
+          }
+        }
+        if (next === 5 || next === 10) {
+          try { hapticStreakMilestone(); } catch {}
+          const bonus: 2 | 5 = next === 5 ? 2 : 5;
+          rewardKeyRef.current += 1;
+          setRewardBonus(bonus);
+          setEnergy((prevE) => {
+            const n = Math.max(0, Math.min(25, (prevE || 0) + bonus));
+            try { const cs = cacheGet<any>(CACHE_KEYS.stats) || {}; cacheSet(CACHE_KEYS.stats, { ...cs, energy: n }); window.dispatchEvent(new CustomEvent('exampli:statsChanged', { detail: { energy: n } } as any)); } catch {}
+            return n;
+          });
+          (async () => {
+            try {
+              const res = await rewardEnergy(bonus);
+              const serverEnergy = res?.energy;
+              if (typeof serverEnergy === 'number') {
+                const clamped = Math.max(0, Math.min(25, Number(serverEnergy)));
+                setEnergy((prevE) => Math.max(prevE || 0, clamped));
+              }
+            } catch {}
+          })();
+        }
+        return next;
+      });
+      try {
+        const id = (task as any)?.id;
+        if (!solvedRef.current.has(id)) {
+          solvedRef.current.add(id);
+          setProgressCount((p) => Math.min(PLANNED_COUNT, p + 1));
+        }
+      } catch {}
+    } else {
+      setStreakLocal(0); setStreakFlash(null);
+      setRepeatQueue((prev) => {
+        const exists = prev.some((t) => String((t as any)?.id) === String((task as any)?.id));
+        return exists ? prev : [...prev, task];
+      });
+    }
+  }
+
+  async function submitSpeakingAnswer() {
+    if (!task || task.answer_type !== 'speaking_text') return;
+    if (speakingUploading) return;
+    if (speakingRecording) stopSpeakingRecording();
+    if (!speakingBlob) {
+      setSpeakingError('Сначала запиши ответ');
+      return;
+    }
+    try {
+      setSpeakingUploading(true);
+      setSpeakingError(null);
+      const base64 = await blobToBase64(speakingBlob);
+      const pure = base64.split(',').pop() || base64;
+      const resp = await fetch('/api/speaking_grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_base64: pure,
+          mime_type: speakingBlob.type || 'audio/webm',
+          duration_ms: Math.max(0, speakingDuration),
+          task_text: task.task_text || '',
+          task_id: task.id,
+          lesson_id: lessonId,
+        }),
+      });
+      if (!resp.ok) {
+        let detail = 'Не удалось проверить запись';
+        try {
+          const err = await resp.json();
+          detail = String(err?.detail || err?.error || detail);
+        } catch {}
+        throw new Error(detail);
+      }
+      const payload = await resp.json();
+      setSpeakingFeedback(payload?.feedback || 'Проверка завершена.');
+      setSpeakingTranscript(payload?.transcript || null);
+      handleAnswerResult(Boolean(payload?.passed));
+    } catch (err: any) {
+      console.error('[speaking_submit] error', err);
+      setSpeakingError(String(err?.message || 'Не удалось проверить запись'));
+    } finally {
+      setSpeakingUploading(false);
+    }
+  }
+
   function next(){
     if (mode === 'base') {
       if (baseIdx + 1 < planned.length) {
@@ -1553,6 +1808,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setPaintTy(0);
     paintInitRef.current = false;
     setTableNums([]);
+    resetSpeakingState();
     setViewKey((k) => k + 1);
   }
 
@@ -1881,8 +2137,15 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         return null;
                         }))}
                         {task.answer_type === 'listening' && (
-                          <div className="mt-4 px-1">
-                            <audio ref={audioRef} src={listeningMeta?.src || undefined} preload="auto" className="hidden" />
+                        <div className="mt-4 px-1">
+                          <audio
+                            key={listeningAudioKey}
+                            ref={audioRef}
+                            src={listeningMeta?.src || undefined}
+                            preload="auto"
+                            className="hidden"
+                            autoPlay={false}
+                          />
                             {listeningMeta?.src ? (
                               <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#101833] via-[#111c3f] to-[#08162b] p-4 shadow-[0px_20px_35px_rgba(0,0,0,0.45)]">
                                 <div className="flex items-center gap-4">
@@ -1900,9 +2163,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                                     {listeningPlaying ? '❚❚' : '▶'}
                                   </button>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-white/60 font-semibold">
-                                      <span>Аудирование</span>
-                                      <span className="tabular-nums">
+                                    <div className="flex items-center justify-between text-[12px] text-white/70 font-semibold">
+                                      <span className="truncate">Тема {listeningMeta.topicOrder}, урок {listeningMeta.lessonOrder}</span>
+                                      <span className="tabular-nums text-white/80">
                                         {formatTime(listeningProgress)} / {(listeningReady || listeningEnded) ? formatTime(listeningDuration) : '--:--'}
                                       </span>
                                     </div>
@@ -1914,10 +2177,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                                           background: 'linear-gradient(90deg, #60efff 0%, #5b8bff 50%, #d889ff 100%)'
                                         }}
                                       />
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between text-[12px] text-white/70 font-semibold">
-                                      <span>Тема {listeningMeta.topicOrder}, урок {listeningMeta.lessonOrder}</span>
-                                      {!listeningStarted && !listeningEnded && <span className="text-white/50">Без перемотки</span>}
                                     </div>
                                     {listeningEnded && (
                                       <div className="mt-2 text-xs text-amber-200 font-semibold">
@@ -1935,6 +2194,81 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             ) : (
                               <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 text-amber-100 text-sm font-semibold px-4 py-3">
                                 Аудиотрек для этого задания появится позже.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {task.answer_type === 'speaking_text' && (
+                          <div className="mt-4 px-1 space-y-4">
+                            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#13142b] via-[#0f1a33] to-[#091727] p-5 shadow-[0px_16px_40px_rgba(0,0,0,0.45)]">
+                              <div className="flex flex-col items-center gap-4">
+                                <button
+                                  type="button"
+                                  onClick={() => { speakingRecording ? stopSpeakingRecording() : startSpeakingRecording(); }}
+                                  disabled={!speakingCapable || speakingUploading}
+                                  className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold transition-all ${
+                                    speakingRecording
+                                      ? 'bg-red-500 text-white animate-pulse'
+                                      : 'bg-white text-[#0f1a33] shadow-[0px_12px_30px_rgba(255,255,255,0.25)]'
+                                  } ${(!speakingCapable || speakingUploading) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                  aria-label={speakingRecording ? 'Остановить запись' : 'Начать запись'}
+                                >
+                                  {speakingRecording ? '■' : '🎙️'}
+                                </button>
+                                <div className="w-full">
+                                  <div className="h-16 flex items-end gap-1">
+                                    {speakingLevels.map((lvl, idx) => (
+                                      <span
+                                        // eslint-disable-next-line react/no-array-index-key
+                                        key={`s-lvl-${idx}`}
+                                        className="flex-1 rounded-full bg-gradient-to-t from-white/10 to-white/80 transition-all duration-150"
+                                        style={{ height: `${Math.max(6, Math.min(100, lvl * 100))}%`, opacity: speakingRecording ? 1 : 0.4 }}
+                                      />
+                                    ))}
+                                  </div>
+                                  <div className="mt-2 text-center text-sm text-white/80 font-semibold tabular-nums">
+                                    {formatDurationMs(speakingDuration)}
+                                  </div>
+                                  {!speakingCapable && (
+                                    <div className="mt-2 text-xs text-center text-amber-200">
+                                      Запись голоса недоступна в этом браузере.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {speakingUrl && (
+                              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-2">
+                                <audio controls src={speakingUrl} className="w-full" />
+                                <div className="flex items-center justify-between text-xs text-white/60">
+                                  <span>Длительность: {formatDurationMs(speakingDuration)}</span>
+                                  <button
+                                    type="button"
+                                    className="text-white font-semibold text-xs"
+                                    onClick={() => resetSpeakingState()}
+                                  >
+                                    Перезаписать
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {speakingError && (
+                              <div className="text-sm text-red-300 text-center">{speakingError}</div>
+                            )}
+                            {speakingUploading && (
+                              <div className="text-sm text-white/80 text-center flex items-center justify-center gap-2">
+                                <span className="inline-block h-4 w-4 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+                                <span>Прослушиваем и проверяем...</span>
+                              </div>
+                            )}
+                            {speakingFeedback && (
+                              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm leading-relaxed">
+                                {speakingFeedback}
+                                {speakingTranscript && (
+                                  <div className="mt-2 text-xs text-white/50">
+                                    Расшифровка: {speakingTranscript}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
