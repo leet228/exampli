@@ -394,6 +394,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (resetPosition) {
       try { audio.currentTime = 0; } catch {}
       setListeningProgress(0);
+      setListeningEnded(false);
+      setListeningStarted(false);
     }
     setListeningPlaying(false);
   }, []);
@@ -416,6 +418,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       return;
     }
     setListeningError(null);
+    setListeningEnded(false);
+    setListeningStarted(false);
+    setListeningPlaying(false);
+    setListeningProgress(0);
     const audio = audioRef.current;
     if (!audio) return;
     try { audio.load(); } catch {}
@@ -550,8 +556,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setSpeakingRecording(false);
     if (flushChunks) speakingChunksRef.current = [];
     setSpeakingLevels((prev) => prev.map(() => 0));
-    const duration = Date.now() - (speakingStartRef.current || Date.now());
-    setSpeakingDuration((prev) => (prev > 0 ? prev : Math.max(0, duration)));
+    const duration = Math.max(0, Date.now() - (speakingStartRef.current || Date.now()));
+    setSpeakingDuration(duration);
     const audioCtx = speakingAudioCtxRef.current;
     if (audioCtx) {
       try { audioCtx.close(); } catch {}
@@ -577,7 +583,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   }, [speakingUrl, stopSpeakingRecording]);
 
   const startSpeakingRecording = useCallback(async () => {
-    if (speakingRecording || speakingUploading) return;
+    if (speakingRecording || speakingUploading || speakingBlob) return;
     setSpeakingError(null);
     if (typeof navigator === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
       setSpeakingError('Браузер не поддерживает запись голоса');
@@ -2249,61 +2255,56 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         )}
                         {task.answer_type === 'speaking_text' && (
                           <div className="mt-4 px-1 space-y-4">
-                            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#13142b] via-[#0f1a33] to-[#091727] p-5 shadow-[0px_16px_40px_rgba(0,0,0,0.45)]">
+                            {!speakingBlob && (
+                              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#13142b] via-[#0f1a33] to-[#091727] p-5 shadow-[0px_16px_40px_rgba(0,0,0,0.45)] overflow-hidden">
                               <div className="flex flex-col items-center gap-6">
                                 <div className="text-center text-xl font-mono text-white/80 tabular-nums tracking-wide">
                                   {formatDurationMs(speakingDuration)}
                                 </div>
-                                <div className="relative w-full h-20">
-                                  <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-dashed border-red-400/40" />
+                                  <div className="relative w-full h-20 overflow-hidden rounded-2xl bg-black/10">
+                                    <div className="absolute inset-0 flex items-center">
+                                      <div className="w-full border-t border-dashed border-red-400/40" />
+                                    </div>
+                                    <div className="absolute inset-0 flex items-center gap-[3px] px-2">
+                                      {speakingLevels.map((lvl, idx) => (
+                                        <div key={`wave-${idx}`} className="flex-1 flex items-center justify-center">
+                                          <div
+                                            className="w-[2px] rounded-full bg-red-400 transition-all duration-75"
+                                            style={{
+                                              height: `${Math.max(4, lvl * 70)}px`,
+                                              opacity: speakingRecording ? 0.9 : 0.35,
+                                            }}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="absolute inset-0 flex items-center gap-[3px] px-1">
-                                    {speakingLevels.map((lvl, idx) => (
-                                      <div key={`wave-${idx}`} className="flex-1 flex items-center justify-center">
-                                        <div
-                                          className="w-[3px] rounded-full bg-red-400 transition-all duration-75"
-                                          style={{
-                                            height: `${Math.max(4, lvl * 70)}px`,
-                                            opacity: speakingRecording ? 0.9 : 0.4,
-                                          }}
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => { speakingRecording ? stopSpeakingRecording() : startSpeakingRecording(); }}
+                                    disabled={!speakingCapable || speakingUploading || Boolean(speakingBlob)}
+                                    className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold transition-all ${
+                                      speakingRecording
+                                        ? 'bg-red-500 text-white shadow-[0_0_25px_rgba(255,76,76,0.45)]'
+                                        : 'bg-white text-[#0f1a33] shadow-[0px_12px_30px_rgba(255,255,255,0.25)]'
+                                  } ${(!speakingCapable || speakingUploading || speakingBlob) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    aria-label={speakingRecording ? 'Остановить запись' : 'Начать запись'}
+                                  >
+                                    {speakingRecording ? '■' : '🎙️'}
+                                  </button>
+                                  {!speakingCapable && (
+                                    <div className="text-xs text-center text-amber-200">
+                                      Запись голоса недоступна в этом браузере.
+                                    </div>
+                                  )}
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => { speakingRecording ? stopSpeakingRecording() : startSpeakingRecording(); }}
-                                  disabled={!speakingCapable || speakingUploading}
-                                  className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold transition-all ${
-                                    speakingRecording
-                                      ? 'bg-red-500 text-white shadow-[0_0_25px_rgba(255,76,76,0.45)]'
-                                      : 'bg-white text-[#0f1a33] shadow-[0px_12px_30px_rgba(255,255,255,0.25)]'
-                                  } ${(!speakingCapable || speakingUploading) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                  aria-label={speakingRecording ? 'Остановить запись' : 'Начать запись'}
-                                >
-                                  {speakingRecording ? '■' : '🎙️'}
-                                </button>
-                                {!speakingCapable && (
-                                  <div className="text-xs text-center text-amber-200">
-                                    Запись голоса недоступна в этом браузере.
-                                  </div>
-                                )}
                               </div>
-                            </div>
+                            )}
                             {speakingUrl && (
                               <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-2">
                                 <audio controls src={speakingUrl} className="w-full" />
-                                <div className="flex items-center justify-between text-xs text-white/60">
-                                  <span>Длительность: {formatDurationMs(speakingDuration)}</span>
-                                  <button
-                                    type="button"
-                                    className="text-white font-semibold text-xs"
-                                    onClick={() => resetSpeakingState()}
-                                  >
-                                    Перезаписать
-                                  </button>
+                                <div className="text-right text-xs text-white/60">
+                                  Длительность: {formatDurationMs(speakingDuration)}
                                 </div>
                               </div>
                             )}

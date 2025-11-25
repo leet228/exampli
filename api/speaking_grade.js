@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { File } from 'undici';
+import { File } from 'node:buffer';
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 
