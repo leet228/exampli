@@ -349,7 +349,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const fileName = lessonOrder === 1 ? 'get_file.mp3' : `get_file (${lessonOrder - 1}).mp3`;
     const src = `/en_ege/${Math.round(topicOrder)}/${encodeURIComponent(fileName)}`;
     return {
-      src,
+      src: `${src}?v=${viewKey}`,
       topicOrder: Math.round(topicOrder),
       lessonOrder: Math.round(lessonOrder),
       topicId,
