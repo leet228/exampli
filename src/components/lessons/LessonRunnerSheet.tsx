@@ -9,6 +9,8 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
 import { sfx } from '../../lib/sfx';
 
+const SPEAKING_WAVE_BARS = 96;
+
 const isIOSDevice = (() => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -112,7 +114,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [speakingUrl, setSpeakingUrl] = useState<string | null>(null);
   const [speakingDuration, setSpeakingDuration] = useState<number>(0);
   const [speakingError, setSpeakingError] = useState<string | null>(null);
-  const [speakingLevels, setSpeakingLevels] = useState<number[]>(() => Array.from({ length: 24 }, () => 0));
+  const [speakingLevels, setSpeakingLevels] = useState<number[]>(() => Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
+  const speakingAudioCtxRef = useRef<AudioContext | null>(null);
+  const speakingAnalyserRef = useRef<AnalyserNode | null>(null);
+  const speakingDataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const [speakingUploading, setSpeakingUploading] = useState<boolean>(false);
   const [speakingFeedback, setSpeakingFeedback] = useState<string | null>(null);
   const [speakingTranscript, setSpeakingTranscript] = useState<string | null>(null);
@@ -414,7 +419,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const audio = audioRef.current;
     if (!audio) return;
     try { audio.load(); } catch {}
-  }, [task?.answer_type, listeningMeta?.src]);
+  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey]);
 
   useEffect(() => {
     if (task?.answer_type !== 'listening') return;
@@ -447,7 +452,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [task?.answer_type, listeningMeta?.src]);
+  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey]);
 
   useEffect(() => {
     if (!open) stopListeningAudio(true);
@@ -471,11 +476,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const audio = audioRef.current;
     if (!audio) return;
     if (listeningPlaying) {
-      audio.pause();
+      try { audio.pause(); } catch {}
+      setListeningPlaying(false);
     } else {
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => setListeningError('Разреши воспроизведение, чтобы послушать аудио'));
+      try {
+        const playPromise = audio.play();
+        setListeningPlaying(true);
+        setListeningStarted(true);
+        setListeningError(null);
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {
+            setListeningError('Разреши воспроизведение, чтобы послушать аудио');
+            setListeningPlaying(false);
+          });
+        }
+      } catch {
+        setListeningError('Не удалось воспроизвести аудио');
+        setListeningPlaying(false);
       }
     }
   }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying]);
@@ -535,6 +552,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setSpeakingLevels((prev) => prev.map(() => 0));
     const duration = Date.now() - (speakingStartRef.current || Date.now());
     setSpeakingDuration((prev) => (prev > 0 ? prev : Math.max(0, duration)));
+    const audioCtx = speakingAudioCtxRef.current;
+    if (audioCtx) {
+      try { audioCtx.close(); } catch {}
+      speakingAudioCtxRef.current = null;
+    }
+    speakingAnalyserRef.current = null;
+    speakingDataArrayRef.current = null;
   }, []);
 
   const resetSpeakingState = useCallback(() => {
@@ -549,7 +573,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setSpeakingFeedback(null);
     setSpeakingTranscript(null);
     setSpeakingError(null);
-    setSpeakingLevels(Array.from({ length: 24 }, () => 0));
+    setSpeakingLevels(Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
   }, [speakingUrl, stopSpeakingRecording]);
 
   const startSpeakingRecording = useCallback(async () => {
@@ -573,6 +597,20 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       speakingRecorderRef.current = recorder;
       speakingChunksRef.current = [];
+      if (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext)) {
+        try {
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx: AudioContext = new AudioCtx();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          const srcNode = ctx.createMediaStreamSource(stream);
+          srcNode.connect(analyser);
+          speakingAudioCtxRef.current = ctx;
+          speakingAnalyserRef.current = analyser;
+          const buffer = new ArrayBuffer(analyser.fftSize);
+          speakingDataArrayRef.current = new Uint8Array(buffer) as Uint8Array<ArrayBuffer>;
+        } catch {}
+      }
       recorder.ondataavailable = (evt) => {
         if (evt.data && evt.data.size > 0) speakingChunksRef.current.push(evt.data);
       };
@@ -602,14 +640,30 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         return null;
       });
       setSpeakingDuration(0);
-      setSpeakingLevels(Array.from({ length: 24 }, () => 0));
+      setSpeakingLevels(Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
       speakingStartRef.current = Date.now();
       if (speakingTimerRef.current) clearInterval(speakingTimerRef.current);
       speakingTimerRef.current = window.setInterval(() => {
         setSpeakingDuration(Date.now() - speakingStartRef.current);
       }, 200);
       const animate = () => {
-        setSpeakingLevels((prev) => prev.map(() => Math.random()));
+        let nextValue = Math.random() * 0.2;
+        const analyser = speakingAnalyserRef.current;
+        const dataArray = speakingDataArrayRef.current;
+        if (analyser && dataArray) {
+          analyser.getByteTimeDomainData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const v = (dataArray[i] - 128) / 128;
+            sum += Math.abs(v);
+          }
+          nextValue = Math.min(1, (sum / dataArray.length) * 4);
+        }
+        setSpeakingLevels((prev) => {
+          const arr = prev.slice(1);
+          arr.push(nextValue);
+          return arr;
+        });
         speakingAnimRef.current = requestAnimationFrame(animate);
       };
       animate();
@@ -651,11 +705,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }, [task?.answer_type, resetSpeakingState]);
 
-  useEffect(() => {
-    return () => {
-      resetSpeakingState();
-    };
-  }, [resetSpeakingState]);
 
   const tableColumnCount = useMemo(() => {
     if (task?.answer_type !== 'table_num_input') return 0;
@@ -2201,40 +2250,46 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         {task.answer_type === 'speaking_text' && (
                           <div className="mt-4 px-1 space-y-4">
                             <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#13142b] via-[#0f1a33] to-[#091727] p-5 shadow-[0px_16px_40px_rgba(0,0,0,0.45)]">
-                              <div className="flex flex-col items-center gap-4">
+                              <div className="flex flex-col items-center gap-6">
+                                <div className="text-center text-xl font-mono text-white/80 tabular-nums tracking-wide">
+                                  {formatDurationMs(speakingDuration)}
+                                </div>
+                                <div className="relative w-full h-20">
+                                  <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-dashed border-red-400/40" />
+                                  </div>
+                                  <div className="absolute inset-0 flex items-center gap-[3px] px-1">
+                                    {speakingLevels.map((lvl, idx) => (
+                                      <div key={`wave-${idx}`} className="flex-1 flex items-center justify-center">
+                                        <div
+                                          className="w-[3px] rounded-full bg-red-400 transition-all duration-75"
+                                          style={{
+                                            height: `${Math.max(4, lvl * 70)}px`,
+                                            opacity: speakingRecording ? 0.9 : 0.4,
+                                          }}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => { speakingRecording ? stopSpeakingRecording() : startSpeakingRecording(); }}
                                   disabled={!speakingCapable || speakingUploading}
                                   className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold transition-all ${
                                     speakingRecording
-                                      ? 'bg-red-500 text-white animate-pulse'
+                                      ? 'bg-red-500 text-white shadow-[0_0_25px_rgba(255,76,76,0.45)]'
                                       : 'bg-white text-[#0f1a33] shadow-[0px_12px_30px_rgba(255,255,255,0.25)]'
                                   } ${(!speakingCapable || speakingUploading) ? 'opacity-60 cursor-not-allowed' : ''}`}
                                   aria-label={speakingRecording ? 'Остановить запись' : 'Начать запись'}
                                 >
                                   {speakingRecording ? '■' : '🎙️'}
                                 </button>
-                                <div className="w-full">
-                                  <div className="h-16 flex items-end gap-1">
-                                    {speakingLevels.map((lvl, idx) => (
-                                      <span
-                                        // eslint-disable-next-line react/no-array-index-key
-                                        key={`s-lvl-${idx}`}
-                                        className="flex-1 rounded-full bg-gradient-to-t from-white/10 to-white/80 transition-all duration-150"
-                                        style={{ height: `${Math.max(6, Math.min(100, lvl * 100))}%`, opacity: speakingRecording ? 1 : 0.4 }}
-                                      />
-                                    ))}
+                                {!speakingCapable && (
+                                  <div className="text-xs text-center text-amber-200">
+                                    Запись голоса недоступна в этом браузере.
                                   </div>
-                                  <div className="mt-2 text-center text-sm text-white/80 font-semibold tabular-nums">
-                                    {formatDurationMs(speakingDuration)}
-                                  </div>
-                                  {!speakingCapable && (
-                                    <div className="mt-2 text-xs text-center text-amber-200">
-                                      Запись голоса недоступна в этом браузере.
-                                    </div>
-                                  )}
-                                </div>
+                                )}
                               </div>
                             </div>
                             {speakingUrl && (
