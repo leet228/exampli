@@ -9,8 +9,6 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
 import { sfx } from '../../lib/sfx';
 
-const SPEAKING_WAVE_BARS = 96;
-
 const isIOSDevice = (() => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -108,25 +106,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [listeningError, setListeningError] = useState<string | null>(null);
   const [listeningStarted, setListeningStarted] = useState<boolean>(false);
   const [listeningAudioKey, setListeningAudioKey] = useState<number>(0);
-  const [speakingCapable, setSpeakingCapable] = useState<boolean>(false);
-  const [speakingRecording, setSpeakingRecording] = useState<boolean>(false);
-  const [speakingBlob, setSpeakingBlob] = useState<Blob | null>(null);
-  const [speakingUrl, setSpeakingUrl] = useState<string | null>(null);
-  const [speakingDuration, setSpeakingDuration] = useState<number>(0);
-  const [speakingError, setSpeakingError] = useState<string | null>(null);
-  const [speakingLevels, setSpeakingLevels] = useState<number[]>(() => Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
-  const speakingAudioCtxRef = useRef<AudioContext | null>(null);
-  const speakingAnalyserRef = useRef<AnalyserNode | null>(null);
-  const speakingDataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const [speakingUploading, setSpeakingUploading] = useState<boolean>(false);
-  const [speakingFeedback, setSpeakingFeedback] = useState<string | null>(null);
-  const [speakingTranscript, setSpeakingTranscript] = useState<string | null>(null);
-  const speakingRecorderRef = useRef<MediaRecorder | null>(null);
-  const speakingStreamRef = useRef<MediaStream | null>(null);
-  const speakingChunksRef = useRef<Blob[]>([]);
-  const speakingTimerRef = useRef<number | null>(null);
-  const speakingAnimRef = useRef<number | null>(null);
-  const speakingStartRef = useRef<number>(0);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -425,7 +404,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const audio = audioRef.current;
     if (!audio) return;
     try { audio.load(); } catch {}
-  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey]);
+  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey, task?.id, viewKey]);
 
   useEffect(() => {
     if (task?.answer_type !== 'listening') return;
@@ -458,7 +437,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey]);
+  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey, task?.id, viewKey]);
 
   useEffect(() => {
     if (!open) stopListeningAudio(true);
@@ -517,199 +496,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(mins)}:${pad(secs)}`;
   }, []);
-
-  function formatDurationMs(ms: number): string {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    const mins = Math.floor(total / 60).toString().padStart(2, '0');
-    const secs = (total % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  }
-
-  function blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || ''));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  const stopSpeakingRecording = useCallback((flushChunks: boolean = false) => {
-    const recorder = speakingRecorderRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      try { recorder.stop(); } catch {}
-    }
-    speakingRecorderRef.current = null;
-    const stream = speakingStreamRef.current;
-    if (stream) {
-      try { stream.getTracks().forEach((track) => track.stop()); } catch {}
-      speakingStreamRef.current = null;
-    }
-    if (speakingTimerRef.current) {
-      clearInterval(speakingTimerRef.current);
-      speakingTimerRef.current = null;
-    }
-    if (speakingAnimRef.current) {
-      cancelAnimationFrame(speakingAnimRef.current);
-      speakingAnimRef.current = null;
-    }
-    setSpeakingRecording(false);
-    if (flushChunks) speakingChunksRef.current = [];
-    setSpeakingLevels((prev) => prev.map(() => 0));
-    const duration = Math.max(0, Date.now() - (speakingStartRef.current || Date.now()));
-    setSpeakingDuration(duration);
-    const audioCtx = speakingAudioCtxRef.current;
-    if (audioCtx) {
-      try { audioCtx.close(); } catch {}
-      speakingAudioCtxRef.current = null;
-    }
-    speakingAnalyserRef.current = null;
-    speakingDataArrayRef.current = null;
-  }, []);
-
-  const resetSpeakingState = useCallback(() => {
-    stopSpeakingRecording(true);
-    speakingChunksRef.current = [];
-    if (speakingUrl) {
-      try { URL.revokeObjectURL(speakingUrl); } catch {}
-    }
-    setSpeakingUrl(null);
-    setSpeakingBlob(null);
-    setSpeakingDuration(0);
-    setSpeakingFeedback(null);
-    setSpeakingTranscript(null);
-    setSpeakingError(null);
-    setSpeakingLevels(Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
-  }, [speakingUrl, stopSpeakingRecording]);
-
-  const startSpeakingRecording = useCallback(async () => {
-    if (speakingRecording || speakingUploading || speakingBlob) return;
-    setSpeakingError(null);
-    if (typeof navigator === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
-      setSpeakingError('Браузер не поддерживает запись голоса');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      speakingStreamRef.current = stream;
-      const mimeType = (() => {
-        try {
-          if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-            return 'audio/webm;codecs=opus';
-          }
-        } catch {}
-        return undefined;
-      })();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      speakingRecorderRef.current = recorder;
-      speakingChunksRef.current = [];
-      if (typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext)) {
-        try {
-          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-          const ctx: AudioContext = new AudioCtx();
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          const srcNode = ctx.createMediaStreamSource(stream);
-          srcNode.connect(analyser);
-          speakingAudioCtxRef.current = ctx;
-          speakingAnalyserRef.current = analyser;
-          const buffer = new ArrayBuffer(analyser.fftSize);
-          speakingDataArrayRef.current = new Uint8Array(buffer) as Uint8Array<ArrayBuffer>;
-        } catch {}
-      }
-      recorder.ondataavailable = (evt) => {
-        if (evt.data && evt.data.size > 0) speakingChunksRef.current.push(evt.data);
-      };
-      recorder.onstop = () => {
-        if (speakingChunksRef.current.length === 0) return;
-        const blob = new Blob(speakingChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-        speakingChunksRef.current = [];
-        if (blob.size === 0) return;
-        setSpeakingBlob(blob);
-        setSpeakingFeedback(null);
-        setSpeakingTranscript(null);
-        setSpeakingError(null);
-        setSpeakingUrl((prev) => {
-          if (prev) {
-            try { URL.revokeObjectURL(prev); } catch {}
-          }
-          return URL.createObjectURL(blob);
-        });
-      };
-      recorder.start(250);
-      setSpeakingRecording(true);
-      setSpeakingBlob(null);
-      setSpeakingFeedback(null);
-      setSpeakingTranscript(null);
-      setSpeakingUrl((prev) => {
-        if (prev) { try { URL.revokeObjectURL(prev); } catch {} }
-        return null;
-      });
-      setSpeakingDuration(0);
-      setSpeakingLevels(Array.from({ length: SPEAKING_WAVE_BARS }, () => 0));
-      speakingStartRef.current = Date.now();
-      if (speakingTimerRef.current) clearInterval(speakingTimerRef.current);
-      speakingTimerRef.current = window.setInterval(() => {
-        setSpeakingDuration(Date.now() - speakingStartRef.current);
-      }, 200);
-      const animate = () => {
-        let nextValue = Math.random() * 0.2;
-        const analyser = speakingAnalyserRef.current;
-        const dataArray = speakingDataArrayRef.current;
-        if (analyser && dataArray) {
-          analyser.getByteTimeDomainData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const v = (dataArray[i] - 128) / 128;
-            sum += Math.abs(v);
-          }
-          nextValue = Math.min(1, (sum / dataArray.length) * 4);
-        }
-        setSpeakingLevels((prev) => {
-          const arr = prev.slice(1);
-          arr.push(nextValue);
-          return arr;
-        });
-        speakingAnimRef.current = requestAnimationFrame(animate);
-      };
-      animate();
-    } catch (err) {
-      console.error('[speaking_record] start error', err);
-      setSpeakingError('Нет доступа к микрофону');
-      stopSpeakingRecording(true);
-    }
-  }, [speakingRecording, speakingUploading, stopSpeakingRecording]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setSpeakingCapable(Boolean(navigator?.mediaDevices?.getUserMedia));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (speakingUrl) {
-        try { URL.revokeObjectURL(speakingUrl); } catch {}
-      }
-    };
-  }, [speakingUrl]);
-
-  useEffect(() => {
-    if (!open && speakingRecording) {
-      stopSpeakingRecording(true);
-    }
-  }, [open, speakingRecording, stopSpeakingRecording]);
-
-  useEffect(() => {
-    if ((confirmExit || showExitAd) && speakingRecording) {
-      stopSpeakingRecording(true);
-    }
-  }, [confirmExit, showExitAd, speakingRecording, stopSpeakingRecording]);
-
-  useEffect(() => {
-    if (task?.answer_type !== 'speaking_text') {
-      resetSpeakingState();
-    }
-  }, [task?.answer_type, resetSpeakingState]);
 
 
   const tableColumnCount = useMemo(() => {
@@ -1498,7 +1284,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'input') return text.trim().length > 0;
     if (task.answer_type === 'num_input' || task.answer_type === 'listening') return text.trim().length > 0;
     if (task.answer_type === 'table_num_input') return tableNums.length > 0 && tableNums.every((v) => v.trim().length === 1);
-    if (task.answer_type === 'speaking_text') return Boolean(speakingBlob) && !speakingUploading && !speakingRecording;
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
@@ -1513,7 +1298,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       return parsePositionItems(task.task_text || '').length > 0;
     }
     return false;
-}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw, tableNums, speakingBlob, speakingUploading, speakingRecording]);
+}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw, tableNums]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -1532,10 +1317,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   async function check(){
     if (!task) return;
-    if (task.answer_type === 'speaking_text') {
-      await submitSpeakingAnswer();
-      return;
-    }
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
     else if (task.answer_type === 'num_input' || task.answer_type === 'listening') user = text.trim();
@@ -1763,51 +1544,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
-  async function submitSpeakingAnswer() {
-    if (!task || task.answer_type !== 'speaking_text') return;
-    if (speakingUploading) return;
-    if (speakingRecording) stopSpeakingRecording();
-    if (!speakingBlob) {
-      setSpeakingError('Сначала запиши ответ');
-      return;
-    }
-    try {
-      setSpeakingUploading(true);
-      setSpeakingError(null);
-      const base64 = await blobToBase64(speakingBlob);
-      const pure = base64.split(',').pop() || base64;
-      const resp = await fetch('/api/speaking_grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audio_base64: pure,
-          mime_type: speakingBlob.type || 'audio/webm',
-          duration_ms: Math.max(0, speakingDuration),
-          task_text: task.task_text || '',
-          task_id: task.id,
-          lesson_id: lessonId,
-        }),
-      });
-      if (!resp.ok) {
-        let detail = 'Не удалось проверить запись';
-        try {
-          const err = await resp.json();
-          detail = String(err?.detail || err?.error || detail);
-        } catch {}
-        throw new Error(detail);
-      }
-      const payload = await resp.json();
-      setSpeakingFeedback(payload?.feedback || 'Проверка завершена.');
-      setSpeakingTranscript(payload?.transcript || null);
-      handleAnswerResult(Boolean(payload?.passed));
-    } catch (err: any) {
-      console.error('[speaking_submit] error', err);
-      setSpeakingError(String(err?.message || 'Не удалось проверить запись'));
-    } finally {
-      setSpeakingUploading(false);
-    }
-  }
-
   function next(){
     if (mode === 'base') {
       if (baseIdx + 1 < planned.length) {
@@ -1863,7 +1599,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setPaintTy(0);
     paintInitRef.current = false;
     setTableNums([]);
-    resetSpeakingState();
     setViewKey((k) => k + 1);
   }
 
@@ -2249,82 +1984,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                             ) : (
                               <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 text-amber-100 text-sm font-semibold px-4 py-3">
                                 Аудиотрек для этого задания появится позже.
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {task.answer_type === 'speaking_text' && (
-                          <div className="mt-4 px-1 space-y-4">
-                            {!speakingBlob && (
-                              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#13142b] via-[#0f1a33] to-[#091727] p-5 shadow-[0px_16px_40px_rgba(0,0,0,0.45)] overflow-hidden">
-                              <div className="flex flex-col items-center gap-6">
-                                <div className="text-center text-xl font-mono text-white/80 tabular-nums tracking-wide">
-                                  {formatDurationMs(speakingDuration)}
-                                </div>
-                                  <div className="relative w-full h-20 overflow-hidden rounded-2xl bg-black/10">
-                                    <div className="absolute inset-0 flex items-center">
-                                      <div className="w-full border-t border-dashed border-red-400/40" />
-                                    </div>
-                                    <div className="absolute inset-0 flex items-center gap-[3px] px-2">
-                                      {speakingLevels.map((lvl, idx) => (
-                                        <div key={`wave-${idx}`} className="flex-1 flex items-center justify-center">
-                                          <div
-                                            className="w-[2px] rounded-full bg-red-400 transition-all duration-75"
-                                            style={{
-                                              height: `${Math.max(4, lvl * 70)}px`,
-                                              opacity: speakingRecording ? 0.9 : 0.35,
-                                            }}
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => { speakingRecording ? stopSpeakingRecording() : startSpeakingRecording(); }}
-                                    disabled={!speakingCapable || speakingUploading || Boolean(speakingBlob)}
-                                    className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold transition-all ${
-                                      speakingRecording
-                                        ? 'bg-red-500 text-white shadow-[0_0_25px_rgba(255,76,76,0.45)]'
-                                        : 'bg-white text-[#0f1a33] shadow-[0px_12px_30px_rgba(255,255,255,0.25)]'
-                                  } ${(!speakingCapable || speakingUploading || speakingBlob) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    aria-label={speakingRecording ? 'Остановить запись' : 'Начать запись'}
-                                  >
-                                    {speakingRecording ? '■' : '🎙️'}
-                                  </button>
-                                  {!speakingCapable && (
-                                    <div className="text-xs text-center text-amber-200">
-                                      Запись голоса недоступна в этом браузере.
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            {speakingUrl && (
-                              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-2">
-                                <audio controls src={speakingUrl} className="w-full" />
-                                <div className="text-right text-xs text-white/60">
-                                  Длительность: {formatDurationMs(speakingDuration)}
-                                </div>
-                              </div>
-                            )}
-                            {speakingError && (
-                              <div className="text-sm text-red-300 text-center">{speakingError}</div>
-                            )}
-                            {speakingUploading && (
-                              <div className="text-sm text-white/80 text-center flex items-center justify-center gap-2">
-                                <span className="inline-block h-4 w-4 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
-                                <span>Прослушиваем и проверяем...</span>
-                              </div>
-                            )}
-                            {speakingFeedback && (
-                              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm leading-relaxed">
-                                {speakingFeedback}
-                                {speakingTranscript && (
-                                  <div className="mt-2 text-xs text-white/50">
-                                    Расшифровка: {speakingTranscript}
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>
