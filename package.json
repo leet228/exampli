@@ -11,7 +11,8 @@
         "dev:api": "node dev-api-server.mjs",
         "typecheck": "tsc --noEmit",
         "build:api": "tsc -p tsconfig.json",
-        "build": "pnpm run build:api && vite build",
+        "generate:svg-manifest": "node scripts/gen-svg-manifest.mjs",
+        "build": "pnpm run build:api && pnpm run generate:svg-manifest && vite build",
         "preview": "vite preview",
         "lint": "eslint .",
         "vercel-build": "pnpm run build"

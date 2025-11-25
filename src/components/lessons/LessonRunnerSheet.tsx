@@ -25,7 +25,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'listening' | 'it_code' | 'it_code_2' | 'painting' | 'position';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'listening' | 'table_num_input' | 'it_code' | 'it_code_2' | 'painting' | 'position';
   options: string[] | null;
   correct: string;
 };
@@ -62,6 +62,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   // Position (упорядочивание)
   const [posOrder, setPosOrder] = useState<number[]>([]); // текущий порядок id (сверху вниз)
   const [posCorrectIds, setPosCorrectIds] = useState<Set<number>>(new Set()); // какие id стояли на «своём» месте до проверки
+  const [tableNums, setTableNums] = useState<string[]>([]); // значения для table_num_input
   // Prompt (T) overlay
   const [showT, setShowT] = useState<boolean>(false);
   const [streakLocal, setStreakLocal] = useState<number>(0);
@@ -469,6 +470,31 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(mins)}:${pad(secs)}`;
   }, []);
+
+  const tableColumnCount = useMemo(() => {
+    if (task?.answer_type !== 'table_num_input') return 0;
+    if (tableNums.length > 0) return tableNums.length;
+    return Math.max(1, computeTableColumnCount(task));
+  }, [task, tableNums.length]);
+
+  const tableCorrectDigits = useMemo(() => {
+    if (task?.answer_type !== 'table_num_input') return [];
+    const cols = Math.max(1, tableColumnCount || computeTableColumnCount(task));
+    const variants = parseAnswerPipe(task.correct || '');
+    const template = String((variants[0] ?? task.correct ?? '') || '');
+    return parseCorrectDigits(template, cols).map((d) => String(d));
+  }, [task, tableColumnCount]);
+
+  const handleTableCellChange = useCallback((index: number, raw: string) => {
+    if (status !== 'idle') return;
+    const digit = raw.replace(/[^0-9]/g, '');
+    setTableNums((prev) => {
+      const len = Math.max(prev.length, index + 1);
+      const next = Array.from({ length: len }, (_, i) => prev[i] || '');
+      next[index] = digit.slice(-1);
+      return next;
+    });
+  }, [status]);
 
   // ===== Connections (новый тип ответа) =====
   const connContainerRef = useRef<HTMLDivElement | null>(null);
@@ -904,6 +930,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task, viewKey]);
 
+  useEffect(() => {
+    if (task?.answer_type !== 'table_num_input') return;
+    const cols = Math.max(1, computeTableColumnCount(task));
+    setTableNums(Array.from({ length: cols }, () => ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task, viewKey]);
+
   const onPaintWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (status !== 'idle') return;
     // Зум только с Alt (как просили); без Alt — игнорируем
@@ -1147,6 +1180,30 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return s.split('|').map((x) => x.trim()).filter(Boolean);
   }
 
+  function computeTableColumnCount(tableTask?: TaskRow): number {
+    if (!tableTask) return 0;
+    const variants = parseAnswerPipe(tableTask.correct || '');
+    const templateRaw = (variants[0] ?? tableTask.correct ?? '') || '';
+    const template = String(templateRaw);
+    const digitsOnly = template.replace(/[^0-9]/g, '');
+    if (digitsOnly.length > 0) return digitsOnly.length;
+    const compact = template.replace(/\s+/g, '');
+    if (compact.length > 0) return compact.length;
+    if (Array.isArray(tableTask.options) && tableTask.options.length > 0) return tableTask.options.length;
+    return Math.max(1, String(tableTask.correct || '').length || 1);
+  }
+
+  function tableLetterLabel(idx: number): string {
+    const base = 26;
+    let n = idx;
+    let label = '';
+    while (n >= 0) {
+      label = String.fromCharCode(65 + (n % base)) + label;
+      n = Math.floor(n / base) - 1;
+    }
+    return label;
+  }
+
   // Извлекаем CSV-таблицы из блоков (table) ... (table)
   function extractCsvTables(src: string): Array<string[][]> {
     const s = String(src || '');
@@ -1199,6 +1256,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'text') return text.trim().length > 0;
     if (task.answer_type === 'input') return text.trim().length > 0;
     if (task.answer_type === 'num_input' || task.answer_type === 'listening') return text.trim().length > 0;
+    if (task.answer_type === 'table_num_input') return tableNums.length > 0 && tableNums.every((v) => v.trim().length === 1);
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
@@ -1213,7 +1271,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       return parsePositionItems(task.task_text || '').length > 0;
     }
     return false;
-}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw]);
+}, [task, choice, text, lettersSel, selectedCard, multiSel, connMap, itc2Top, itc2Bottom, paintHasDraw, tableNums]);
 
   // Раскладка «клавиатуры»: распределяем элементы по строкам красиво
   function computeRows(count: number): number[] {
@@ -1235,6 +1293,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let user = '';
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
     else if (task.answer_type === 'num_input' || task.answer_type === 'listening') user = text.trim();
+    else if (task.answer_type === 'table_num_input') user = tableNums.map((v) => v.trim()).join('');
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -1342,6 +1401,18 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       ok = variants.some((v) => decimalEquals(String(v), user));
     } else {
       ok = decimalEquals(String(task.correct || ''), user);
+    }
+  } else if (task.answer_type === 'table_num_input') {
+    const sanitizedUser = user.replace(/\s+/g, '');
+    const matches = (sample: string) => {
+      const digits = String(sample || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
+      return digits === sanitizedUser;
+    };
+    const variants = parseAnswerPipe(task.correct || '');
+    if (variants.length > 0) {
+      ok = variants.some(matches);
+    } else {
+      ok = matches(task.correct || '');
     }
     } else if (task.answer_type === 'it_code_2') {
       const san = (s: string) => String(s || '').trim().replace(/[^\d]+/g, '');
@@ -1481,6 +1552,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     setPaintTx(0);
     setPaintTy(0);
     paintInitRef.current = false;
+    setTableNums([]);
     setViewKey((k) => k + 1);
   }
 
@@ -2357,6 +2429,63 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     />
                   </div>
                 )}
+                {task && task.answer_type === 'table_num_input' && (() => {
+                  const columns = Math.max(1, tableColumnCount || 1);
+                  return (
+                    <div className="px-4 mb-2">
+                      <div className="px-4 py-4 rounded-2xl bg-white/5 border border-white/10 max-w-[640px] mx-auto overflow-x-auto">
+                        <div className="min-w-[260px]">
+                          <div
+                            className="grid gap-2 text-center text-xs font-semibold tracking-[0.3em] text-white/70"
+                            style={{ gridTemplateColumns: `repeat(${columns}, minmax(32px, 1fr))` }}
+                          >
+                            {Array.from({ length: columns }).map((_, idx) => (
+                              <div key={`tbl-letter-${idx}`}>{tableLetterLabel(idx)}</div>
+                            ))}
+                          </div>
+                          <div
+                            className="mt-2 grid gap-2"
+                            style={{ gridTemplateColumns: `repeat(${columns}, minmax(32px, 1fr))` }}
+                          >
+                            {Array.from({ length: columns }).map((_, idx) => {
+                              const value = tableNums[idx] || '';
+                              if (status === 'idle') {
+                                return (
+                                  <input
+                                    key={`tbl-cell-${idx}`}
+                                    value={value}
+                                    onChange={(e) => handleTableCellChange(idx, e.target.value)}
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={1}
+                                    disabled={status !== 'idle'}
+                                    className="rounded-2xl border border-white/20 bg-white/5 py-3 text-center font-extrabold text-lg text-white focus:outline-none focus:border-white/50 transition-colors"
+                                    onFocus={(e) => e.currentTarget.select()}
+                                  />
+                                );
+                              }
+                              const correctDigit = tableCorrectDigits[idx] ?? '';
+                              const userDigit = (tableNums[idx] || '').trim();
+                              const isCorrect = correctDigit === userDigit;
+                              return (
+                                <div
+                                  key={`tbl-cell-res-${idx}`}
+                                  className={`rounded-2xl py-3 text-center font-extrabold text-lg border ${
+                                    isCorrect
+                                      ? 'border-green-500/60 bg-green-600/15 text-green-300'
+                                      : 'border-red-500/60 bg-red-600/15 text-red-300'
+                                  }`}
+                                >
+                                  {correctDigit || '–'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {task && task.answer_type === 'it_code_2' && (
                   <div className="px-4 mb-2 max-w-[640px] mx-auto grid gap-2">
                     <input

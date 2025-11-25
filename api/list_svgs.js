@@ -1,6 +1,5 @@
 // ESM serverless function for Vercel: list all SVGs within /public recursively
-import { promises as fs } from 'fs';
-import path from 'path';
+import manifest from '../public/svg-manifest.json' assert { type: 'json' };
 
 export default async function handler(req, res) {
   try {
@@ -15,28 +14,14 @@ export default async function handler(req, res) {
       return;
     }
 
-    const root = path.join(process.cwd(), 'public');
-    const out = [];
-
-    async function walk(dir) {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      for (const ent of entries) {
-        // skip hidden/system
-        if (ent.name.startsWith('.')) continue;
-        const full = path.join(dir, ent.name);
-        if (ent.isDirectory()) {
-          await walk(full);
-        } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.svg')) {
-          const rel = path.relative(root, full).replace(/\\/g, '/');
-          out.push('/' + rel);
-        }
-      }
+    const payload = manifest && typeof manifest === 'object'
+      ? manifest
+      : null;
+    if (!payload || !Array.isArray(payload.svgs)) {
+      res.status(500).json({ error: 'manifest_missing' });
+      return;
     }
-
-    await walk(root);
-    // stable order
-    out.sort();
-    res.status(200).json({ svgs: out });
+    res.status(200).json(payload);
   } catch (e) {
     try { console.error('[api/list_svgs] error', e); } catch {}
     res.status(500).json({ error: 'Internal error' });
