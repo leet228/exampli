@@ -23,27 +23,31 @@ export default function PostLesson() {
     try { return Boolean(before?.streakToday); } catch { return false; }
   }, [before]);
 
-  // Проверяем: все ли квесты уже выполнены на текущий момент
-  const allQuestsDone = React.useMemo(() => {
+  const questCodes = React.useMemo(() => {
     try {
       const meta = cacheGet<any>(CACHE_KEYS.dailyQuests) || { quests: [] };
-      const prog = cacheGet<Record<string, any>>(CACHE_KEYS.dailyQuestsProgress) || {};
-      const codes: string[] = (Array.isArray(meta.quests) ? meta.quests : []).map((q: any) => String(q.code));
-      if (codes.length === 0) return false;
-      return codes.every((c) => {
-        const p = prog[c];
-        const s = String(p?.status || 'in_progress');
-        return s === 'completed' || s === 'claimed';
+      return (Array.isArray(meta.quests) ? meta.quests : []).map((q: any) => String(q.code));
+    } catch { return []; }
+  }, []);
+
+  // Проверяем: все ли квесты были выполнены ДО урока
+  const allQuestsDoneBefore = React.useMemo(() => {
+    try {
+      if (!questCodes.length) return false;
+      const beforeMap = before?.quests || {};
+      return questCodes.every((code) => {
+        const status = String(beforeMap?.[code]?.status || 'in_progress');
+        return status === 'completed' || status === 'claimed';
       });
     } catch { return false; }
-  }, []);
+  }, [before, questCodes]);
 
   // Начальная развилка шагов (возможен мгновенный выход)
   React.useEffect(() => {
     const skipPromo = isPlus;
     if (skipPromo) {
       if (hadStreakTodayBefore) {
-        if (allQuestsDone) { navigate('/'); return; }
+        if (allQuestsDoneBefore) { navigate('/'); return; }
         setStep('quests');
       } else {
         setStep('streakWeek');
@@ -52,16 +56,16 @@ export default function PostLesson() {
       // показываем промо как было
       setStep('promo');
     }
-  }, [isPlus, hadStreakTodayBefore, allQuestsDone, navigate]);
+  }, [isPlus, hadStreakTodayBefore, allQuestsDoneBefore, navigate]);
 
   const onAfterPromo = React.useCallback(() => {
     if (hadStreakTodayBefore) {
-      if (allQuestsDone) { navigate('/'); return; }
+      if (allQuestsDoneBefore) { navigate('/'); return; }
       setStep('quests');
     } else {
       setStep('streakWeek');
     }
-  }, [hadStreakTodayBefore, allQuestsDone, navigate]);
+  }, [hadStreakTodayBefore, allQuestsDoneBefore, navigate]);
 
   return (
     <div className="fixed inset-0 z-[9999]" style={{ background: 'var(--bg)' }}>
@@ -71,7 +75,7 @@ export default function PostLesson() {
       {step === 'streakWeek' && (
         <StreakWeek
           before={before}
-          onContinue={() => { if (allQuestsDone) { navigate('/'); } else { setStep('quests'); } }}
+          onContinue={() => { if (allQuestsDoneBefore) { navigate('/'); } else { setStep('quests'); } }}
         />
       )}
       {step === 'quests' && (

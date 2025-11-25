@@ -105,7 +105,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [listeningEnded, setListeningEnded] = useState<boolean>(false);
   const [listeningError, setListeningError] = useState<string | null>(null);
   const [listeningStarted, setListeningStarted] = useState<boolean>(false);
-  const [listeningAudioKey, setListeningAudioKey] = useState<number>(0);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -387,7 +386,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
     resetListeningState();
     stopListeningAudio(true);
-    setListeningAudioKey((k) => k + 1);
   }, [task?.id, viewKey, task?.answer_type, resetListeningState, stopListeningAudio]);
 
   useEffect(() => {
@@ -404,7 +402,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const audio = audioRef.current;
     if (!audio) return;
     try { audio.load(); } catch {}
-  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey, task?.id, viewKey]);
+  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey]);
 
   useEffect(() => {
     if (task?.answer_type !== 'listening') return;
@@ -437,7 +435,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [task?.answer_type, listeningMeta?.src, listeningAudioKey, task?.id, viewKey]);
+  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey]);
 
   useEffect(() => {
     if (!open) stopListeningAudio(true);
@@ -1929,7 +1927,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         {task.answer_type === 'listening' && (
                         <div className="mt-4 px-1">
                           <audio
-                            key={listeningAudioKey}
+                            key={`${task?.id || 'task'}-${viewKey}`}
                             ref={audioRef}
                             src={listeningMeta?.src || undefined}
                             preload="auto"
