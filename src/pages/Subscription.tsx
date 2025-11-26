@@ -31,9 +31,9 @@ export default function Subscription() {
     { id: 'm12', months: 12, price: 4999, title: 'КУРСИК' },
   ];
   const gems = [
-    { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 400 },
-    { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 900 },
-    { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1800 },
+    { id: 'g1', icon: '/shop/chest.svg',  amount: 1200, rub: 399 },
+    { id: 'g2', icon: '/shop/barrel.svg', amount: 3000, rub: 899 },
+    { id: 'g3', icon: '/shop/cart.svg',   amount: 6500, rub: 1799 },
   ];
   const aiTokens = [
     { id: 'ai_plus', icon: '/ai/ai_www.svg', rub: 449, tokens: 0, label: 'КУРСИК AI +', description: 'Месячная подписка!\n+500000 токенов на месяц' },

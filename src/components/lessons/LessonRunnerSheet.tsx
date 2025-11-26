@@ -105,6 +105,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [listeningEnded, setListeningEnded] = useState<boolean>(false);
   const [listeningError, setListeningError] = useState<string | null>(null);
   const [listeningStarted, setListeningStarted] = useState<boolean>(false);
+  const listeningRafRef = useRef<number | null>(null);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -376,6 +377,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setListeningStarted(false);
     }
     setListeningPlaying(false);
+    if (listeningRafRef.current != null) {
+      cancelAnimationFrame(listeningRafRef.current);
+      listeningRafRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -408,17 +413,44 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task?.answer_type !== 'listening') return;
     const audio = audioRef.current;
     if (!audio) return;
+    const ensureLoop = () => {
+      if (listeningRafRef.current != null) return;
+      const tick = () => {
+        const node = audioRef.current;
+        if (node) {
+          setListeningProgress(node.currentTime || 0);
+        }
+        listeningRafRef.current = requestAnimationFrame(tick);
+      };
+      listeningRafRef.current = requestAnimationFrame(tick);
+    };
+    const stopLoop = () => {
+      if (listeningRafRef.current != null) {
+        cancelAnimationFrame(listeningRafRef.current);
+        listeningRafRef.current = null;
+      }
+    };
     const onLoaded = () => {
       setListeningReady(true);
       setListeningDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+      setListeningProgress(audio.currentTime || 0);
     };
     const onTime = () => setListeningProgress(audio.currentTime || 0);
-    const onPlay = () => { setListeningPlaying(true); setListeningStarted(true); setListeningError(null); };
-    const onPause = () => setListeningPlaying(false);
+    const onPlay = () => {
+      setListeningPlaying(true);
+      setListeningStarted(true);
+      setListeningError(null);
+      ensureLoop();
+    };
+    const onPause = () => {
+      setListeningPlaying(false);
+      stopLoop();
+    };
     const onEnded = () => {
       setListeningPlaying(false);
       setListeningEnded(true);
       setListeningProgress(Number.isFinite(audio.duration) ? audio.duration : audio.currentTime || 0);
+      stopLoop();
     };
     const onError = () => setListeningError('Не удалось воспроизвести аудио');
     audio.addEventListener('loadedmetadata', onLoaded);
@@ -434,6 +466,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      stopLoop();
     };
   }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey]);
 
@@ -461,6 +494,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (listeningPlaying) {
       try { audio.pause(); } catch {}
       setListeningPlaying(false);
+      if (listeningRafRef.current != null) {
+        cancelAnimationFrame(listeningRafRef.current);
+        listeningRafRef.current = null;
+      }
     } else {
       try {
         const playPromise = audio.play();
@@ -471,11 +508,19 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           playPromise.catch(() => {
             setListeningError('Разреши воспроизведение, чтобы послушать аудио');
             setListeningPlaying(false);
+            if (listeningRafRef.current != null) {
+              cancelAnimationFrame(listeningRafRef.current);
+              listeningRafRef.current = null;
+            }
           });
         }
       } catch {
         setListeningError('Не удалось воспроизвести аудио');
         setListeningPlaying(false);
+        if (listeningRafRef.current != null) {
+          cancelAnimationFrame(listeningRafRef.current);
+          listeningRafRef.current = null;
+        }
       }
     }
   }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying]);
