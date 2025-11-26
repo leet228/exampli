@@ -1927,7 +1927,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         {task.answer_type === 'listening' && (
                         <div className="mt-4 px-1">
                           <audio
-                            key={`${task?.id || 'task'}-${viewKey}`}
                             ref={audioRef}
                             src={listeningMeta?.src || undefined}
                             preload="auto"
