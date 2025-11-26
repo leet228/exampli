@@ -98,8 +98,10 @@ export default function AI() {
 
   const inputBaseColor = '#2b2b2b';
   const inputDarkColor = React.useMemo(() => darken(inputBaseColor, 18), []);
+  const sendingLocked = isLoading;
   function focusComposer(e?: any) {
     try {
+      if (sendingLocked) return;
       const el = (e?.target as HTMLElement) || null;
       if (!el) { textareaRef.current?.focus(); return; }
       // Не фокусируем textarea, если клик по кнопкам/иконкам/крестикам
@@ -318,6 +320,7 @@ export default function AI() {
   }
 
   function onPickImageClick() {
+    if (sendingLocked) return;
     fileInputRef.current?.click();
   }
 
@@ -440,6 +443,7 @@ export default function AI() {
               onClick={() => { try { hapticTiny(); } catch {}; onPickImageClick(); }}
               baseColor="#2b2b2b"
               textColor="rgba(255,255,255,0.9)"
+              disabled={sendingLocked}
             >
               +
             </MotionPressButton>
@@ -463,7 +467,7 @@ export default function AI() {
             >
               <textarea
                 ref={textareaRef}
-                className="block w-full bg-transparent outline-none text-[var(--text)] placeholder-[var(--muted)] text-base leading-6 resize-none no-scrollbar whitespace-pre-wrap break-normal"
+                className="block w-full bg-transparent outline-none text-[var(--text)] placeholder-[var(--muted)] text-base leading-6 resize-none no-scrollbar whitespace-pre-wrap break-normal disabled:cursor-not-allowed"
                 rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -472,6 +476,9 @@ export default function AI() {
                 placeholder="Спроси что угодно"
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
+                disabled={sendingLocked}
+                aria-disabled={sendingLocked}
+                style={{ opacity: sendingLocked ? 0.55 : 1 }}
               />
             </div>
 
@@ -487,6 +494,12 @@ export default function AI() {
             >
               ↑
             </MotionPressButton>
+            {sendingLocked && (
+              <div className="flex items-center gap-2 text-[12px] text-white/70">
+                <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Жду ответ…</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
