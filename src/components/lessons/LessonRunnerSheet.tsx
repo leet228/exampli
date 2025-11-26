@@ -106,6 +106,25 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const [listeningError, setListeningError] = useState<string | null>(null);
   const [listeningStarted, setListeningStarted] = useState<boolean>(false);
   const listeningRafRef = useRef<number | null>(null);
+
+  const startListeningProgressLoop = useCallback(() => {
+    if (listeningRafRef.current != null) return;
+    const tick = () => {
+      const node = audioRef.current;
+      if (node) {
+        setListeningProgress(node.currentTime || 0);
+      }
+      listeningRafRef.current = requestAnimationFrame(tick);
+    };
+    listeningRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const stopListeningProgressLoop = useCallback(() => {
+    if (listeningRafRef.current != null) {
+      cancelAnimationFrame(listeningRafRef.current);
+      listeningRafRef.current = null;
+    }
+  }, []);
   // Снимок состояния ДО начала урока — нужен для правильной анимации пост-экрана (стрик/квесты)
   const beforeRef = useRef<{ streak: number; last_active_at: string | null; timezone: string | null; yesterdayFrozen: boolean; quests: Record<string, any>; coins: number; streakToday?: boolean; yKind?: 'active' | 'freeze' | '' } | null>(null);
 
@@ -377,11 +396,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setListeningStarted(false);
     }
     setListeningPlaying(false);
-    if (listeningRafRef.current != null) {
-      cancelAnimationFrame(listeningRafRef.current);
-      listeningRafRef.current = null;
-    }
-  }, []);
+    stopListeningProgressLoop();
+  }, [stopListeningProgressLoop]);
 
   useEffect(() => {
     if (task?.answer_type !== 'listening') {
@@ -413,23 +429,6 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task?.answer_type !== 'listening') return;
     const audio = audioRef.current;
     if (!audio) return;
-    const ensureLoop = () => {
-      if (listeningRafRef.current != null) return;
-      const tick = () => {
-        const node = audioRef.current;
-        if (node) {
-          setListeningProgress(node.currentTime || 0);
-        }
-        listeningRafRef.current = requestAnimationFrame(tick);
-      };
-      listeningRafRef.current = requestAnimationFrame(tick);
-    };
-    const stopLoop = () => {
-      if (listeningRafRef.current != null) {
-        cancelAnimationFrame(listeningRafRef.current);
-        listeningRafRef.current = null;
-      }
-    };
     const onLoaded = () => {
       setListeningReady(true);
       setListeningDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
@@ -440,17 +439,17 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       setListeningPlaying(true);
       setListeningStarted(true);
       setListeningError(null);
-      ensureLoop();
+      startListeningProgressLoop();
     };
     const onPause = () => {
       setListeningPlaying(false);
-      stopLoop();
+      stopListeningProgressLoop();
     };
     const onEnded = () => {
       setListeningPlaying(false);
       setListeningEnded(true);
       setListeningProgress(Number.isFinite(audio.duration) ? audio.duration : audio.currentTime || 0);
-      stopLoop();
+      stopListeningProgressLoop();
     };
     const onError = () => setListeningError('Не удалось воспроизвести аудио');
     audio.addEventListener('loadedmetadata', onLoaded);
@@ -466,9 +465,23 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
-      stopLoop();
+      stopListeningProgressLoop();
     };
-  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey]);
+  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey, startListeningProgressLoop, stopListeningProgressLoop]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopListeningProgressLoop();
+      } else if (task?.answer_type === 'listening' && listeningPlaying) {
+        startListeningProgressLoop();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [listeningPlaying, startListeningProgressLoop, stopListeningProgressLoop, task?.answer_type]);
 
   useEffect(() => {
     if (!open) stopListeningAudio(true);
@@ -494,10 +507,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (listeningPlaying) {
       try { audio.pause(); } catch {}
       setListeningPlaying(false);
-      if (listeningRafRef.current != null) {
-        cancelAnimationFrame(listeningRafRef.current);
-        listeningRafRef.current = null;
-      }
+      stopListeningProgressLoop();
     } else {
       try {
         const playPromise = audio.play();
@@ -508,22 +518,22 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           playPromise.catch(() => {
             setListeningError('Разреши воспроизведение, чтобы послушать аудио');
             setListeningPlaying(false);
-            if (listeningRafRef.current != null) {
-              cancelAnimationFrame(listeningRafRef.current);
-              listeningRafRef.current = null;
-            }
+            stopListeningProgressLoop();
           });
         }
       } catch {
         setListeningError('Не удалось воспроизвести аудио');
         setListeningPlaying(false);
-        if (listeningRafRef.current != null) {
-          cancelAnimationFrame(listeningRafRef.current);
-          listeningRafRef.current = null;
-        }
+        stopListeningProgressLoop();
       }
     }
-  }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying]);
+  }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying, stopListeningProgressLoop]);
+
+  useEffect(() => {
+    if (!open || task?.answer_type !== 'listening') {
+      stopListeningProgressLoop();
+    }
+  }, [open, task?.answer_type, stopListeningProgressLoop]);
 
   const listeningProgressPct = useMemo(() => {
     if (listeningDuration > 0) {

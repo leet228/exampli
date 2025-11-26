@@ -38,9 +38,9 @@ export default async function handler(req, res) {
         m12: { stars: toStars(4999), months: 12, title: 'КУРСИК PLUS' },
       },
       gems: {
-        g1: { stars: toStars(400),  coins: 1200, title: 'Монеты' },
-        g2: { stars: toStars(900),  coins: 3000, title: 'Монеты' },
-        g3: { stars: toStars(1800), coins: 6500, title: 'Монеты' },
+        g1: { stars: toStars(399),  coins: 1200, title: 'Монеты' },
+        g2: { stars: toStars(899),  coins: 3000, title: 'Монеты' },
+        g3: { stars: toStars(1799), coins: 6500, title: 'Монеты' },
       },
       ai_tokens: {
         ai_plus: { stars: toStars(449), rub: 449, title: 'КУРСИК AI +', months: 1 },
