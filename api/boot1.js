@@ -3,6 +3,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit } from './_kv.mjs';
 
+const LONG_CACHE_TTL = 60 * 60 * 24 * 7;
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'OPTIONS') {
@@ -119,21 +121,25 @@ export default async function handler(req, res) {
         pack = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : (rpc.data || {});
         if (kvAvailable()) { try { await cacheSetJSON(cacheKey, pack, 45); } catch {} }
         // additionally seed long-lived caches for static catalogs
-        try {
-          if (kvAvailable()) {
+        if (kvAvailable()) {
+          try {
+            const tasks = [];
             if (Array.isArray(pack.subjectsAll) && pack.subjectsAll.length) {
-              await cacheSetJSON('subjectsAll:v1', pack.subjectsAll, 60 * 60 * 24 * 7);
+              tasks.push(cacheSetJSON('subjectsAll:v1', pack.subjectsAll, LONG_CACHE_TTL));
             }
             const topicsBy = pack.topicsBySubject || {};
-            for (const sid of Object.keys(topicsBy)) {
-              await cacheSetJSON(`topicsBySubject:v1:${sid}`, topicsBy[sid], 60 * 60 * 24 * 7);
+            for (const [sid, items] of Object.entries(topicsBy)) {
+              tasks.push(cacheSetJSON(`topicsBySubject:v1:${sid}`, items, LONG_CACHE_TTL));
             }
             const lessonsBy = pack.lessonsByTopic || {};
-            for (const tid of Object.keys(lessonsBy)) {
-              await cacheSetJSON(`lessonsByTopic:v1:${tid}`, lessonsBy[tid], 60 * 60 * 24 * 7);
+            for (const [tid, items] of Object.entries(lessonsBy)) {
+              tasks.push(cacheSetJSON(`lessonsByTopic:v1:${tid}`, items, LONG_CACHE_TTL));
             }
-          }
-        } catch {}
+            if (tasks.length) {
+              await Promise.allSettled(tasks);
+            }
+          } catch {}
+        }
       }
       const d = pack || {};
       profData = d.profile || null;

@@ -59,6 +59,16 @@ export default function AppLayout() {
   const [prewarmFriendsDone, setPrewarmFriendsDone] = useState(false);
   const bootDone = bootReady && uiWarmed;
 
+  // Во время онбординга полностью глушим звуки, чтобы пользователь не слышал SFX поверх модального сценария
+  useEffect(() => {
+    try { sfx.setGlobalMuted(showOnboarding); } catch {}
+    return () => {
+      if (showOnboarding) {
+        try { sfx.setGlobalMuted(false); } catch {}
+      }
+    };
+  }, [showOnboarding]);
+
   // Снимаем телеграмовский лоадер сразу при монтировании
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;

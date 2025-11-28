@@ -1218,6 +1218,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     }
   }
 
+  // Доп. нормализация: убираем пробелы совсем (для input)
+  function normalizeAnswerNoSpaces(src: string): string {
+    return normalizeAnswer(src).replace(/\s+/g, '');
+  }
+
   // Нормализуем десятичное число: допускаем "1,5" и "1.5", пробелы, знак
   // Возвращает каноничную строку числа или null, если строка не является числом
   function normalizeDecimalString(src: string): string | null {
@@ -1404,6 +1409,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     let ok = false;
     if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
       const userNorm = normalizeAnswer(user);
+    const userNoSpaces = task.answer_type === 'input' ? normalizeAnswerNoSpaces(user) : null;
       // Для input не используем список через запятую, чтобы не ломать десятичные числа вида "1,5"
       let variants = (task.answer_type === 'input') ? [] : parseAnswerList(task.correct || '');
       // Для it_code и input поддерживаем разделитель "|"
@@ -1414,13 +1420,25 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           for (const p of pipe) if (!set.has(p)) variants.push(p);
         }
       }
+    const correctNorm = normalizeAnswer(task.correct || '');
+    const correctNoSpaces = task.answer_type === 'input' ? normalizeAnswerNoSpaces(task.correct || '') : null;
       if (variants.length > 0) {
         ok = variants.some((v) => {
-          if (task.answer_type === 'input' && decimalEquals(v, user)) return true;
-          return normalizeAnswer(v) === userNorm;
+        if (task.answer_type === 'input') {
+          if (decimalEquals(v, user)) return true;
+          if (userNoSpaces != null && normalizeAnswerNoSpaces(v) === userNoSpaces) return true;
+        }
+        return normalizeAnswer(v) === userNorm;
         });
       } else {
-        ok = (userNorm === normalizeAnswer(task.correct || '')) || (task.answer_type === 'input' && decimalEquals(task.correct || '', user));
+      if (task.answer_type === 'input') {
+        ok =
+          decimalEquals(task.correct || '', user) ||
+          (userNoSpaces != null && correctNoSpaces === userNoSpaces) ||
+          (userNorm === correctNorm);
+      } else {
+        ok = (userNorm === correctNorm);
+      }
       }
   } else if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
     const variants = parseAnswerPipe(task.correct || '');

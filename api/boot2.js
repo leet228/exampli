@@ -3,6 +3,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit } from './_kv.mjs';
 
+const LONG_CACHE_TTL = 60 * 60 * 24 * 7;
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'OPTIONS') {
@@ -65,56 +67,72 @@ export default async function handler(req, res) {
         d = Array.isArray(rpc.data) ? (rpc.data[0] || {}) : rpc.data;
         if (kvAvailable()) { try { await cacheSetJSON(cacheKey, d, 45); } catch {} }
         // seed long-lived catalogs
-        try {
-          if (kvAvailable()) {
+        if (kvAvailable()) {
+          try {
+            const tasks = [];
             if (Array.isArray(d.subjectsAll) && d.subjectsAll.length) {
-              await cacheSetJSON('subjectsAll:v1', d.subjectsAll, 60 * 60 * 24 * 7);
+              tasks.push(cacheSetJSON('subjectsAll:v1', d.subjectsAll, LONG_CACHE_TTL));
             }
             const topicsBy = d.topicsBySubject || {};
-            for (const sid of Object.keys(topicsBy)) {
-              await cacheSetJSON(`topicsBySubject:v1:${sid}`, topicsBy[sid], 60 * 60 * 24 * 7);
+            for (const [sid, items] of Object.entries(topicsBy)) {
+              tasks.push(cacheSetJSON(`topicsBySubject:v1:${sid}`, items, LONG_CACHE_TTL));
             }
             const lessonsBy = d.lessonsByTopic || {};
-            for (const tid of Object.keys(lessonsBy)) {
-              await cacheSetJSON(`lessonsByTopic:v1:${tid}`, lessonsBy[tid], 60 * 60 * 24 * 7);
+            for (const [tid, items] of Object.entries(lessonsBy)) {
+              tasks.push(cacheSetJSON(`lessonsByTopic:v1:${tid}`, items, LONG_CACHE_TTL));
             }
-          }
-        } catch {}
+            if (tasks.length) {
+              await Promise.allSettled(tasks);
+            }
+          } catch {}
+        }
       }
       friendsListRaw = Array.isArray(d.friends) ? d.friends : [];
       invites = Array.isArray(d.invites) ? d.invites : [];
       // overlay super-long caches if exist (subjects/topics/lessons)
+      const fallbackSubjects = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
+      const fallbackTopicsBy = d.topicsBySubject || {};
+      const fallbackLessonsBy = d.lessonsByTopic || {};
+      subjectsAll = fallbackSubjects;
+      topicsOnly = { topicsBySubject: fallbackTopicsBy };
+      lessonsByTopic = fallbackLessonsBy;
       try {
         if (kvAvailable()) {
-          const cachedSubjectsAll = await cacheGetJSON('subjectsAll:v1');
-          if (cachedSubjectsAll && Array.isArray(cachedSubjectsAll)) subjectsAll = cachedSubjectsAll; else subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
           const sid = activeId || d.active_id || null;
-          if (sid) {
-            const topicsCached = await cacheGetJSON(`topicsBySubject:v1:${sid}`);
-            if (topicsCached && Array.isArray(topicsCached)) topicsOnly = { topicsBySubject: { [String(sid)]: topicsCached } };
-            const lessonsBy = {};
-            if (topicsCached && Array.isArray(topicsCached)) {
-              for (const t of topicsCached) {
-                const key = `lessonsByTopic:v1:${t.id}`;
-                const ls = await cacheGetJSON(key);
-                if (Array.isArray(ls)) lessonsBy[String(t.id)] = ls;
+          const [subjectsCached, topicsCached] = await Promise.all([
+            cacheGetJSON('subjectsAll:v1'),
+            sid ? cacheGetJSON(`topicsBySubject:v1:${sid}`) : Promise.resolve(null),
+          ]);
+          if (Array.isArray(subjectsCached) && subjectsCached.length) {
+            subjectsAll = subjectsCached;
+          }
+          if (sid && Array.isArray(topicsCached) && topicsCached.length) {
+            topicsOnly = { topicsBySubject: { [String(sid)]: topicsCached } };
+            const lessonTasks = topicsCached
+              .map((topic) => {
+                const tid = topic?.id;
+                if (!tid) return null;
+                return cacheGetJSON(`lessonsByTopic:v1:${tid}`).then((list) => ({ tid, list }));
+              })
+              .filter(Boolean);
+            if (lessonTasks.length) {
+              const lessonResults = await Promise.all(lessonTasks);
+              const lessonsMap = {};
+              for (const { tid, list } of lessonResults) {
+                if (Array.isArray(list) && list.length) {
+                  lessonsMap[String(tid)] = list;
+                }
+              }
+              if (Object.keys(lessonsMap).length) {
+                lessonsByTopic = lessonsMap;
               }
             }
-            if (Object.keys(lessonsBy).length) lessonsByTopic = lessonsBy; else lessonsByTopic = d.lessonsByTopic || {};
-          } else {
-            subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
-            topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
-            lessonsByTopic = d.lessonsByTopic || {};
           }
-        } else {
-          subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
-          topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
-          lessonsByTopic = d.lessonsByTopic || {};
         }
       } catch {
-        subjectsAll = Array.isArray(d.subjectsAll) ? d.subjectsAll : [];
-        topicsOnly = { topicsBySubject: (d.topicsBySubject || {}) };
-        lessonsByTopic = d.lessonsByTopic || {};
+        subjectsAll = fallbackSubjects;
+        topicsOnly = { topicsBySubject: fallbackTopicsBy };
+        lessonsByTopic = fallbackLessonsBy;
       }
       streakDaysAll = Array.isArray(d.streakDaysAll) ? d.streakDaysAll : [];
       friendsStats = d.friendsStats || {};
