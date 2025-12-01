@@ -1,6 +1,6 @@
 // src/pages/AppLayout.tsx
 import { Outlet, useLocation } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import HUD from '../components/HUD';
 import BottomNav from '../components/BottomNav';
 import Splash from '../components/Splash';
@@ -21,26 +21,18 @@ async function pingPresence(route: string, event: string) {
     });
   } catch {}
 }
-import Profile from '../pages/Profile';
-import Home from '../pages/Home';
-import AI from '../pages/AI';
-import Battle from '../pages/Battle';
-import Quests from '../pages/Quests';
-import Subscription from '../pages/Subscription';
 import TopicsPanel from '../components/panels/TopicsPanel';
 import AddCourseSheet from '../components/panels/AddCourseSheet';
-import FriendsPanel from '../components/panels/FriendsPanel';
-import AddFriendsPanel from '../components/panels/AddFriendsPanel';
 import { sfx } from '../lib/sfx';
+
+const BOTTOM_NAV_ROUTES = new Set(['/', '/quests', '/battle', '/ai', '/subscription', '/profile']);
 
 
 export default function AppLayout() {
   const { pathname } = useLocation();
 
   // HUD всегда смонтирован, но скрывается вне «Дороги»
-  const showHUD = true;
-  // нижняя навигация на этих маршрутах
-  const showBottom = ['/', '/quests', '/battle', '/ai', '/subscription', '/profile'].includes(pathname);
+  const showBottom = BOTTOM_NAV_ROUTES.has(pathname);
   const isAI = pathname === '/ai';
 
   const [bootReady, setBootReady] = useState(false); // данные загружены и кэшированы
@@ -48,15 +40,7 @@ export default function AppLayout() {
   const [bootData, setBootData] = useState<BootData | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [openCoursePicker, setOpenCoursePicker] = useState<boolean>(false);
-  const profileRef = useRef<HTMLDivElement | null>(null);
-  const homeRef = useRef<HTMLDivElement | null>(null);
-  const aiRef = useRef<HTMLDivElement | null>(null);
-  const battleRef = useRef<HTMLDivElement | null>(null);
-  const questsRef = useRef<HTMLDivElement | null>(null);
-  const subsRef = useRef<HTMLDivElement | null>(null);
-  const addCourseRootRef = useRef<HTMLDivElement | null>(null);
   const [prewarmACDone, setPrewarmACDone] = useState(false);
-  const [prewarmFriendsDone, setPrewarmFriendsDone] = useState(false);
   const bootDone = bootReady && uiWarmed;
 
   // Во время онбординга полностью глушим звуки, чтобы пользователь не слышал SFX поверх модального сценария
@@ -119,35 +103,24 @@ export default function AppLayout() {
 
   // Автоматическая прокрутка вверх при переключении между страницами bottom nav
   useEffect(() => {
-    if (showBottom) {
-      // Небольшая задержка, чтобы страница успела отрендериться
-      const timeoutId = setTimeout(() => {
-        try {
-          // Прокручиваем все .main-scroll контейнеры (для Home, AI и других страниц)
-          const scrollContainers = document.querySelectorAll('.main-scroll');
-          scrollContainers.forEach((container) => {
-            if (container instanceof HTMLElement) {
-              container.scrollTop = 0;
-            }
-          });
-          // Прокручиваем контейнеры страниц через ref'ы
-          [homeRef, profileRef, aiRef, battleRef, questsRef, subsRef].forEach((ref) => {
-            if (ref.current) {
-              const el = ref.current as HTMLElement;
-              el.scrollTop = 0;
-              // Также ищем скролл-контейнеры внутри
-              const innerScroll = el.querySelector('.main-scroll') as HTMLElement;
-              if (innerScroll) innerScroll.scrollTop = 0;
-            }
-          });
-          // Также прокручиваем window и document (для Profile и других страниц без .main-scroll)
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        } catch {}
-      }, 0);
-      return () => clearTimeout(timeoutId);
-    }
+    if (!showBottom) return;
+    // Небольшая задержка, чтобы страница успела отрендериться
+    const timeoutId = setTimeout(() => {
+      try {
+        // Прокручиваем все .main-scroll контейнеры
+        const scrollContainers = document.querySelectorAll('.main-scroll');
+        scrollContainers.forEach((container) => {
+          if (container instanceof HTMLElement) {
+            container.scrollTop = 0;
+          }
+        });
+        // Также прокручиваем window и document
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timeoutId);
   }, [pathname, showBottom]);
 
   // После ухода сплэша подсказать оверлеям пересчитать позицию
@@ -179,23 +152,6 @@ export default function AppLayout() {
     }
   }, [bootReady]);
 
-  // Управляем inert у постоянных контейнеров страниц: активной странице снимаем inert, скрытым — ставим inert
-  useEffect(() => {
-    const map: Array<[string, React.RefObject<HTMLDivElement>]> = [
-      ['/', homeRef],
-      ['/ai', aiRef],
-      ['/battle', battleRef],
-      ['/quests', questsRef],
-      ['/subscription', subsRef],
-      ['/profile', profileRef],
-    ];
-    map.forEach(([path, ref]) => {
-      const el = ref.current;
-      const hidden = pathname !== path;
-      try { if (hidden) el?.setAttribute('inert', ''); else el?.removeAttribute('inert'); } catch {}
-    });
-  }, [pathname]);
-
   // Presence ping на смену маршрута (с TTL 5 минут на сервере)
   useEffect(() => {
     try { pingPresence(pathname || '/', 'route'); } catch {}
@@ -215,14 +171,6 @@ export default function AppLayout() {
     if (!bootReady) return;
     (async () => { try { await syncEnergy(0); } catch {} })();
   }, [bootReady]);
-
-  // После bootReady один раз прогреваем FriendsPanel и AddFriendsPanel, затем размонтируем
-  useEffect(() => {
-    if (bootReady && !prewarmFriendsDone) {
-      const id = requestAnimationFrame(() => setPrewarmFriendsDone(true));
-      return () => cancelAnimationFrame(id);
-    }
-  }, [bootReady, prewarmFriendsDone]);
 
   return (
     <div className={`min-h-screen ${isAI ? '' : 'safe-top'} safe-bottom main-scroll`}>
@@ -268,7 +216,7 @@ export default function AppLayout() {
           )}
 
           {/* Боевой контейнер: всегда присутствует и не скрыт, чтобы портал HUD был виден */}
-          <div ref={addCourseRootRef} id="addcourse-root" />
+          <div id="addcourse-root" />
         </>
       )}
 
@@ -278,39 +226,7 @@ export default function AppLayout() {
       </div>
 
       <div id="app-container" className={isAI ? 'w-full' : 'max-w-xl mx-auto p-5'}>
-        {bootReady && (
-          <>
-            {/* Home */}
-            <div ref={homeRef} className={pathname === '/' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/' ? undefined : true}>
-              <Home />
-            </div>
-            {/* AI */}
-            <div ref={aiRef} className={pathname === '/ai' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/ai' ? undefined : true}>
-              <AI />
-            </div>
-            {/* Battle */}
-            <div ref={battleRef} className={pathname === '/battle' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/battle' ? undefined : true}>
-              <Battle />
-            </div>
-            {/* Quests */}
-            <div ref={questsRef} className={pathname === '/quests' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/quests' ? undefined : true}>
-              <Quests />
-            </div>
-            {/* Subscription */}
-            <div ref={subsRef} className={pathname === '/subscription' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/subscription' ? undefined : true}>
-              <Subscription />
-            </div>
-            {/* Profile */}
-            <div ref={profileRef} className={pathname === '/profile' ? '' : 'prewarm-mount'} aria-hidden={pathname === '/profile' ? undefined : true}>
-              <Profile />
-            </div>
-          </>
-        )}
-
-        {/* Другие неизвестные маршруты — через Outlet, чтобы не дублировать наши страницы */}
-        {!['/', '/ai', '/battle', '/quests', '/subscription', '/profile'].includes(pathname) && (
-          <Outlet context={{ bootData }} />
-        )}
+        {bootReady && <Outlet context={{ bootData }} />}
       </div>
 
       {/* Onboarding поверх после boot */}

@@ -191,9 +191,10 @@ export default function Subscription() {
     window.addEventListener('exampli:statsChanged', onStats as EventListener);
     const onFrostPulse = () => setFrostsPulseKey((k) => k + 1);
     window.addEventListener('exampli:frostsPulse', onFrostPulse as EventListener);
-    return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
-    // eslint-disable-next-line no-unreachable
-    return () => { window.removeEventListener('exampli:frostsPulse', onFrostPulse as EventListener); };
+    return () => {
+      window.removeEventListener('exampli:statsChanged', onStats as EventListener);
+      window.removeEventListener('exampli:frostsPulse', onFrostPulse as EventListener);
+    };
   }, []);
 
   // Поймаем возврат c ?paid=1 или startapp=paid (из t.me/...) и покажем уведомление
