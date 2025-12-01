@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import LessonRoundButton from './LessonRoundButton';
 import LessonButton from './LessonButton';
 import { hapticSelect } from '../../lib/haptics';
@@ -39,6 +39,29 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
       return '';
     }
   }, [lessons?.length]);
+
+  const completedLessonsCount = useMemo(() => {
+    if (!lessons?.length || !completedLessonIds?.size) return 0;
+    let count = 0;
+    for (const lesson of lessons) {
+      if (completedLessonIds.has(String(lesson.id))) count += 1;
+    }
+    return count;
+  }, [lessons, completedLessonIds]);
+
+  const getRoadImageVariant = useCallback((imageNum: number) => {
+    if (!courseCode) return null;
+    const thresholds: Record<number, number> = { 1: 3, 2: 7 };
+    const threshold = thresholds[imageNum];
+    const completedVariant = threshold != null && completedLessonsCount >= threshold;
+    const suffix = completedVariant ? `${imageNum}_comp` : `${imageNum}0`;
+    const fallback = completedVariant ? `/road_pic/${courseCode}${imageNum}0.svg` : null;
+    return {
+      src: `/road_pic/${courseCode}${suffix}.svg`,
+      fallback,
+      completedVariant,
+    };
+  }, [courseCode, completedLessonsCount]);
 
   // Функция для определения, нужно ли показывать картинку после урока
   const shouldShowImage = (lessonIdx: number): { show: boolean; imageNum: number; side: 'right' | 'left' } => {
@@ -152,6 +175,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                     ? 18 // big → small = 4.5
                     : 8)); // остальные = 2
           const imageInfo = shouldShowImage(idx);
+          const imageVariant = imageInfo.show ? getRoadImageVariant(imageInfo.imageNum) : null;
           return (
             <li key={l.id} style={{ marginTop: gapPx, position: 'relative' }}>
               <div className={`flex justify-center`} style={{ overflow: 'visible' }}>
@@ -194,7 +218,7 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                 </motion.div>
               </div>
               {/* Картинка после урока */}
-              {imageInfo.show && courseCode && (
+              {imageVariant && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -209,13 +233,19 @@ export default function LessonRoad({ lessons, onOpen, currentTopicTitle, nextTop
                   }}
                 >
                   <img
-                    src={`/road_pic/${courseCode}${imageInfo.imageNum}0.svg`}
+                    src={imageVariant.src}
                     alt=""
                     className="h-auto object-contain pointer-events-none select-none"
                     style={{ width: '160px', maxWidth: '180px' }}
                     onError={(e) => {
+                      const node = e.currentTarget as HTMLImageElement;
+                      if (imageVariant.completedVariant && imageVariant.fallback && node.dataset.fallbackApplied !== '1') {
+                        node.dataset.fallbackApplied = '1';
+                        node.src = imageVariant.fallback;
+                        return;
+                      }
                       // Скрываем картинку, если файл не найден
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      node.style.display = 'none';
                     }}
                   />
                 </motion.div>
