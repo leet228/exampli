@@ -9,6 +9,8 @@ import { cacheGet, cacheSet, CACHE_KEYS } from '../../lib/cache';
 import { spendEnergy, rewardEnergy, finishLesson } from '../../lib/userState';
 import { sfx } from '../../lib/sfx';
 
+const LESSON_TASKS_CACHE_VERSION = 'v5';
+
 const isIOSDevice = (() => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -138,12 +140,12 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     // загрузочный экран и предзагрузка заданий
     setLoading(true);
     (async () => {
-      // сначала попробуем из localStorage (кеш урока) — v4
+      // сначала попробуем из localStorage (кеш урока) — v5
       let rows: any[] | null = null;
       try {
-        const v4Key = `exampli:lesson_tasks:v4:${lessonId}`;
-        const rawV4 = localStorage.getItem(v4Key);
-        if (rawV4) rows = JSON.parse(rawV4) as any[];
+        const cacheKey = `exampli:lesson_tasks:${LESSON_TASKS_CACHE_VERSION}:${lessonId}`;
+        const rawV5 = localStorage.getItem(cacheKey);
+        if (rawV5) rows = JSON.parse(rawV5) as any[];
       } catch {}
       if (!rows || !Array.isArray(rows) || rows.length === 0) {
         let fetched: any[] | null = null;
@@ -174,9 +176,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
           return Number(a?.id || 0) - Number(b?.id || 0);
         });
         try {
-          // сохраняем в v4 и удаляем старый v3, чтобы не путаться со старыми данными
-          localStorage.setItem(`exampli:lesson_tasks:v4:${lessonId}`, JSON.stringify(rows));
-          try { localStorage.removeItem(`exampli:lesson_tasks:v3:${lessonId}`); } catch {}
+          // сохраняем в v5 и удаляем старый v4, чтобы не путаться со старыми данными
+          localStorage.setItem(`exampli:lesson_tasks:${LESSON_TASKS_CACHE_VERSION}:${lessonId}`, JSON.stringify(rows));
+          try { localStorage.removeItem(`exampli:lesson_tasks:v4:${lessonId}`); } catch {}
         } catch {}
       }
       setTasks(rows as any);

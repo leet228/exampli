@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { kvAvailable, cacheGetJSON, cacheSetJSON, rateLimit } from './_kv.mjs';
 
 const LONG_CACHE_TTL = 60 * 60 * 24 * 7;
+const LESSONS_CACHE_VERSION = 'v2';
 
 export default async function handler(req, res) {
   try {
@@ -133,7 +134,7 @@ export default async function handler(req, res) {
             }
             const lessonsBy = pack.lessonsByTopic || {};
             for (const [tid, items] of Object.entries(lessonsBy)) {
-              tasks.push(cacheSetJSON(`lessonsByTopic:v1:${tid}`, items, LONG_CACHE_TTL));
+              tasks.push(cacheSetJSON(`lessonsByTopic:${LESSONS_CACHE_VERSION}:${tid}`, items, LONG_CACHE_TTL));
             }
             if (tasks.length) {
               await Promise.allSettled(tasks);

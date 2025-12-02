@@ -5,6 +5,7 @@ import { cacheGetJSON, cacheSetJSON, kvAvailable } from './_kv.mjs';
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 200;
 const CACHE_TTL_SECONDS = Number(process.env.LESSON_TASKS_CACHE_TTL || 60);
+const CACHE_VERSION = 'v2';
 
 function parseNumber(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -48,7 +49,7 @@ export default async function handler(req, res) {
     const limit = clampLimit(req.query?.limit);
     const cursorOrder = parseNumber(req.query?.cursor_order ?? req.query?.cursorOrder);
     const cursorId = parseNumber(req.query?.cursor_id ?? req.query?.cursorId);
-    const cacheKey = `lesson_tasks:v1:${lessonId}:limit:${limit}`;
+    const cacheKey = `lesson_tasks:${CACHE_VERSION}:${lessonId}:limit:${limit}`;
 
     if (!cursorOrder && !cursorId && kvAvailable()) {
       const cached = await cacheGetJSON(cacheKey);
