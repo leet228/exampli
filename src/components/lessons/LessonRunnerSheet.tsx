@@ -27,7 +27,7 @@ type TaskRow = {
   prompt: string;
   task_text: string; // contains (underline)
   order_index?: number | null;
-  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'listening' | 'table_num_input' | 'it_code' | 'it_code_2' | 'painting' | 'position';
+  answer_type: 'choice' | 'text' | 'word_letters' | 'cards' | 'multiple_choice' | 'input' | 'connections' | 'num_input' | 'listening' | 'listening_table' | 'table_num_input' | 'it_code' | 'it_code_2' | 'painting' | 'position';
   options: string[] | null;
   correct: string;
 };
@@ -89,6 +89,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   const solvedRef = useRef<Set<string | number>>(new Set());
   const [viewKey, setViewKey] = useState<number>(0);
   const task = (mode === 'base') ? planned[baseIdx] : (repeatCurrent as any);
+  const isListeningTask = task?.answer_type === 'listening' || task?.answer_type === 'listening_table';
   // Метрики завершения урока
   const [answersTotal, setAnswersTotal] = useState<number>(0);
   const [answersCorrect, setAnswersCorrect] = useState<number>(0);
@@ -282,7 +283,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   // ===== Listening tasks (аудирование) =====
   const listeningMeta = useMemo<ListeningMeta | null>(() => {
-    if (!task || task.answer_type !== 'listening') return null;
+    if (!task || (task.answer_type !== 'listening' && task.answer_type !== 'listening_table')) return null;
     let activeCode: string | null = null;
     try {
       activeCode = localStorage.getItem('exampli:activeSubjectCode');
@@ -293,7 +294,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         if (cached) activeCode = cached;
       } catch {}
     }
-    if (!activeCode || activeCode.toLowerCase() !== 'ege_english') return null;
+    const lowered = activeCode.toLowerCase();
+    if (lowered !== 'ege_english' && lowered !== 'oge_english') return null;
 
     let topicId: string | number | null = null;
     try {
@@ -368,7 +370,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (!lessonOrder || !Number.isFinite(lessonOrder) || lessonOrder < 1) return null;
 
     const fileName = lessonOrder === 1 ? 'get_file.mp3' : `get_file (${lessonOrder - 1}).mp3`;
-    const src = `/en_ege/${Math.round(topicOrder)}/${encodeURIComponent(fileName)}`;
+    const basePath = lowered === 'oge_english' ? '/en_oge' : '/en_ege';
+    const src = `${basePath}/${Math.round(topicOrder)}/${encodeURIComponent(fileName)}`;
     return {
       src: `${src}?v=${viewKey}`,
       topicOrder: Math.round(topicOrder),
@@ -402,17 +405,17 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   }, [stopListeningProgressLoop]);
 
   useEffect(() => {
-    if (task?.answer_type !== 'listening') {
+    if (!isListeningTask) {
       resetListeningState();
       stopListeningAudio(true);
       return;
     }
     resetListeningState();
     stopListeningAudio(true);
-  }, [task?.id, viewKey, task?.answer_type, resetListeningState, stopListeningAudio]);
+  }, [task?.id, viewKey, isListeningTask, resetListeningState, stopListeningAudio]);
 
   useEffect(() => {
-    if (task?.answer_type !== 'listening') return;
+    if (!isListeningTask) return;
     if (!listeningMeta?.src) {
       setListeningError('Аудио для этого задания пока недоступно');
       return;
@@ -425,10 +428,10 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     const audio = audioRef.current;
     if (!audio) return;
     try { audio.load(); } catch {}
-  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey]);
+  }, [isListeningTask, listeningMeta?.src, task?.id, viewKey]);
 
   useEffect(() => {
-    if (task?.answer_type !== 'listening') return;
+    if (!isListeningTask) return;
     const audio = audioRef.current;
     if (!audio) return;
     const onLoaded = () => {
@@ -469,13 +472,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
       audio.removeEventListener('error', onError);
       stopListeningProgressLoop();
     };
-  }, [task?.answer_type, listeningMeta?.src, task?.id, viewKey, startListeningProgressLoop, stopListeningProgressLoop]);
+  }, [isListeningTask, listeningMeta?.src, task?.id, viewKey, startListeningProgressLoop, stopListeningProgressLoop]);
 
   useEffect(() => {
     const handleVisibility = () => {
       if (document.hidden) {
         stopListeningProgressLoop();
-      } else if (task?.answer_type === 'listening' && listeningPlaying) {
+      } else if (isListeningTask && listeningPlaying) {
         startListeningProgressLoop();
       }
     };
@@ -483,26 +486,26 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [listeningPlaying, startListeningProgressLoop, stopListeningProgressLoop, task?.answer_type]);
+  }, [isListeningTask, listeningPlaying, startListeningProgressLoop, stopListeningProgressLoop]);
 
   useEffect(() => {
     if (!open) stopListeningAudio(true);
   }, [open, stopListeningAudio]);
 
   useEffect(() => {
-    if ((confirmExit || showExitAd) && task?.answer_type === 'listening') {
+    if ((confirmExit || showExitAd) && isListeningTask) {
       stopListeningAudio();
     }
-  }, [confirmExit, showExitAd, task?.answer_type, stopListeningAudio]);
+  }, [confirmExit, showExitAd, isListeningTask, stopListeningAudio]);
 
   useEffect(() => {
-    if (status !== 'idle' && task?.answer_type === 'listening') {
+    if (status !== 'idle' && isListeningTask) {
       stopListeningAudio();
     }
-  }, [status, task?.answer_type, stopListeningAudio]);
+  }, [status, isListeningTask, stopListeningAudio]);
 
   const handleListeningToggle = useCallback(() => {
-    if (task?.answer_type !== 'listening') return;
+    if (!isListeningTask) return;
     if (!listeningMeta?.src || listeningEnded) return;
     const audio = audioRef.current;
     if (!audio) return;
@@ -529,13 +532,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         stopListeningProgressLoop();
       }
     }
-  }, [task?.answer_type, listeningMeta?.src, listeningEnded, listeningPlaying, stopListeningProgressLoop]);
+  }, [isListeningTask, listeningMeta?.src, listeningEnded, listeningPlaying, stopListeningProgressLoop]);
 
   useEffect(() => {
-    if (!open || task?.answer_type !== 'listening') {
+    if (!open || !isListeningTask) {
       stopListeningProgressLoop();
     }
-  }, [open, task?.answer_type, stopListeningProgressLoop]);
+  }, [open, isListeningTask, stopListeningProgressLoop]);
 
   const listeningProgressPct = useMemo(() => {
     if (listeningDuration > 0) {
@@ -554,14 +557,17 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
 
   const tableColumnCount = useMemo(() => {
+    if (task?.answer_type === 'listening_table') {
+      return tableNums.length > 0 ? tableNums.length : 5;
+    }
     if (task?.answer_type !== 'table_num_input') return 0;
     if (tableNums.length > 0) return tableNums.length;
     return Math.max(1, computeTableColumnCount(task));
   }, [task, tableNums.length]);
 
   const tableCorrectDigits = useMemo(() => {
-    if (task?.answer_type !== 'table_num_input') return [];
-    const cols = Math.max(1, tableColumnCount || computeTableColumnCount(task));
+    if (!task || (task.answer_type !== 'table_num_input' && task.answer_type !== 'listening_table')) return [];
+    const cols = Math.max(1, tableColumnCount || computeTableColumnCount(task) || (task.answer_type === 'listening_table' ? 5 : 0));
     const variants = parseAnswerPipe(task.correct || '');
     const template = String((variants[0] ?? task.correct ?? '') || '');
     return parseCorrectDigits(template, cols).map((d) => String(d));
@@ -1013,8 +1019,8 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   }, [task, viewKey]);
 
   useEffect(() => {
-    if (task?.answer_type !== 'table_num_input') return;
-    const cols = Math.max(1, computeTableColumnCount(task));
+    if (!task || (task.answer_type !== 'table_num_input' && task.answer_type !== 'listening_table')) return;
+    const cols = task.answer_type === 'listening_table' ? 5 : Math.max(1, computeTableColumnCount(task));
     setTableNums(Array.from({ length: cols }, () => ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task, viewKey]);
@@ -1269,6 +1275,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
 
   function computeTableColumnCount(tableTask?: TaskRow): number {
     if (!tableTask) return 0;
+    if (tableTask.answer_type === 'listening_table') return 5;
     const variants = parseAnswerPipe(tableTask.correct || '');
     const templateRaw = (variants[0] ?? tableTask.correct ?? '') || '';
     const template = String(templateRaw);
@@ -1341,9 +1348,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
     if (task.answer_type === 'word_letters') return (lettersSel.length > 0);
     if (task.answer_type === 'cards') return (selectedCard != null);
     if (task.answer_type === 'text') return text.trim().length > 0;
-    if (task.answer_type === 'input') return text.trim().length > 0;
-    if (task.answer_type === 'num_input' || task.answer_type === 'listening') return text.trim().length > 0;
-    if (task.answer_type === 'table_num_input') return tableNums.length > 0 && tableNums.every((v) => v.trim().length === 1);
+    if (task.answer_type === 'input' || task.answer_type === 'listening') return text.trim().length > 0;
+    if (task.answer_type === 'num_input') return text.trim().length > 0;
+    if (task.answer_type === 'table_num_input' || task.answer_type === 'listening_table') return tableNums.length > 0 && tableNums.every((v) => v.trim().length === 1);
     if (task.answer_type === 'it_code') return text.trim().length > 0;
     if (task.answer_type === 'it_code_2') return (itc2Top.trim().length > 0 && itc2Bottom.trim().length > 0);
     if (task.answer_type === 'painting') return text.trim().length > 0;
@@ -1378,9 +1385,9 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   async function check(){
     if (!task) return;
     let user = '';
-    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code') user = text.trim();
-    else if (task.answer_type === 'num_input' || task.answer_type === 'listening') user = text.trim();
-    else if (task.answer_type === 'table_num_input') user = tableNums.map((v) => v.trim()).join('');
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'listening') user = text.trim();
+    else if (task.answer_type === 'num_input') user = text.trim();
+    else if (task.answer_type === 'table_num_input' || task.answer_type === 'listening_table') user = tableNums.map((v) => v.trim()).join('');
     else if (task.answer_type === 'choice') user = (choice || '');
     else if (task.answer_type === 'multiple_choice') {
       // сравнение множеств как строк отсортированных id
@@ -1409,13 +1416,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
   }
     // Проверка правильности
     let ok = false;
-    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting') {
+    if (task.answer_type === 'text' || task.answer_type === 'input' || task.answer_type === 'it_code' || task.answer_type === 'painting' || task.answer_type === 'listening') {
       const userNorm = normalizeAnswer(user);
     const userNoSpaces = task.answer_type === 'input' ? normalizeAnswerNoSpaces(user) : null;
       // Для input не используем список через запятую, чтобы не ломать десятичные числа вида "1,5"
       let variants = (task.answer_type === 'input') ? [] : parseAnswerList(task.correct || '');
-      // Для it_code и input поддерживаем разделитель "|"
-      if (task.answer_type === 'it_code' || task.answer_type === 'input') {
+      // Для it_code, input и listening поддерживаем разделитель "|"
+      if (task.answer_type === 'it_code' || task.answer_type === 'input' || task.answer_type === 'listening') {
         const pipe = parseAnswerPipe(task.correct || '');
         if (pipe.length > 0) {
           const set = new Set<string>(variants.map(v => v));
@@ -1442,14 +1449,14 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
         ok = (userNorm === correctNorm);
       }
       }
-  } else if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
+  } else if (task.answer_type === 'num_input') {
     const variants = parseAnswerPipe(task.correct || '');
     if (variants.length > 0) {
       ok = variants.some((v) => decimalEquals(String(v), user));
     } else {
       ok = decimalEquals(String(task.correct || ''), user);
     }
-  } else if (task.answer_type === 'table_num_input') {
+  } else if (task.answer_type === 'table_num_input' || task.answer_type === 'listening_table') {
     const sanitizedUser = user.replace(/\s+/g, '');
     const matches = (sample: string) => {
       const digits = String(sample || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
@@ -1999,7 +2006,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                         }
                         return null;
                         }))}
-                        {task.answer_type === 'listening' && (
+                        {(task.answer_type === 'listening' || task.answer_type === 'listening_table') && (
                         <div className="mt-4 px-1">
                           <audio
                             ref={audioRef}
@@ -2505,7 +2512,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       value={(() => {
                         if (status === 'wrong') {
                           let vars: string[] = [];
-                          if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
+                          if (task.answer_type === 'num_input') {
                             vars = parseAnswerPipe(task.correct || '');
                           } else if (task.answer_type === 'it_code') {
                             const list = parseAnswerList(task.correct || '');
@@ -2517,6 +2524,13 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           } else if (task.answer_type === 'input') {
                             // Для input показываем варианты из pipe, чтобы не путать запятую в десятичной дроби со списком
                             vars = parseAnswerPipe(task.correct || '');
+                          } else if (task.answer_type === 'listening') {
+                            const list = parseAnswerList(task.correct || '');
+                            const pipe = parseAnswerPipe(task.correct || '');
+                            const set = new Set<string>();
+                            for (const v of list) { const vv = v.trim(); if (vv) set.add(vv); }
+                            for (const v of pipe) { const vv = v.trim(); if (vv) set.add(vv); }
+                            vars = Array.from(set);
                           } else {
                             vars = parseAnswerList(task.correct || '');
                           }
@@ -2527,7 +2541,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                       })()}
                       onChange={(e) => {
                         const raw = e.target.value || '';
-                        if (task.answer_type === 'num_input' || task.answer_type === 'listening') {
+                        if (task.answer_type === 'num_input') {
                           // Разрешаем цифры, пробелы, знак и десятичные разделители "." и ","
                           const filtered = raw.replace(/[^\d.,+\-\s]/g, '');
                           setText(filtered);
@@ -2535,11 +2549,11 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                           setText(raw);
                         }
                       }}
-                      placeholder={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? 'Введи число...' : 'Напиши ответ...'}
+                      placeholder={task.answer_type === 'num_input' ? 'Введи число...' : 'Напиши ответ...'}
                       aria-label="Ответ"
                       disabled={status !== 'idle'}
-                      inputMode={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? ((isIOSDevice ? 'decimal' : 'numeric') as any) : undefined}
-                      pattern={(task.answer_type === 'num_input' || task.answer_type === 'listening') ? '[0-9.,+-]*' : undefined}
+                      inputMode={task.answer_type === 'num_input' ? ((isIOSDevice ? 'decimal' : 'numeric') as any) : undefined}
+                      pattern={task.answer_type === 'num_input' ? '[0-9.,+-]*' : undefined}
                       className={`w-full max-w-[640px] mx-auto rounded-2xl px-4 py-3 outline-none disabled:opacity-60 disabled:cursor-not-allowed text-center font-extrabold text-base ${
                         status === 'correct'
                           ? 'border border-green-500/60 bg-green-600/10 text-green-400'
@@ -2550,7 +2564,7 @@ export default function LessonRunnerSheet({ open, onClose, lessonId }: { open: b
                     />
                   </div>
                 )}
-                {task && task.answer_type === 'table_num_input' && (() => {
+                {task && (task.answer_type === 'table_num_input' || task.answer_type === 'listening_table') && (() => {
                   const columns = Math.max(1, tableColumnCount || 1);
                   return (
                     <div className="px-4 mb-2">

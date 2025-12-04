@@ -14,6 +14,7 @@ const UPCOMING_CODES = new Set([
   'ege_french',
   'oge_french',
   'oge_literature',
+  'oge_math',
 ]);
 
 export default function AddCourseBlocking({ open, onPicked }: { open: boolean; onPicked: (s: Subject) => void }){
