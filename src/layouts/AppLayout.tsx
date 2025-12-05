@@ -378,7 +378,6 @@ export default function AppLayout() {
       <AddCourseBlocking
         open={openCoursePicker}
         onPicked={async (s) => {
-          try { (window as any).__exampliLoadingSubject = { code: String(s.code || '').replace(/^(oge_|ege_)/, '').toLowerCase(), title: s.title }; } catch {}
           try { (window as any).__exampliRequireBoot2 = true; } catch {}
           try { (window as any).__exampliBootLocked = true; } catch {}
           try {

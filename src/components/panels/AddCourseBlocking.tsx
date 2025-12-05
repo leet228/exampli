@@ -100,11 +100,13 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             try {
                               const { data: topics } = await supabase
                                 .from('topics')
-                                .select('id,title')
+                                .select('id,title,order_index')
                                 .eq('subject_id', s.id)
                                 .order('order_index', { ascending: true })
-                                .limit(1);
-                              const firstTopic = (topics as any[])?.[0] || null;
+                                .limit(50);
+                              const topicsList = Array.isArray(topics) ? topics : [];
+                              const firstTopic = topicsList[0] || null;
+                              try { cacheSet(CACHE_KEYS.topicsBySubject(s.id), topicsList as any); } catch {}
                               // persist to users
                               try {
                                 const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -123,6 +125,17 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                                 if (firstTopic?.id) {
                                   localStorage.setItem('exampli:currentTopicId', String(firstTopic.id));
                                   localStorage.setItem('exampli:currentTopicTitle', String(firstTopic.title || ''));
+                                  // предзагрузим уроки этой темы, чтобы после boot они были сразу
+                                  try {
+                                    const { data: lessonsData } = await supabase
+                                      .from('lessons')
+                                      .select('id,topic_id,order_index')
+                                      .eq('topic_id', firstTopic.id)
+                                      .order('order_index', { ascending: true });
+                                    const lessonsList = Array.isArray(lessonsData) ? lessonsData : [];
+                                    cacheSet(CACHE_KEYS.lessonsByTopic(firstTopic.id), lessonsList as any);
+                                    window.dispatchEvent(new Event('exampli:lessonsChanged'));
+                                  } catch {}
                                 }
                               } catch {}
                               // update TopicsButton immediately
