@@ -378,18 +378,22 @@ export default function AppLayout() {
       <AddCourseBlocking
         open={openCoursePicker}
         onPicked={async (s) => {
+          try { (window as any).__exampliLoadingSubject = { code: String(s.code || '').replace(/^(oge_|ege_)/, '').toLowerCase(), title: s.title }; } catch {}
+          try { (window as any).__exampliRequireBoot2 = true; } catch {}
+          try { (window as any).__exampliBootLocked = true; } catch {}
+          try {
+            const once = (window as any).__exampliBootOnce;
+            if (once && typeof once === 'object') once.started = false;
+          } catch {}
+          setOpenCoursePicker(false);
+          setBootReady(false);
+          setUiWarmed(false);
           try {
             await setUserSubjects([s.code]);
             window.dispatchEvent(new CustomEvent('exampli:courseChanged', { detail: { title: s.title, code: s.code } } as any));
           } finally {
-            setOpenCoursePicker(false);
-            setBootReady(false);
-            setUiWarmed(false);
-            try {
-              const once = (window as any).__exampliBootOnce;
-              if (once && typeof once === 'object') once.started = false;
-            } catch {}
-            try { delete (window as any).__exampliBootLocked; } catch {}
+            try { window.dispatchEvent(new Event('exampli:startBoot')); } catch {}
+            setTimeout(() => { try { delete (window as any).__exampliBootLocked; } catch {} }, 0);
           }
         }}
       />

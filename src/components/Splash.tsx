@@ -75,13 +75,27 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
       const data = await bootPreload(undefined, (label) => setPhase(label || 'Загрузка…'));
       if (!live) return;
       setBoot(data);
+      const needBoot2 = (() => { try { return Boolean((window as any).__exampliRequireBoot2); } catch { return false; } })();
+      if (needBoot2) {
+        try { delete (window as any).__exampliRequireBoot2; } catch {}
+      }
+      const runBoot2 = async () => {
+        try {
+          const uid = (data?.user as any)?.id as string | undefined;
+          const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null;
+          if (uid) await bootPreloadBackground(uid, activeId);
+        } catch {}
+      };
+      if (needBoot2) {
+        await runBoot2();
+      } else {
+        void runBoot2();
+      }
       setTimeout(() => {
         setDone(true);
         onReady(data);
         try { warmupLoadSvgs(); } catch {}
       }, 100);
-      // Фоновый ШАГ 2: один запрос на тяжелые данные
-      try { const uid = (data?.user as any)?.id as string | undefined; const activeId = (data?.subjects?.[0]?.id as number | undefined) ?? null; if (uid) void bootPreloadBackground(uid, activeId); } catch {}
     };
 
     const locked = (() => { try { return Boolean((window as any).__exampliBootLocked); } catch { return false; } })();
