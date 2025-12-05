@@ -22,6 +22,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
   const [openLevels, setOpenLevels] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pressedId, setPressedId] = useState<number | null>(null);
+  const [loadingCourseId, setLoadingCourseId] = useState<number | null>(null);
   // Локальный accent (не берём из CSS)
   const accentColor = '#3c73ff';
   const baseDefault = '#22313a';
@@ -59,6 +60,8 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
     <FullScreenSheet open={open} onClose={() => {}} title="Выбери первый курс" useTelegramBack={false} dismissible={false}>
       <div className="space-y-5 px-4 pb-6">
         {Object.entries(grouped).map(([level, items]) => {
+          const groupHasLoading = loadingCourseId != null && items.some((s) => s.id === loadingCourseId);
+          if (loadingCourseId != null && !groupHasLoading) return null;
           const isOpen = !!openLevels[level];
           return (
             <div key={level} className="space-y-2">
@@ -74,7 +77,9 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
               {isOpen && (
                 <div className="rounded-2xl bg-[#101b20] border border-white/10 p-2">
                   <div className="grid gap-2">
-                    {items.map(s => {
+                    {items
+                      .filter((s) => loadingCourseId == null || s.id === loadingCourseId)
+                      .map(s => {
                       const codeNormalized = String(s.code || '').toLowerCase();
                       const isUpcoming = UPCOMING_CODES.has(codeNormalized);
                       const imgSrc = `/subjects/${s.code}.svg`;
@@ -87,11 +92,13 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           onPointerUp={() => setPressedId(null)}
                           onPointerCancel={() => setPressedId(null)}
                           onClick={async () => {
+                            if (loadingCourseId != null) return;
                             if (isUpcoming) {
                               try { hapticTiny(); } catch {}
                               return;
                             }
                             setSelectedId(s.id);
+                            setLoadingCourseId(s.id);
                             hapticSelect();
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
@@ -142,7 +149,11 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               try {
                                 if (firstTopic?.title) window.dispatchEvent(new CustomEvent('exampli:topicBadge', { detail: { topicTitle: firstTopic?.title } } as any));
                               } catch {}
-                            } catch {}
+                            } catch (err) {
+                              console.warn('[AddCourseBlocking] preload failed', err);
+                              setLoadingCourseId(null);
+                              return;
+                            }
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${
@@ -197,7 +208,7 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                           )}
                         </motion.button>
                       );
-                    })}
+                      })}
                   </div>
                 </div>
               )}
@@ -205,6 +216,12 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
           );
         })}
       </div>
+      {loadingCourseId != null && (
+        <div className="flex flex-col items-center gap-3 py-6">
+          <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+          <div className="text-sm text-white/70 font-semibold">Готовим курс…</div>
+        </div>
+      )}
     </FullScreenSheet>
   );
 }
