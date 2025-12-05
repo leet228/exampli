@@ -44,6 +44,7 @@ export default async function handler(req, res) {
     const todayIsoMsk = startOfDayIsoMsk(now)
     const weekStartIsoMsk = startOfDayIsoMsk(new Date(now.getTime() - 6 * msInDay))
     const y = now.getUTCFullYear(), m = now.getUTCMonth()+1
+    const monthIsoMsk = `${y}-${pad(m)}-01T00:00:00+03:00`
 
     // Users
     const { count: total } = await supabase.from('users').select('*', { count: 'exact', head: true })
@@ -91,7 +92,6 @@ export default async function handler(req, res) {
 
   // Revenue this month (RUB)
   // Старт текущего месяца в МСК
-  const monthIsoMsk = `${y}-${pad(m)}-01T00:00:00+03:00`
   let grossMonth = 0
     try {
       const { data } = await supabase
