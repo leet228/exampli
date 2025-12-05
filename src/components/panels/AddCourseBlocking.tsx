@@ -114,6 +114,35 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               const topicsList = Array.isArray(topics) ? topics : [];
                               const firstTopic = topicsList[0] || null;
                               try { cacheSet(CACHE_KEYS.topicsBySubject(s.id), topicsList as any); } catch {}
+                              // Предварительно загрузим уроки для всех тем выбранного курса
+                              if (topicsList.length) {
+                                try {
+                                  const topicIds = topicsList.map((t: any) => t.id).filter((id) => id != null);
+                                  if (topicIds.length) {
+                                    const { data: lessonsAll } = await supabase
+                                      .from('lessons')
+                                      .select('id, topic_id, order_index')
+                                      .in('topic_id', topicIds as any)
+                                      .order('topic_id', { ascending: true })
+                                      .order('order_index', { ascending: true });
+                                    const grouped = new Map<string | number, any[]>();
+                                    (lessonsAll || []).forEach((row: any) => {
+                                      const tid = row.topic_id;
+                                      if (tid == null) return;
+                                      const bucket = grouped.get(tid) || [];
+                                      bucket.push(row);
+                                      grouped.set(tid, bucket);
+                                    });
+                                    grouped.forEach((list, tid) => {
+                                      try { cacheSet(CACHE_KEYS.lessonsByTopic(tid), list as any); } catch {}
+                                    });
+                                    // уведомим UI, что уроки активной темы обновились
+                                    if (firstTopic?.id != null) {
+                                      window.dispatchEvent(new Event('exampli:lessonsChanged'));
+                                    }
+                                  }
+                                } catch {}
+                              }
                               // persist to users
                               try {
                                 const tgId: number | undefined = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.id;

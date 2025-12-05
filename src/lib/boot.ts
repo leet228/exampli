@@ -476,6 +476,14 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   // 6) уроки активной темы (если выбрана) — приходят из step1
   const currentTopicIdBoot: string | number | null = userRow?.current_topic ?? null;
   let lessonsArr: LessonRow[] = (step1.lessons || []).map((l: any) => ({ id: l.id, topic_id: l.topic_id, order_index: l.order_index }));
+  if ((!lessonsArr || lessonsArr.length === 0) && currentTopicIdBoot != null) {
+    try {
+      const cached = cacheGet<any[]>(CACHE_KEYS.lessonsByTopic(currentTopicIdBoot));
+      if (Array.isArray(cached) && cached.length) {
+        lessonsArr = cached.map((l: any) => ({ id: l.id, topic_id: l.topic_id ?? currentTopicIdBoot, order_index: l.order_index }));
+      }
+    } catch {}
+  }
   if (currentTopicIdBoot != null) {
     try { cacheSet(CACHE_KEYS.lessonsByTopic(currentTopicIdBoot), lessonsArr as any); } catch {}
   }
