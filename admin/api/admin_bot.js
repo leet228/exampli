@@ -96,8 +96,16 @@ async function buildDailyReportMessage(supabase) {
   // Today bounds in MSK (+03:00)
   const now = new Date()
   const pad = (n) => String(n).padStart(2, '0')
-  const y = now.getUTCFullYear(), m = now.getUTCMonth() + 1, d = now.getUTCDate()
-  const todayIsoMsk = `${y}-${pad(m)}-${pad(d)}T00:00:00+03:00`
+  const msInDay = 24 * 60 * 60 * 1000
+  const startOfDayIsoMsk = (date) => {
+    const yy = date.getUTCFullYear()
+    const mm = date.getUTCMonth() + 1
+    const dd = date.getUTCDate()
+    return `${yy}-${pad(mm)}-${pad(dd)}T00:00:00+03:00`
+  }
+  const todayIsoMsk = startOfDayIsoMsk(now)
+  const weekStartIsoMsk = startOfDayIsoMsk(new Date(now.getTime() - 6 * msInDay))
+  const y = now.getUTCFullYear(), m = now.getUTCMonth() + 1
 
   // Users
   const { count: total } = await supabase.from('users').select('*', { count: 'exact', head: true })
@@ -105,6 +113,8 @@ async function buildDailyReportMessage(supabase) {
   const { count: plusActive } = await supabase.from('users').select('*', { count: 'exact', head: true }).gt('plus_until', nowIso)
   const { count: aiPlusActive } = await supabase.from('users').select('*', { count: 'exact', head: true }).gt('ai_plus_until', nowIso)
   const { count: newToday } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', todayIsoMsk)
+  const { count: newWeek } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', weekStartIsoMsk)
+  const { count: newMonth } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', monthIsoMsk)
 
   // Online now
   let online = 0
@@ -188,6 +198,8 @@ async function buildDailyReportMessage(supabase) {
     `📈 Средний онлайн за день: <b>${(avgOnlineToday||0).toLocaleString('ru-RU')}</b>`,
     `🔝 Максимальный онлайн за день: <b>${(maxOnlineToday||0).toLocaleString('ru-RU')}</b>${maxAtMsk ? ` в <b>${maxAtMsk} МСК</b>` : ''}`,
     `🆕 Новые сегодня: <b>${(newToday||0).toLocaleString('ru-RU')}</b>`,
+    `📅 Новые за 7 дней: <b>${(newWeek||0).toLocaleString('ru-RU')}</b>`,
+    `🗓️ Новые за месяц: <b>${(newMonth||0).toLocaleString('ru-RU')}</b>`,
     `\n⭐ PLUS активные: <b>${(plusActive||0).toLocaleString('ru-RU')}</b>`,
     `🤖 AI+ активные: <b>${(aiPlusActive||0).toLocaleString('ru-RU')}</b>`,
     `\n💰 Доход за месяц: <b>${Math.round(grossMonth).toLocaleString('ru-RU')} ₽</b>`,
