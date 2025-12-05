@@ -727,6 +727,7 @@ export default function Subscription() {
                   <div className="mt-4 grid gap-2">
                     <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Бесконечная энергия</span></div>
                     <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Доступ к <span className="font-semibold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span></span></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Добавление до 4 курсов</span></div>
                     <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Никакой рекламы</span></div>
                     <div className="flex items-center gap-2 text-sm"><span className="text-sky-400">✔</span><span>Заморозка стрика</span></div>
                   </div>
