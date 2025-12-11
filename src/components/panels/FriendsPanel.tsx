@@ -83,25 +83,6 @@ export default function FriendsPanel({ open, onClose }: Props) {
     duel_wins?: number | null;
   } | null>(null);
 
-  // Компоновка «облака иконок» как в профиле
-  const iconsCloud = useMemo(() => {
-    // Чуть больший вертикальный шаг; ряд из 4 иконок на уровне центра аватарки (≈50%)
-    const rows: { y: number; xs: number[] }[] = [
-      { y: 12, xs: [28, 72] },
-      { y: 24, xs: [18, 50, 82] },
-      { y: 30, xs: [28, 72] },
-      { y: 50, xs: [10, 30, 70, 90] },
-      { y: 70, xs: [28, 72] },
-      { y: 76, xs: [18, 50, 82] },
-      { y: 88, xs: [28, 72] },
-    ];
-    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
-    rows.forEach((row) => {
-      row.xs.forEach((x) => { items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 }); });
-    });
-    return items;
-  }, []);
-
   useEffect(() => {
     if (!open) { setInvitesOpen(false); setInvites([]); }
   }, [open]);
@@ -489,7 +470,6 @@ export default function FriendsPanel({ open, onClose }: Props) {
         <div className="flex flex-col gap-3">
           {friends.map((f) => {
             const initials = (f.first_name || f.username || '?').slice(0,1).toUpperCase();
-            const iconKey = f.background_icon || 'bg_icon_cat';
             return (
               <PressButton
                 key={f.user_id}
@@ -504,33 +484,6 @@ export default function FriendsPanel({ open, onClose }: Props) {
                   className="relative w-full"
                   style={{ height: 140, background: f.background_color || '#1d2837' }}
                 >
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 pointer-events-none"
-                    style={{
-                      maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)',
-                      WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)'
-                    }}
-                  >
-                    {iconsCloud.map((it, i) => (
-                      <img
-                        key={i}
-                        src={`/profile_icons/${iconKey}.svg`}
-                        alt=""
-                        style={{
-                          position: 'absolute',
-                          left: `${it.x}%`,
-                          top: `${it.y}%`,
-                          width: `${24 * it.s}px`,
-                          height: `${24 * it.s}px`,
-                          opacity: it.o,
-                          transform: `translate(-50%, -50%) rotate(${it.r}deg)`,
-                          filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))'
-                        }}
-                      />
-                    ))}
-                  </div>
-
                   <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                     <div className="relative z-[1] w-20 h-20 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                       {f.avatar_url ? (
@@ -605,11 +558,6 @@ export default function FriendsPanel({ open, onClose }: Props) {
             >
               {/* header background like profile */}
               <div className="relative w-full" style={{ height: 280, background: friendView.background_color || '#1d2837' }}>
-                <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)', WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)' }}>
-                  {iconsCloud.map((it, i) => (
-                    <img key={i} src={`/profile_icons/${friendView.background_icon || 'bg_icon_cat'}.svg`} alt="" style={{ position: 'absolute', left: `${it.x}%`, top: `${it.y}%`, width: `${24 * it.s}px`, height: `${24 * it.s}px`, opacity: it.o, transform: `translate(-50%, -50%) rotate(${it.r}deg)`, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }} />
-                  ))}
-                </div>
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                   <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                     {(friendStats?.avatar_url || friendView.avatar_url) ? (

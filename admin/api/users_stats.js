@@ -9,9 +9,15 @@ export default async function handler(req, res) {
     if (!url || !serviceKey) { res.status(500).json({ error: 'supabase_env_missing' }); return }
 
     const supabase = createClient(url, serviceKey)
+    const baseUsers = () =>
+      supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .not('phone_number', 'is', null)
+        .not('added_course', 'is', null)
 
     // total users
-    const { count: total, error: e1 } = await supabase.from('users').select('*', { count: 'exact', head: true })
+    const { count: total, error: e1 } = await baseUsers()
     if (e1) { res.status(500).json({ error: e1.message }); return }
 
     // online: prefer app_presence with expires_at > now; fallback to users.last_active_at within 5 minutes
@@ -29,25 +35,21 @@ export default async function handler(req, res) {
       const { count: fallbackCount } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
+        .not('phone_number', 'is', null)
+        .not('added_course', 'is', null)
         .gte('last_active_at', fiveMinAgo)
       online = fallbackCount || 0
     }
 
     // new24h: created_at within 24hasdasd
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { count: new24h, error: e3 } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', dayAgo)
+    const { count: new24h, error: e3 } = await baseUsers().gte('created_at', dayAgo)
     if (e3) { res.status(500).json({ error: e3.message }); return }
 
     // Active PLUS and AI+ (until > now)
     const nowIso = new Date().toISOString()
-    const { count: plusActive } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .gt('plus_until', nowIso)
-    const { count: aiPlusActive } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .gt('ai_plus_until', nowIso)
+    const { count: plusActive } = await baseUsers().gt('plus_until', nowIso)
+    const { count: aiPlusActive } = await baseUsers().gt('ai_plus_until', nowIso)
 
     res.status(200).json({ total: total || 0, online: online || 0, new24h: new24h || 0, plusActive: plusActive || 0, aiPlusActive: aiPlusActive || 0 })
   } catch (e) {

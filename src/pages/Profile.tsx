@@ -54,30 +54,6 @@ export default function Profile() {
   const [courseCode, setCourseCode] = useState<string | null>(null);
   const [bg, setBg] = useState<string>('#3280c2');
   const [baseBg, setBaseBg] = useState<string>('#3280c2');
-  const [bgIcon, setBgIcon] = useState<string>('bg_icon_cat');
-  const [tempBgIcon, setTempBgIcon] = useState<string>('bg_icon_cat');
-  const [iconsOpen, setIconsOpen] = useState<boolean>(false);
-  const iconsCloud = useMemo(() => {
-    // Симметричная раскладка 18 иконок: ряды 2,3,2,4,2,3,2
-    // Центральный ряд (4) имеет «дырку» по центру, чтобы не наезжать на аватар
-    // Сжимание по вертикали: ряды ближе друг к другу (малый шаг по Y)
-    const rows: { y: number; xs: number[] }[] = [
-      { y: 30, xs: [28, 72] },            // 2
-      { y: 38, xs: [18, 50, 82] },        // 3
-      { y: 46, xs: [28, 72] },            // 2
-      { y: 58, xs: [10, 30, 70, 90] },    // 4 — по уровню центра аватарки, дальше от неё по X
-      { y: 70, xs: [28, 72] },            // 2
-      { y: 78, xs: [18, 50, 82] },        // 3
-      { y: 86, xs: [28, 72] },            // 2
-    ];
-    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
-    rows.forEach((row) => {
-      row.xs.forEach((x) => {
-        items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 });
-      });
-    });
-    return items;
-  }, []);
   const [phone, setPhone] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -390,7 +366,6 @@ export default function Profile() {
       try {
         const prof = (window as any)?.__exampliBoot?.userProfile || null;
         if (prof?.background_color) { setBg(String(prof.background_color)); setBaseBg(String(prof.background_color)); }
-        if (prof?.background_icon) { setBgIcon(String(prof.background_icon)); setTempBgIcon(String(prof.background_icon)); }
         if (prof?.phone_number) setPhone(String(prof.phone_number));
         if (prof?.username) setUsername(String(prof.username));
       } catch {}
@@ -603,24 +578,6 @@ export default function Profile() {
   const initials = (u?.first_name || 'U').slice(0,1).toUpperCase();
   const maskedPhone = phone ? phone : '';
   const atUsername = username ? `@${username}` : '';
-
-  // Иконки для оверлея друга — компоновка как в FriendsPanel
-  const friendIconsCloud = useMemo(() => {
-    const rows: { y: number; xs: number[] }[] = [
-      { y: 12, xs: [28, 72] },
-      { y: 24, xs: [18, 50, 82] },
-      { y: 30, xs: [28, 72] },
-      { y: 50, xs: [10, 30, 70, 90] },
-      { y: 70, xs: [28, 72] },
-      { y: 76, xs: [18, 50, 82] },
-      { y: 88, xs: [28, 72] },
-    ];
-    const items: { x: number; y: number; s: number; r: number; o: number }[] = [];
-    rows.forEach((row) => {
-      row.xs.forEach((x) => { items.push({ x, y: row.y, s: 1, r: 0, o: 0.28 }); });
-    });
-    return items;
-  }, []);
 
   // helpers for share/date
   function formatDate(d: Date) {
@@ -982,33 +939,6 @@ export default function Profile() {
             background: bg,
           }}
         >
-          {/* декоративный слой: много маленьких иконок, разбросанные по полю с сильным затуханием к краям */}
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)',
-              WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)'
-            }}
-          >
-            {iconsCloud.map((it, i) => (
-              <img
-                key={i}
-                src={`/profile_icons/${tempBgIcon}.svg`}
-                alt=""
-                style={{
-                  position: 'absolute',
-                  left: `${it.x}%`,
-                  top: `${it.y}%`,
-                  width: `${24 * it.s}px`,
-                  height: `${24 * it.s}px`,
-                  opacity: it.o,
-                  transform: `translate(-50%, -50%) rotate(${it.r}deg)`,
-                  filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))'
-                }}
-              />
-            ))}
-          </div>
           {/* PLUS bottom gradient glow inside hero background */}
           {isPlus && !editing && (
             <div
@@ -1049,11 +979,6 @@ export default function Profile() {
           >
             {/* header background like profile */}
             <div className="relative w-full" style={{ height: 280, background: friendView.background_color || '#1d2837' }}>
-              <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ maskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)', WebkitMaskImage: 'radial-gradient(75% 70% at 50% 48%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 82%)' }}>
-                {friendIconsCloud.map((it, i) => (
-                  <img key={i} src={`/profile_icons/${friendView.background_icon || 'bg_icon_cat'}.svg`} alt="" style={{ position: 'absolute', left: `${it.x}%`, top: `${it.y}%`, width: `${24 * it.s}px`, height: `${24 * it.s}px`, opacity: it.o, transform: `translate(-50%, -50%) rotate(${it.r}deg)`, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }} />
-                ))}
-              </div>
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                 <div className="relative z-[1] w-28 h-28 rounded-full overflow-hidden bg-black/20 border border-white/30 shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                   {(friendStats?.avatar_url || friendView.avatar_url) ? (
@@ -1396,44 +1321,6 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Выбор иконок профиля */}
-          <div className="w-full max-w-xl px-3">
-            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
-              {/* кнопка-заголовок как в примере */}
-              <button
-                type="button"
-                onClick={() => setIconsOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: iconsOpen ? '1px solid rgba(255,255,255,0.10)' : '1px solid transparent' }}
-              >
-                <div className="text-left">
-                  <div className="text-sm font-semibold">Иконки профиля</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <img src={`/profile_icons/${tempBgIcon}.svg`} alt="" className="w-7 h-7 rounded-md" />
-                  <span className="text-white/70">▾</span>
-                </div>
-              </button>
-
-              {/* выпадающая панель с иконками */}
-              {iconsOpen && (
-                <div className="px-3 pb-3 pt-2 grid grid-cols-6 gap-2">
-                  {['bg_icon_cat'].map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setTempBgIcon(key)}
-                      className={`rounded-xl border ${tempBgIcon===key? 'border-white/60 bg-white/10' : 'border-white/10 bg-white/5'}`}
-                      style={{ padding: 8 }}
-                    >
-                      <img src={`/profile_icons/${key}.svg`} alt="" className="w-10 h-10" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Сохранить */}
           <div className="w-full max-w-xl px-3">
             <motion.button
@@ -1457,7 +1344,7 @@ export default function Profile() {
                   try {
                     const { data: upd, error: updErr } = await supabase
                       .from('user_profile')
-                      .update({ background_color: sel, background_icon: tempBgIcon })
+                      .update({ background_color: sel, background_icon: null })
                       .eq('user_id', uid)
                       .select('user_id')
                       .single();
@@ -1466,7 +1353,7 @@ export default function Profile() {
                   if (!ok) {
                     const { data: ins, error: insErr } = await supabase
                       .from('user_profile')
-                      .insert({ user_id: uid, background_color: sel, background_icon: tempBgIcon })
+                      .insert({ user_id: uid, background_color: sel, background_icon: null })
                       .select('user_id')
                       .single();
                     if (insErr) throw insErr;
@@ -1475,15 +1362,14 @@ export default function Profile() {
                   try {
                     const boot: any = (window as any).__exampliBoot || {};
                     (boot.userProfile ||= {} as any).background_color = sel;
-                    (boot.userProfile ||= {} as any).background_icon = tempBgIcon;
+                    (boot.userProfile ||= {} as any).background_icon = null;
                     (window as any).__exampliBoot = boot;
                   } catch {}
                   try {
                     const prev = (cacheGet as any)(CACHE_KEYS.userProfile) || {};
-                    cacheSet(CACHE_KEYS.userProfile, { ...prev, background_color: sel, background_icon: tempBgIcon });
+                    cacheSet(CACHE_KEYS.userProfile, { ...prev, background_color: sel, background_icon: null });
                   } catch {}
                   setBg(sel);
-                  setBgIcon(tempBgIcon);
                 } catch (e) { try { console.warn('save color failed', e); } catch {} }
                 setEditing(false);
               }}
@@ -1491,7 +1377,7 @@ export default function Profile() {
               Сохранить
             </motion.button>
             {/* Телеграм BackButton — отмена изменений */}
-            <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setTempBgIcon(bgIcon); setEditing(false); }} active={editing} />
+            <CancelOnTelegramBack onCancel={() => { setBg(baseBg); setSel(baseBg); setEditing(false); }} active={editing} />
           </div>
         </>
       )}

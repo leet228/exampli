@@ -46,14 +46,21 @@ export default async function handler(req, res) {
     const y = now.getUTCFullYear(), m = now.getUTCMonth()+1
     const monthIsoMsk = `${y}-${pad(m)}-01T00:00:00+03:00`
 
+    const baseUsers = () =>
+      supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .not('phone_number', 'is', null)
+        .not('added_course', 'is', null)
+
     // Users
-    const { count: total } = await supabase.from('users').select('*', { count: 'exact', head: true })
+    const { count: total } = await baseUsers()
     const nowIso = new Date().toISOString()
-    const { count: plusActive } = await supabase.from('users').select('*', { count: 'exact', head: true }).gt('plus_until', nowIso)
-    const { count: aiPlusActive } = await supabase.from('users').select('*', { count: 'exact', head: true }).gt('ai_plus_until', nowIso)
-    const { count: newToday } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', todayIsoMsk)
-    const { count: newWeek } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', weekStartIsoMsk)
-    const { count: newMonth } = await supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', monthIsoMsk)
+    const { count: plusActive } = await baseUsers().gt('plus_until', nowIso)
+    const { count: aiPlusActive } = await baseUsers().gt('ai_plus_until', nowIso)
+    const { count: newToday } = await baseUsers().gte('created_at', todayIsoMsk)
+    const { count: newWeek } = await baseUsers().gte('created_at', weekStartIsoMsk)
+    const { count: newMonth } = await baseUsers().gte('created_at', monthIsoMsk)
 
     // Online now
     let online = 0
