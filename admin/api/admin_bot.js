@@ -69,19 +69,21 @@ export default async function handler(req, res) {
 
     // Cancel broadcast via inline button
     if (callbackData === 'broadcast_cancel') {
+      if (cb?.message?.message_id) { try { await deleteMessage(botToken, chatId, cb.message.message_id) } catch {} }
+      if (state?.promptMsgId) { try { await deleteMessage(botToken, chatId, state.promptMsgId) } catch {} }
       await saveState(chatId, null)
       if (callbackId) { try { await answerCallback(botToken, callbackId, 'Рассылка отменена'); } catch {} }
-      await tgSend(botToken, chatId, 'Рассылка отменена.')
       res.status(200).json({ ok: true, cancelled: true })
       return
     }
 
     // /send: ask for broadcast text or photo
     if (/^\/send(?:@\w+)?(?:\s|$)/i.test(text)) {
-      await saveState(chatId, { mode: 'awaiting_broadcast', at: Date.now() })
-      await tgSend(botToken, chatId, 'Введите текст рассылки. Можно прикрепить фото, подпись пойдёт как текст.', {
+      const sent = await tgSend(botToken, chatId, 'Введите текст рассылки. Можно прикрепить фото, подпись пойдёт как текст.', {
         reply_markup: { inline_keyboard: [[{ text: 'Отменить', callback_data: 'broadcast_cancel' }]] }
       })
+      const promptId = sent?.result?.message_id || null
+      await saveState(chatId, { mode: 'awaiting_broadcast', at: Date.now(), promptMsgId: promptId })
       res.status(200).json({ ok: true, awaiting_broadcast: true })
       return
     }
@@ -89,6 +91,7 @@ export default async function handler(req, res) {
     // Awaiting broadcast content
     if (state?.mode === 'awaiting_broadcast') {
       if (/^\/cancel/i.test(text)) {
+        if (state?.promptMsgId) { try { await deleteMessage(botToken, chatId, state.promptMsgId) } catch {} }
         await saveState(chatId, null)
         await tgSend(botToken, chatId, 'Рассылка отменена.')
         res.status(200).json({ ok: true, cancelled: true })
@@ -136,7 +139,12 @@ export default async function handler(req, res) {
 
       const { queued, direct, failed } = await dispatchBroadcast(req, jobs, mainBotToken)
       await saveState(chatId, null)
-      await tgSend(botToken, chatId, `Рассылка запланирована.\nПолучателей: ${recipients.length}\nЧерез очередь: ${queued}\nПрямых попыток: ${direct}${failed ? `\nОшибок: ${failed}` : ''}`)
+      if (state?.promptMsgId) { try { await deleteMessage(botToken, chatId, state.promptMsgId) } catch {} }
+      const doneMsg = await tgSend(botToken, chatId, `Рассылка запланирована.\nПолучателей: ${recipients.length}\nЧерез очередь: ${queued}\nПрямых попыток: ${direct}${failed ? `\nОшибок: ${failed}` : ''}`)
+      const doneId = doneMsg?.result?.message_id || null
+      if (doneId) {
+        setTimeout(() => { deleteMessage(botToken, chatId, doneId).catch(() => {}); }, 3000)
+      }
       res.status(200).json({ ok: true, broadcast: true, recipients: recipients.length, queued, direct, failed, photo: Boolean(photoUrl) })
       return
     }
@@ -342,7 +350,7 @@ async function sendChunkTelegram(botToken, jobs) {
   for (const job of jobs) {
     try {
       if (job.photo) {
-        await tgSendPhoto(botToken, job.tg, job.photo, job.text || undefined)
+        await tgSendPhotoSmart(botToken, job.tg, job.photo, job.text || undefined)
       } else if (job.text) {
         await tgSend(botToken, job.tg, job.text)
       }
@@ -494,14 +502,51 @@ async function fetchIqsmsBalance() {
 async function tgSend(botToken, chatId, text, extra) {
   const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`
   const payload = { chat_id: chatId, text, ...(extra || {}) }
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  try { return await resp.json() } catch { return null }
 }
 
-async function tgSendPhoto(botToken, chatId, photoUrl, caption) {
-  if (!botToken || !chatId || !photoUrl) return
-  const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`
-  const payload = { chat_id: chatId, photo: photoUrl, caption: caption || undefined }
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+async function tgSendPhotoSmart(botToken, chatId, relPhotoPathOrAbs, caption) {
+  if (!botToken || !chatId || !relPhotoPathOrAbs) return
+  const api = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`
+  const photo = relPhotoPathOrAbs
+  let resp = await fetch(api, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, photo, caption: caption || undefined })
+  }).catch(() => null)
+  let shouldFallbackUpload = false
+  try {
+    const js = resp ? await resp.json().catch(() => null) : null
+    if (!resp || !resp.ok || (js && js.ok === false)) {
+      const desc = (js && js.description) ? String(js.description) : ''
+      if (!resp || resp.status === 400) shouldFallbackUpload = true
+      if (desc && /wrong http url|http url content blocked|failed to get http url|file is too big/i.test(desc)) {
+        shouldFallbackUpload = true
+      }
+    }
+  } catch {
+    if (!resp || !resp.ok) shouldFallbackUpload = true
+  }
+  if (!shouldFallbackUpload) return
+
+  try {
+    const assetResp = await fetch(photo)
+    const contentType = assetResp.headers.get('content-type') || 'image/png'
+    const arr = await assetResp.arrayBuffer()
+    const fd = new FormData()
+    fd.append('chat_id', chatId)
+    if (caption) fd.append('caption', caption)
+    const blob = new Blob([arr], { type: contentType })
+    fd.append('photo', blob, 'image')
+    await fetch(api, { method: 'POST', body: fd })
+  } catch {}
+}
+
+async function deleteMessage(botToken, chatId, messageId) {
+  if (!botToken || !chatId || !messageId) return
+  const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/deleteMessage`
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, message_id: messageId }) })
 }
 
 function formatTimeMsk(iso) {
