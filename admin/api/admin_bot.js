@@ -274,25 +274,29 @@ function chunk(arr, size) {
 
 function absPublicUrl(req, relPath) {
   try { if (/^https?:\/\//i.test(String(relPath || ''))) return relPath } catch {}
-  const explicit = (process.env.PUBLIC_BASE_URL || process.env.MAIN_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+  // Для вызовов основного проекта предпочитаем MAIN_PUBLIC_BASE_URL; иначе — PUBLIC_BASE_URL/admin-хост
+  const explicitMain = (process.env.MAIN_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+  const explicit = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '')
   const proto = (req?.headers?.['x-forwarded-proto'] || 'https')
   const host = (req?.headers?.host || process.env.VERCEL_URL || '').toString().replace(/\/$/, '')
-  const base = explicit || (host ? `${proto}://${host}` : '')
+  const base = explicitMain || explicit || (host ? `${proto}://${host}` : '')
   const rel = String(relPath || '').startsWith('/') ? String(relPath) : `/${String(relPath || '')}`
-  return `${base}${rel}`
+  return base ? `${base}${rel}` : rel
 }
 
 async function dispatchBroadcast(req, jobs, mainBotToken) {
   const chunks = chunk(jobs, 120)
   let queued = 0, direct = 0, failed = 0
-  const url = absPublicUrl(req, '/api/notify_batch')
+  const notifyUrl = process.env.MAIN_PUBLIC_BASE_URL ? `${String(process.env.MAIN_PUBLIC_BASE_URL).replace(/\/$/, '')}/api/notify_batch` : null
   const now = Date.now()
+
+  // Если доступен QStash и известен адрес основного проекта — ставим в очередь; иначе шлём напрямую в Telegram.
   for (let i = 0; i < chunks.length; i++) {
     const body = { jobs: chunks[i] }
     let queuedOk = false
-    if (qstashAvailable() && url) {
+    if (qstashAvailable() && notifyUrl) {
       const { ok } = await enqueueJson({
-        url,
+        url: notifyUrl,
         body,
         delaySeconds: Math.min(i * 2, 60),
         deduplicationKey: `admin_broadcast_${now}_${i}`
@@ -300,15 +304,14 @@ async function dispatchBroadcast(req, jobs, mainBotToken) {
       if (ok) { queued += 1; queuedOk = true }
     }
     if (queuedOk) continue
-    if (url) {
-      const ok = await sendChunkDirect(url, body)
-      direct += 1
-      if (!ok) failed += 1
-      continue
-    }
+
     if (mainBotToken) {
       await sendChunkTelegram(mainBotToken, chunks[i])
       direct += 1
+    } else if (notifyUrl) {
+      const ok = await sendChunkDirect(notifyUrl, body)
+      direct += 1
+      if (!ok) failed += 1
     } else {
       failed += 1
     }
