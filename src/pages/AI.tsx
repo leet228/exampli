@@ -494,12 +494,6 @@ export default function AI() {
             >
               ↑
             </MotionPressButton>
-            {sendingLocked && (
-              <div className="flex items-center gap-2 text-[12px] text-white/70">
-                <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Жду ответ…</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -2,6 +2,11 @@
 // Set BotFather webhook URL to /api/admin_bot for the admin deployment
 // Env: ADMIN_TELEGRAM_BOT_TOKEN (preferred) or TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE (or *_KEY)
 import { createClient } from '@supabase/supabase-js'
+import { kvAvailable, getRedis } from '../../api/_kv.mjs'
+import { qstashAvailable, enqueueJson } from '../../api/_qstash.mjs'
+
+const memoryState = new Map()
+const STATE_TTL_MS = 15 * 60 * 1000
 
 export default async function handler(req, res) {
   try {
@@ -17,7 +22,7 @@ export default async function handler(req, res) {
       const supabase = createClient(supabaseUrl, serviceKey)
 
       // Debug: return report text; optionally send if chat provided (?send=1&chat=123)
-      const botToken = process.env.ADMIN_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN
+      const botToken = process.env.TELEGRAM_BOT_TOKEN
       const msg = await buildDailyReportMessage(supabase)
       const send = String((req.query||{}).send||'0') === '1'
       const chat = String((req.query||{}).chat||'')
@@ -35,23 +40,104 @@ export default async function handler(req, res) {
       return
     }
 
-    const botToken = process.env.ADMIN_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
     if (!botToken || !supabaseUrl || !serviceKey) { res.status(500).json({ error: 'missing_env' }); return }
     const supabase = createClient(supabaseUrl, serviceKey)
 
     const update = await safeJson(req)
-    const msg = update?.message || null
+    const msg = update?.message || update?.edited_message || null
+    const cb = update?.callback_query || null
     const text = (msg?.text || '').trim()
-    const chatId = String(msg?.from?.id || msg?.chat?.id || '')
-    if (!text || !chatId) { res.status(200).json({ ok: true, skipped: true }); return }
+    const chatId = String(msg?.from?.id || msg?.chat?.id || cb?.from?.id || cb?.message?.chat?.id || '')
+    if (!chatId) { res.status(200).json({ ok: true, skipped: true }); return }
 
     // Only allow messages from ADMIN_TG_ID (if set)
     const adminId = String(process.env.ADMIN_TG_ID || '')
-    const fromId = String(msg?.from?.id || '')
+    const fromId = String(msg?.from?.id || cb?.from?.id || '')
     if (adminId && fromId !== adminId) {
       res.status(200).json({ ok: true, ignored: true })
+      return
+    }
+
+    const callbackData = cb?.data ? String(cb.data) : ''
+    const callbackId = cb?.id ? String(cb.id) : null
+    const state = await loadState(chatId)
+    const hasPayload = Boolean(text || (msg?.photo && msg.photo.length) || callbackData)
+    if (!hasPayload) { res.status(200).json({ ok: true, skipped: true }); return }
+
+    // Cancel broadcast via inline button
+    if (callbackData === 'broadcast_cancel') {
+      await saveState(chatId, null)
+      if (callbackId) { try { await answerCallback(botToken, callbackId, 'Рассылка отменена'); } catch {} }
+      await tgSend(botToken, chatId, 'Рассылка отменена.')
+      res.status(200).json({ ok: true, cancelled: true })
+      return
+    }
+
+    // /send: ask for broadcast text or photo
+    if (/^\/send(?:@\w+)?(?:\s|$)/i.test(text)) {
+      await saveState(chatId, { mode: 'awaiting_broadcast', at: Date.now() })
+      await tgSend(botToken, chatId, 'Введите текст рассылки. Можно прикрепить фото, подпись пойдёт как текст.', {
+        reply_markup: { inline_keyboard: [[{ text: 'Отменить', callback_data: 'broadcast_cancel' }]] }
+      })
+      res.status(200).json({ ok: true, awaiting_broadcast: true })
+      return
+    }
+
+    // Awaiting broadcast content
+    if (state?.mode === 'awaiting_broadcast') {
+      if (/^\/cancel/i.test(text)) {
+        await saveState(chatId, null)
+        await tgSend(botToken, chatId, 'Рассылка отменена.')
+        res.status(200).json({ ok: true, cancelled: true })
+        return
+      }
+
+      const caption = (msg?.caption || '').trim()
+      const payloadText = text || caption || ''
+      const photoSizes = Array.isArray(msg?.photo) ? msg.photo : []
+      const photoId = photoSizes.length ? String(photoSizes[photoSizes.length - 1]?.file_id || '') : ''
+      let photoUrl = ''
+      if (photoId) {
+        photoUrl = await resolveFileUrl(botToken, photoId)
+      }
+      if (!payloadText && !photoUrl) {
+        await tgSend(botToken, chatId, 'Не вижу текста или фото. Пришлите сообщение для рассылки или нажмите «Отменить».', {
+          reply_markup: { inline_keyboard: [[{ text: 'Отменить', callback_data: 'broadcast_cancel' }]] }
+        })
+        res.status(200).json({ ok: true, need_payload: true })
+        return
+      }
+
+      const mainBotToken = process.env.MAIN_TG_TOKEN
+      if (!mainBotToken) {
+        await tgSend(botToken, chatId, 'Не задан MAIN_TG_TOKEN для основного бота — не могу отправить рассылку.')
+        await saveState(chatId, null)
+        res.status(200).json({ ok: false, error: 'missing_main_bot_token' })
+        return
+      }
+
+      const recipients = await fetchAllTgIds(supabase)
+      if (!recipients.length) {
+        await tgSend(botToken, chatId, 'Нет получателей (tg_id пуст).')
+        await saveState(chatId, null)
+        res.status(200).json({ ok: false, error: 'no_recipients' })
+        return
+      }
+
+      const jobs = recipients.map((tg) => ({
+        tg,
+        text: payloadText,
+        photo: photoUrl || undefined,
+        kind: 'admin_broadcast',
+      }))
+
+      const { queued, direct, failed } = await dispatchBroadcast(req, jobs, mainBotToken)
+      await saveState(chatId, null)
+      await tgSend(botToken, chatId, `Рассылка запланирована.\nПолучателей: ${recipients.length}\nЧерез очередь: ${queued}\nПрямых попыток: ${direct}${failed ? `\nОшибок: ${failed}` : ''}`)
+      res.status(200).json({ ok: true, broadcast: true, recipients: recipients.length, queued, direct, failed, photo: Boolean(photoUrl) })
       return
     }
 
@@ -77,6 +163,7 @@ export default async function handler(req, res) {
           '',
           'Команды:',
           '— /stats — отчёт за сегодня (МСК)',
+          '— /send — разослать сообщение всем пользователям',
         ].join('\n')
       await tgSend(botToken, chatId, welcome, { parse_mode: 'HTML', disable_web_page_preview: true })
       res.status(200).json({ ok: true, greeted: true })
@@ -84,11 +171,180 @@ export default async function handler(req, res) {
     }
 
     // Default: hint
-    await tgSend(botToken, chatId, 'Команда не распознана. Попробуй /stats')
+    await tgSend(botToken, chatId, 'Команда не распознана. Попробуй /stats или /send')
     res.status(200).json({ ok: true })
   } catch (e) {
     try { console.error('[admin/api/admin_bot] error', e) } catch {}
     res.status(500).json({ error: 'internal_error', detail: e?.message || String(e) })
+  }
+}
+
+async function loadState(adminId) {
+  if (!adminId) return null
+  if (kvAvailable()) {
+    try {
+      const r = getRedis()
+      if (r) {
+        const raw = await r.get(`admin:broadcast:v1:${adminId}`)
+        if (raw) {
+          try { return typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return raw }
+        }
+      }
+    } catch {}
+  }
+  const item = memoryState.get(adminId)
+  if (item && item.expires > Date.now()) return item.data || null
+  memoryState.delete(adminId)
+  return null
+}
+
+async function saveState(adminId, data) {
+  if (!adminId) return
+  const key = `admin:broadcast:v1:${adminId}`
+  if (kvAvailable()) {
+    try {
+      const r = getRedis()
+      if (r) {
+        if (data) await r.set(key, JSON.stringify(data), { ex: Math.floor(STATE_TTL_MS / 1000) })
+        else await r.del(key)
+      }
+    } catch {}
+  }
+  if (!data) {
+    memoryState.delete(adminId)
+  } else {
+    memoryState.set(adminId, { data, expires: Date.now() + STATE_TTL_MS })
+  }
+}
+
+async function answerCallback(botToken, callbackId, text) {
+  if (!botToken || !callbackId) return
+  try {
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/answerCallbackQuery`
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackId, text: text || undefined, show_alert: false })
+    })
+  } catch {}
+}
+
+async function resolveFileUrl(botToken, fileId) {
+  if (!botToken || !fileId) return ''
+  try {
+    const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/getFile`
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId })
+    })
+    const js = await r.json().catch(() => ({}))
+    if (!r.ok || js?.ok === false) return ''
+    const path = js?.result?.file_path ? String(js.result.file_path) : ''
+    if (!path) return ''
+    return `https://api.telegram.org/file/bot${encodeURIComponent(botToken)}/${path}`
+  } catch { return '' }
+}
+
+async function fetchAllTgIds(supabase) {
+  const out = new Set()
+  const page = 1000
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('tg_id', { count: 'exact' })
+      .not('tg_id', 'is', null)
+      .range(from, from + page - 1)
+    if (error) break
+    for (const row of (data || [])) {
+      if (row?.tg_id) out.add(String(row.tg_id))
+    }
+    if (!data || data.length < page) break
+    from += page
+  }
+  return Array.from(out)
+}
+
+function chunk(arr, size) {
+  const res = []
+  for (let i = 0; i < arr.length; i += size) res.push(arr.slice(i, i + size))
+  return res
+}
+
+function absPublicUrl(req, relPath) {
+  try { if (/^https?:\/\//i.test(String(relPath || ''))) return relPath } catch {}
+  const explicit = (process.env.PUBLIC_BASE_URL || process.env.MAIN_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+  const proto = (req?.headers?.['x-forwarded-proto'] || 'https')
+  const host = (req?.headers?.host || process.env.VERCEL_URL || '').toString().replace(/\/$/, '')
+  const base = explicit || (host ? `${proto}://${host}` : '')
+  const rel = String(relPath || '').startsWith('/') ? String(relPath) : `/${String(relPath || '')}`
+  return `${base}${rel}`
+}
+
+async function dispatchBroadcast(req, jobs, mainBotToken) {
+  const chunks = chunk(jobs, 120)
+  let queued = 0, direct = 0, failed = 0
+  const url = absPublicUrl(req, '/api/notify_batch')
+  const now = Date.now()
+  for (let i = 0; i < chunks.length; i++) {
+    const body = { jobs: chunks[i] }
+    let queuedOk = false
+    if (qstashAvailable() && url) {
+      const { ok } = await enqueueJson({
+        url,
+        body,
+        delaySeconds: Math.min(i * 2, 60),
+        deduplicationKey: `admin_broadcast_${now}_${i}`
+      })
+      if (ok) { queued += 1; queuedOk = true }
+    }
+    if (queuedOk) continue
+    if (url) {
+      const ok = await sendChunkDirect(url, body)
+      direct += 1
+      if (!ok) failed += 1
+      continue
+    }
+    if (mainBotToken) {
+      await sendChunkTelegram(mainBotToken, chunks[i])
+      direct += 1
+    } else {
+      failed += 1
+    }
+  }
+  return { queued, direct, failed }
+}
+
+async function sendChunkDirect(url, body) {
+  if (!url) return false
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    const bypass =
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+      process.env.VERCEL_PROTECTION_BYPASS ||
+      process.env.QSTASH_VERCEL_BYPASS ||
+      process.env.QSTASH_BYPASS ||
+      process.env.QSTASH_BYPASS_TOKEN
+    if (bypass) headers['x-vercel-protection-bypass'] = bypass
+    const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+    return resp.ok
+  } catch {
+    return false
+  }
+}
+
+async function sendChunkTelegram(botToken, jobs) {
+  if (!botToken) return
+  for (const job of jobs) {
+    try {
+      if (job.photo) {
+        await tgSendPhoto(botToken, job.tg, job.photo, job.text || undefined)
+      } else if (job.text) {
+        await tgSend(botToken, job.tg, job.text)
+      }
+    } catch {}
+    await new Promise((res) => setTimeout(res, 35))
   }
 }
 
@@ -235,6 +491,13 @@ async function fetchIqsmsBalance() {
 async function tgSend(botToken, chatId, text, extra) {
   const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`
   const payload = { chat_id: chatId, text, ...(extra || {}) }
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+}
+
+async function tgSendPhoto(botToken, chatId, photoUrl, caption) {
+  if (!botToken || !chatId || !photoUrl) return
+  const url = `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendPhoto`
+  const payload = { chat_id: chatId, photo: photoUrl, caption: caption || undefined }
   await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 }
 

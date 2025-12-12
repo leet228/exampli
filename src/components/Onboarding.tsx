@@ -472,8 +472,10 @@ export default function Onboarding({ open, onDone }: Props) {
           </button>
         )}
         <div className="mt-2 text-[11px] text-[color:var(--muted)] text-center">
-          Нажимая кнопку, вы соглашаетесь с нашей{' '}
-          <button type="button" className="underline underline-offset-2 text-white/85" onClick={() => setPolicyOpen(true)}>Политикой обработки персональных данных</button>.
+          Нажимая кнопку, вы принимаете{' '}
+          <button type="button" className="underline underline-offset-2 text-white/85" onClick={() => setPolicyOpen(true)}>Пользовательское соглашение</button>{' '}
+          и{' '}
+          <button type="button" className="underline underline-offset-2 text-white/85" onClick={() => setPolicyOpen(true)}>Политику обработки персональных данных</button>.
         </div>
       </div>
     </div>
@@ -529,8 +531,18 @@ export default function Onboarding({ open, onDone }: Props) {
                 <motion.div className="fixed inset-0 z-[66] bg-black/70" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPolicyOpen(false)}>
                   <div className="w-full h-full flex items-center justify-center p-4">
                     <motion.div className="relative max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl bg-white/95 text-black p-5" initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
-                      <h2 className="text-xl font-extrabold mb-3">Политика обработки персональных данных</h2>
-                      <p className="mb-2">Настоящая политика описывает цели, способы и сроки обработки ваших персональных данных при использовании сервиса «КУРСИК».</p>
+                      <h2 className="text-xl font-extrabold mb-3">Пользовательское соглашение и политика данных</h2>
+                      <p className="mb-2">Используя сервис «КУРСИК», вы подтверждаете согласие с условиями ниже и даёте согласие на обработку персональных данных для работы сервиса.</p>
+                      <div className="mb-3 text-sm leading-relaxed space-y-2">
+                        <p className="font-semibold">Зачем нужен номер телефона:</p>
+                        <ul className="list-disc ml-5 space-y-1">
+                          <li>подтверждение, что вы реальный пользователь, и защита от спама/дубликатов;</li>
+                          <li>восстановление доступа и уведомления об оплатах/квитанциях;</li>
+                          <li>связь по вопросам поддержки и безопасности аккаунта;</li>
+                          <li>законное оформление платных услуг и чеков.</li>
+                        </ul>
+                        <p>Мы не используем номер для звонков или сторонней рекламы. По запросу можно обновить или удалить данные, если их хранение не требуется по закону.</p>
+                      </div>
                       <ul className="list-disc ml-5 space-y-1 text-sm">
                         <li>Цели: регистрация, авторизация, восстановление доступа, платные услуги и поддержка.</li>
                         <li>Состав: номер телефона, идентификатор Telegram, имя пользователя и иные предоставленные данные.</li>
