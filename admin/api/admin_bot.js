@@ -2,8 +2,8 @@
 // Set BotFather webhook URL to /api/admin_bot for the admin deployment
 // Env: ADMIN_TELEGRAM_BOT_TOKEN (preferred) or TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE (or *_KEY)
 import { createClient } from '@supabase/supabase-js'
-import { kvAvailable, getRedis } from '../../api/_kv.mjs'
-import { qstashAvailable, enqueueJson } from '../../api/_qstash.mjs'
+import { kvAvailable, getRedis } from './_kv.mjs'
+import { qstashAvailable, enqueueJson } from './_qstash.mjs'
 
 const memoryState = new Map()
 const STATE_TTL_MS = 15 * 60 * 1000

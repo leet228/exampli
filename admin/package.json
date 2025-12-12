@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@upstash/qstash": "^2.6.0",
+    "@upstash/redis": "^1.30.0",
     "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
     "@supabase/supabase-js": "^2.45.4",
     "onnxruntime-web": "^1.22.0",
