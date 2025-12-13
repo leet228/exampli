@@ -38,9 +38,10 @@ export default function AI() {
       return false;
     } catch { return false; }
   });
+  const [limitReached, setLimitReached] = React.useState<boolean>(false);
 
-  // Показываем если есть ЛЮБАЯ подписка (PLUS или AI+)
-  const hasAccess = isPlus || isAiPlus;
+  // Показываем заглушку только когда бесплатный лимит исчерпан и нет подписок
+  const showPaywall = !isPlus && !isAiPlus && limitReached;
 
   // React to subscription status updates (e.g., after purchase)
   React.useEffect(() => {
@@ -57,9 +58,16 @@ export default function AI() {
     return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
 
-  // При отсутствии ЛЮБОЙ подписки блокируем скролл всей страницы
+  // Если купили подписку после блокировки — снимаем ограничение
   React.useEffect(() => {
-    if (!hasAccess) {
+    if (isPlus || isAiPlus) {
+      setLimitReached(false);
+    }
+  }, [isPlus, isAiPlus]);
+
+  // При показе paywall блокируем скролл всей страницы
+  React.useEffect(() => {
+    if (showPaywall) {
       const prevOverflow = document.body.style.overflow;
       const prevOverscroll = document.documentElement.style.overscrollBehavior as string;
       document.body.style.overflow = 'hidden';
@@ -69,7 +77,7 @@ export default function AI() {
         document.documentElement.style.overscrollBehavior = prevOverscroll || '';
       };
     }
-  }, [hasAccess]);
+  }, [showPaywall]);
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -180,6 +188,11 @@ export default function AI() {
     const trimmed = input.trim();
     if (!trimmed && pendingImages.length === 0) return;
     if (isLoading) return;
+    if (showPaywall) {
+      try { hapticSelect(); } catch {}
+      setError('Бесплатный лимит 5 000 токенов на месяц уже исчерпан. Оформите подписку, чтобы продолжить.');
+      return;
+    }
     setError(null);
 
     const userContent: MessageContent = pendingImages.length > 0
@@ -227,16 +240,20 @@ export default function AI() {
             const clonedResponse = response.clone();
             const json = await clonedResponse.json();
             if (json?.error === 'limit_exceeded' || json?.detail === 'limit_exceeded') {
-              // Превышен лимит - показываем сообщение от AI
-              // Если у пользователя есть AI+ подписка, показываем простое сообщение без кнопки
-              const limitMessage = isAiPlus 
-                ? 'Извините, вы исчерпали месячный лимит.' 
-                : 'Извините, вы исчерпали месячный лимит. Чтобы продолжить использование, вы можете купить КУРСИК AI +.';
-              setMessages((prev) => [...prev, { 
-                role: 'assistant', 
-                content: limitMessage 
-              }]);
+              // Превышен лимит — блокируем и показываем оплату
               try { hapticSelect(); } catch {}
+              if (!isPlus && !isAiPlus) {
+                setLimitReached(true);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: 'assistant',
+                    content: 'Бесплатный лимит 5 000 токенов за месяц исчерпан. Оформите подписку, чтобы продолжить пользоваться AI.'
+                  }
+                ]);
+              } else {
+                setMessages((prev) => [...prev, { role: 'assistant', content: 'Извините, вы исчерпали месячный лимит.' }]);
+              }
               setIsLoading(false);
               return;
             }
@@ -342,7 +359,7 @@ export default function AI() {
     }
   }
 
-  if (!hasAccess) {
+  if (showPaywall) {
     return (
       <div className="fixed inset-0 z-[40] pointer-events-none" style={{ background: '#01347a' }}>
         {/* Картинка на весь экран */}
@@ -354,6 +371,9 @@ export default function AI() {
         />
         {/* Кнопка поверх, ещё выше HUD */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-36 z-[61] w-[min(92%,680px)] px-4 pointer-events-auto">
+          <div className="mb-3 text-center text-white/80 text-sm font-medium">
+            Бесплатный лимит 5 000 токенов на месяц исчерпан. Оформите подписку, чтобы продолжить пользоваться AI.
+          </div>
           <SubscribeCtaButton onClick={() => { try { hapticTiny(); } catch {}; navigate('/subscription'); }} />
         </div>
       </div>

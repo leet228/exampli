@@ -806,8 +806,8 @@ export default function Subscription() {
         </div>
       </div>
 
-      {/* КУРСИК AI + - показываем только если подписка не активна или истекла */}
-      {!isAiPlus && (
+      {/* КУРСИК AI + - показываем только если есть PLUS и нет активной AI+ */}
+      {isPlus && !isAiPlus && (
         <div className="relative mt-2 px-1">
           <div className="text-3xl font-extrabold">
             <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1)', WebkitBackgroundClip:'text', color:'transparent'}}>КУРСИК AI</span> <span className="font-extrabold" style={{background:'linear-gradient(90deg,#38bdf8,#6366f1,#ec4899,#ef4444)', WebkitBackgroundClip:'text', color:'transparent'}}>+</span>

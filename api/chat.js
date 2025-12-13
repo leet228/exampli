@@ -429,20 +429,28 @@ async function assertWithinLimit({ userId, estTokens }) {
         const supabase = createClient(url, key);
         const month = new Date().toISOString().slice(0,7);
         
-        // Базовый лимит без покупки: 400,000 токенов в месяц
-        const BASE_TOKEN_LIMIT = 400000;
-        let tokenCap = BASE_TOKEN_LIMIT;
+        // Лимиты: бесплатный базовый, повышенный для PLUS, +добавка для AI+
+        const FREE_TOKEN_LIMIT = 5000;       // Без подписки: 5 000 токенов в месяц
+        const PLUS_TOKEN_LIMIT = 400000;     // Для КУРСИК PLUS
+        const AI_PLUS_TOKENS  = 500000;      // Дополнительно при КУРСИК AI+
+        let tokenCap = FREE_TOKEN_LIMIT;
         
-        // Проверяем активную подписку на AI токены (КУРСИК AI +)
+        let hasPlusSubscription = false;
         let hasAiPlusSubscription = false;
         try {
             const { data: userRow } = await supabase
                 .from('users')
-                .select('ai_plus_until')
+                .select('plus_until, ai_plus_until')
                 .eq('id', userId)
                 .maybeSingle();
             
             if (userRow) {
+                if (userRow.plus_until) {
+                    const untilDate = new Date(userRow.plus_until);
+                    if (untilDate.getTime() > Date.now()) {
+                        hasPlusSubscription = true;
+                    }
+                }
                 if (userRow.ai_plus_until) {
                     const untilDate = new Date(userRow.ai_plus_until);
                     if (untilDate.getTime() > Date.now()) {
@@ -451,13 +459,15 @@ async function assertWithinLimit({ userId, estTokens }) {
                 }
             }
         } catch (e) {
-            // Если поле не существует, просто пропускаем проверку подписки
-            try { console.warn('[assertWithinLimit] error checking ai_plus_until', e); } catch {}
+            // Если поля отсутствуют, просто пропускаем проверку подписки
+            try { console.warn('[assertWithinLimit] error checking plus/ai_plus', e); } catch {}
         }
         
-        // Если есть активная подписка, добавляем +250,000 токенов
+        // Базовый лимит повышаем для PLUS, сверху добавляем бонус AI+
+        if (hasPlusSubscription) {
+            tokenCap = PLUS_TOKEN_LIMIT;
+        }
         if (hasAiPlusSubscription) {
-            const AI_PLUS_TOKENS = 250000; // Дополнительные 250,000 токенов при подписке
             tokenCap += AI_PLUS_TOKENS;
         }
         
