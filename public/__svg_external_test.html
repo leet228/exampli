@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SVG external image test</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 16px; }
+      .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+      .card { border: 1px solid #ddd; padding: 12px; border-radius: 10px; }
+      img { width: 200px; height: 200px; background: #f7f7f7; object-fit: contain; }
+      .small img { width: 150px; height: 150px; }
+    </style>
+  </head>
+  <body>
+    <h1>SVG external image test</h1>
+    <p>These SVGs reference extracted PNGs via <code>&lt;image href="/..../*.img0.png"&gt;</code>.</p>
+
+    <div class="row">
+      <div class="card small">
+        <div><strong>/friends/qr.svg</strong></div>
+        <img src="/friends/qr.svg" alt="qr" />
+      </div>
+
+      <div class="card">
+        <div><strong>/loads/biology_load1.svg</strong></div>
+        <img src="/loads/biology_load1.svg" alt="load" />
+      </div>
+
+      <div class="card">
+        <div><strong>/ai/ai_www.svg</strong></div>
+        <img src="/ai/ai_www.svg" alt="ai" />
+      </div>
+    </div>
+
+    <script>
+      // Also test data: URL embedding (similar to warmup.ts behavior)
+      async function testDataUrl(path) {
+        const res = await fetch(path);
+        const text = await res.text();
+        const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(text)}`;
+        const img = new Image();
+        img.width = 200;
+        img.height = 200;
+        img.style.background = '#f7f7f7';
+        img.style.objectFit = 'contain';
+        img.alt = 'data:' + path;
+        img.src = dataUrl;
+        const wrap = document.createElement('div');
+        wrap.className = 'card';
+        wrap.innerHTML = `<div><strong>data:${path}</strong></div>`;
+        wrap.appendChild(img);
+        document.querySelector('.row').appendChild(wrap);
+      }
+
+      Promise.all([
+        testDataUrl('/friends/qr.svg'),
+        testDataUrl('/loads/biology_load1.svg'),
+        testDataUrl('/ai/ai_www.svg'),
+      ]).catch(console.error);
+    </script>
+  </body>
+</html>
