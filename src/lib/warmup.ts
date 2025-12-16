@@ -18,6 +18,60 @@ let courseWarmStartedFor: string | null = null;
 let baseUrlsCache: string[] | null = null;
 let baseUrlsPromise: Promise<string[]> | null = null;
 
+function getStartParam(): string {
+  try { return String((window as any)?.Telegram?.WebApp?.initDataUnsafe?.start_param || '').trim().toLowerCase(); } catch { return ''; }
+}
+
+function getQueryParam(name: string): string {
+  try {
+    const url = new URL(window.location.href);
+    return String(url.searchParams.get(name) || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isColdMode(): boolean {
+  // Telegram deep-link: t.me/<bot>?startapp=cold
+  const sp = getStartParam();
+  if (sp === 'cold' || sp === 'coldstart' || sp === 'cold_start') return true;
+  // Browser/dev: ?cold=1
+  const qp = getQueryParam('cold');
+  if (qp === '1' || qp === 'true' || qp === 'yes') return true;
+  return false;
+}
+
+const COLD_SESSION = (() => {
+  if (!isColdMode()) return '';
+  try {
+    const ssKey = 'exampli:cold_session';
+    const prev = window?.sessionStorage?.getItem(ssKey);
+    if (prev) return prev;
+    const v = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    try { window?.sessionStorage?.setItem(ssKey, v); } catch {}
+    return v;
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+})();
+
+export function isColdAssetsMode(): boolean {
+  return Boolean(COLD_SESSION);
+}
+
+export function assetUrl(url: string): string {
+  try {
+    if (!COLD_SESSION) return url;
+    if (!url) return url;
+    // Don't touch data URLs / blobs
+    if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}cold=${encodeURIComponent(COLD_SESSION)}`;
+  } catch {
+    return url;
+  }
+}
+
 function requestIdle(cb: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void, timeout = 1200) {
   try {
     const ric = (window as any).requestIdleCallback as ((cb: (d: any) => void, opts?: any) => number) | undefined;
@@ -44,7 +98,7 @@ async function loadSvgManifest(): Promise<string[]> {
   manifestPromise = (async () => {
     // 1) fastest path: static public file
     try {
-      const r = await fetch('/svg-manifest.json', { cache: 'force-cache' });
+      const r = await fetch(assetUrl('/svg-manifest.json'), { cache: (COLD_SESSION ? 'no-store' : 'force-cache') as RequestCache });
       if (r.ok) {
         const js = (await r.json()) as SvgManifest;
         if (js && Array.isArray(js.svgs)) return js.svgs.filter((u) => typeof u === 'string') as string[];
@@ -52,7 +106,7 @@ async function loadSvgManifest(): Promise<string[]> {
     } catch {}
     // 2) fallback: serverless endpoint (same payload)
     try {
-      const r = await fetch('/api/list_svgs', { cache: 'force-cache' });
+      const r = await fetch(assetUrl('/api/list_svgs'), { cache: (COLD_SESSION ? 'no-store' : 'force-cache') as RequestCache });
       if (r.ok) {
         const js = (await r.json()) as SvgManifest;
         if (js && Array.isArray(js.svgs)) return js.svgs.filter((u) => typeof u === 'string') as string[];
@@ -69,25 +123,31 @@ async function loadSvgManifest(): Promise<string[]> {
 function preloadImageToHttpCache(url: string, priority: 'low' | 'high' | 'auto' = 'low'): Promise<void> {
   try {
     if (!url) return Promise.resolve();
-    if (httpPreloaded[url]) return Promise.resolve();
-    if (inflightImg[url]) return inflightImg[url];
+    // Ключ прогрева — исходный URL (без cold-параметров), чтобы "готово?" работало стабильно
+    // и повторные вызовы не перекачивали одно и то же.
+    const u = assetUrl(url);
+    if (httpPreloaded[url] || httpPreloaded[u]) return Promise.resolve();
+    if (inflightImg[u]) return inflightImg[u];
     let ok = false;
-    inflightImg[url] = new Promise<void>((res) => {
+    inflightImg[u] = new Promise<void>((res) => {
       try {
         const img = new Image();
         img.onload = () => { ok = true; res(); };
         img.onerror = () => { ok = false; res(); };
         (img as any).decoding = 'async';
         try { (img as any).fetchPriority = priority; } catch {}
-        img.src = url;
+        img.src = u;
       } catch {
         res();
       }
     }).then(() => {
-      if (ok) httpPreloaded[url] = 1;
-      delete inflightImg[url];
+      if (ok) {
+        httpPreloaded[url] = 1;
+        httpPreloaded[u] = 1;
+      }
+      delete inflightImg[u];
     });
-    return inflightImg[url];
+    return inflightImg[u];
   } catch {
     return Promise.resolve();
   }
@@ -142,7 +202,8 @@ export function preloadBaseSvgs(opts?: { eager?: boolean }): Promise<void> {
       if (!remaining.length) return;
       await runQueue(remaining, eager
         ? { batch: 10, delayMs: 0, priority: 'high' }
-        : { batch: 4, delayMs: 80, priority: 'low' }
+        // во время онбординга/сплэша — максимально мягко и последовательно
+        : { batch: 1, delayMs: 70, priority: 'low' }
       );
     } catch {}
   })();
@@ -162,9 +223,9 @@ export function preloadCourseCriticalSvgs(courseCode: string): Promise<void> {
         const svgs = await loadSvgManifest();
         const ai = svgs.filter((u) => u.startsWith('/ai/'));
         const road = svgs.filter((u) => u.startsWith(`/road_pic/${norm}`));
-        // Важно: сначала ai, потом road_pic выбранного курса
-        await runQueue(ai, { batch: 3, delayMs: 40, priority: 'high' });
-        await runQueue(road, { batch: 4, delayMs: 60, priority: 'high' });
+        // Важно: для первого захода важнее "дорога" выбранного курса, AI можно догреть сразу следом.
+        await runQueue(road, { batch: 4, delayMs: 55, priority: 'high' });
+        await runQueue(ai, { batch: 3, delayMs: 35, priority: 'high' });
       } catch {}
     })().finally(() => {
       try { delete inflightCourseCritical[norm]; } catch {}
@@ -308,13 +369,16 @@ export function warmupAfterMainSvgs(activeCourseCode?: string | null): void {
         for (const p of excludePrefixes) if (u.startsWith(p)) return true;
         return false;
       };
-      const remaining = svgs.filter((u) => {
+      const remainingRaw = svgs.filter((u) => {
         if (!u) return false;
         if (isExcluded(u)) return false;
         // road_pic выбранного курса уже прогрели на этапе course-critical
         if (norm && u.startsWith(`/road_pic/${norm}`)) return false;
         return true;
       });
+      // Приоритет догрузки после main: сначала road_pic остальных курсов, потом всё остальное.
+      const roadsOther = remainingRaw.filter((u) => u.startsWith('/road_pic/'));
+      const remaining = [...roadsOther, ...remainingRaw.filter((u) => !u.startsWith('/road_pic/'))];
       // Очень мягко: в idle, небольшими порциями
       let idx = 0;
       const batch = 4;
