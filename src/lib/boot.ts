@@ -603,11 +603,6 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
 
 // ШАГ 2 — один запрос к нашему агрегирующему API /api/boot2 (фон, после возврата boot)
 export async function bootPreloadBackground(userId: string, activeId: number | null) {
-  // Всегда при старте boot2 (даже если /api/boot2 упадёт) — догружаем SVG "на всякий случай".
-  // Fire-and-forget, не блокирует UI.
-  try {
-    import('./warmup').then((m) => { try { m.warmupAllSvgs(); } catch {} });
-  } catch {}
   try {
     const r2 = await fetch('/api/boot2', {
       method: 'POST',
