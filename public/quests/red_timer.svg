@@ -1,1 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" id="_Слой_1" data-name="Слой_1" viewBox="0 0 500 500"><defs><style>.st0{fill:#ef4444}</style></defs><circle cx="250" cy="250" r="246.44" class="st0"/><circle cx="250" cy="250" r="205.77" style="fill:#0a111d"/><circle cx="250" cy="250" r="76.96" class="st0"/><rect width="66.91" height="153.24" x="277.56" y="106.7" class="st0" rx="33.46" ry="33.46" transform="rotate(39.67 311.026 183.345)"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_Слой_1" data-name="Слой_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 500 500">
+  <!-- Generator: Adobe Illustrator 29.8.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 2)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #ef4444;
+      }
+
+      .st1 {
+        fill: #0a111d;
+      }
+    </style>
+  </defs>
+  <circle class="st0" cx="250" cy="250" r="246.44"/>
+  <circle class="st1" cx="250" cy="250" r="205.77"/>
+  <circle class="st0" cx="250" cy="250" r="76.96"/>
+  <rect class="st0" x="277.56" y="106.7" width="66.91" height="153.24" rx="33.46" ry="33.46" transform="translate(188.66 -156.33) rotate(39.67)"/>
+</svg>
