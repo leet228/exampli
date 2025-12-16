@@ -684,6 +684,12 @@ export async function bootPreloadBackground(userId: string, activeId: number | n
       const bot = (() => { try { return (import.meta as any)?.env?.VITE_TG_BOT_USERNAME as string | undefined; } catch { return undefined; } })();
       await precomputeAchievementPNGs(u || {}, bot);
     } catch {}
+
+    // Во время boot2 (обычно под сплэшем) — догружаем SVG "на всякий случай".
+    // Это не блокирует UI: fire-and-forget, но ретраит то, что могло не загрузиться ранее.
+    try {
+      import('./warmup').then((m) => { try { m.warmupAllSvgs(); } catch {} });
+    } catch {}
   } catch {}
 }
 

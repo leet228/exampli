@@ -3,8 +3,10 @@ const warmedMap: Record<string, string> = (window as any).__exampliSvgWarmMap ||
 try { (window as any).__exampliSvgWarmMap = warmedMap; } catch {}
 const inflight: Record<string, Promise<void>> = {};
 const inflightImg: Record<string, Promise<void>> = {};
+// отмечаем ТОЛЬКО успешные загрузки (onload). Если был onerror — не отмечаем, чтобы можно было ретраить.
 const httpPreloaded: Record<string, 1> = {};
 const inflightCourseCritical: Record<string, Promise<void>> = {};
+const inflightAllSvgs: { started: boolean; p: Promise<void> | null } = { started: false, p: null };
 
 type SvgManifest = { svgs?: string[] } | null;
 let manifestSvgs: string[] | null = null;
@@ -69,11 +71,12 @@ function preloadImageToHttpCache(url: string, priority: 'low' | 'high' | 'auto' 
     if (!url) return Promise.resolve();
     if (httpPreloaded[url]) return Promise.resolve();
     if (inflightImg[url]) return inflightImg[url];
+    let ok = false;
     inflightImg[url] = new Promise<void>((res) => {
       try {
         const img = new Image();
-        img.onload = () => res();
-        img.onerror = () => res();
+        img.onload = () => { ok = true; res(); };
+        img.onerror = () => { ok = false; res(); };
         (img as any).decoding = 'async';
         try { (img as any).fetchPriority = priority; } catch {}
         img.src = url;
@@ -81,7 +84,7 @@ function preloadImageToHttpCache(url: string, priority: 'low' | 'high' | 'auto' 
         res();
       }
     }).then(() => {
-      httpPreloaded[url] = 1;
+      if (ok) httpPreloaded[url] = 1;
       delete inflightImg[url];
     });
     return inflightImg[url];
@@ -167,6 +170,34 @@ export function preloadCourseCriticalSvgs(courseCode: string): Promise<void> {
       try { delete inflightCourseCritical[norm]; } catch {}
     });
     return inflightCourseCritical[norm];
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+// "На всякий случай": прогреть ВСЕ SVG из manifest (в фоне, без ожидания).
+// Повторные вызовы не создают дубли, а ретраят то, что падало ранее (см. httpPreloaded).
+export function warmupAllSvgs(): void {
+  try { void preloadAllSvgs(); } catch {}
+}
+
+export function preloadAllSvgs(): Promise<void> {
+  try {
+    if (inflightAllSvgs.p) return inflightAllSvgs.p;
+    inflightAllSvgs.started = true;
+    inflightAllSvgs.p = (async () => {
+      try {
+        const svgs = await loadSvgManifest();
+        const remaining = (svgs || []).filter((u) => u && !httpPreloaded[u]);
+        if (!remaining.length) return;
+        // Под сплэшем можно чуть агрессивнее, но всё равно батчами
+        await runQueue(remaining, { batch: 10, delayMs: 30, priority: 'high' });
+      } catch {}
+    })().finally(() => {
+      // даём возможность запускать повторно позже (например, после смены курса/переоткрытия)
+      inflightAllSvgs.p = null;
+    });
+    return inflightAllSvgs.p;
   } catch {
     return Promise.resolve();
   }
