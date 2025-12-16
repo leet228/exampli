@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { cacheSet, CACHE_KEYS } from '../../lib/cache';
 import FullScreenSheet from '../sheets/FullScreenSheet';import { hapticSelect, hapticSlideClose, hapticSlideReveal, hapticTiny } from '../../lib/haptics';
 import { setActiveCourse as storeSetActiveCourse } from '../../lib/courseStore';
+import { preloadBaseSvgs, preloadCourseCriticalSvgs } from '../../lib/warmup';
 
 type Subject = { id: number; code: string; title: string; level: string };
 const UPCOMING_CODES = new Set([
@@ -103,6 +104,12 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                             // мгновенно обновим кэш активного курса, UI переключится, а запись в БД сделает onPicked
                             try { localStorage.setItem('exampli:activeSubjectCode', s.code); } catch {}
                             cacheSet(CACHE_KEYS.activeCourseCode, s.code);
+                            // Ждём, что всё "ДО ai/road_pic" успело прогрузиться (kursik2+stickers+subjects+topics+profile+shop+quests+battle).
+                            // Если онбординга не было или он не успел — догружаем ускоренно.
+                            const baseReady = preloadBaseSvgs({ eager: true });
+                            // Важно: пока пользователь ждёт "Готовим курс…" — прогреваем ai + road_pic выбранного курса (и только его).
+                            // Дальше НЕ пропускаем, пока не дождались (await ниже).
+                            const svgCritical = preloadCourseCriticalSvgs(String(s.code || ''));
                             // Автовыбор первой темы + запись в БД
                             try {
                               const { data: topics } = await supabase
@@ -183,6 +190,8 @@ export default function AddCourseBlocking({ open, onPicked }: { open: boolean; o
                               setLoadingCourseId(null);
                               return;
                             }
+                            // Дожидаемся: (1) базовых SVG до ai/road_pic, (2) критичных SVG выбранного курса
+                            try { await Promise.all([baseReady, svgCritical]); } catch {}
                             setTimeout(() => { onPicked(s); storeSetActiveCourse({ code: s.code, title: s.title }); }, 220);
                           }}
                           className={`relative overflow-hidden w-full flex items-center justify-between rounded-2xl h-14 px-3 border ${

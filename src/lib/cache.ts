@@ -42,6 +42,8 @@ export const CACHE_KEYS = {
   stats: 'stats',
   frosts: 'frosts',
   isPlus: 'plus_active',
+  // AI: marker that free monthly token limit is reached (stores current YYYY-MM)
+  aiFreeLimitMonth: 'ai_free_limit_month',
   lastStreakDay: 'last_streak_day',
   activeCourseCode: 'active_course_code',
   subjectsAll: 'subjects_all',

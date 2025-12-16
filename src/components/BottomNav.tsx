@@ -37,6 +37,7 @@ const Item = ({ to, iconSrc, currentPath }: ItemProps) => {
 export default function BottomNav() {
   const { pathname } = useLocation();
   const isAI = pathname === '/ai';
+  const curMonth = () => new Date().toISOString().slice(0, 7);
   const [isPlus, setIsPlus] = useState<boolean>(() => {
     try {
       const pu0 = (cacheGet<any>(CACHE_KEYS.user)?.plus_until) || (window as any)?.__exampliBoot?.user?.plus_until;
@@ -63,8 +64,33 @@ export default function BottomNav() {
     window.addEventListener('exampli:statsChanged', onStats as EventListener);
     return () => window.removeEventListener('exampli:statsChanged', onStats as EventListener);
   }, []);
-  // Белый bottom nav только если на странице AI и нет ни PLUS, ни AI+ подписки
-  const whiteOnAiNoPlus = isAI && !isPlus && !isAiPlus;
+
+  const [aiFreeLimitReached, setAiFreeLimitReached] = useState<boolean>(() => {
+    try {
+      const v = cacheGet<string>(CACHE_KEYS.aiFreeLimitMonth);
+      return v === curMonth();
+    } catch { return false; }
+  });
+  useEffect(() => {
+    const onAiLimit = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent<{ month?: string; reached?: boolean } & any>;
+        const v = cacheGet<string>(CACHE_KEYS.aiFreeLimitMonth);
+        const reached = (e?.detail?.reached === true) || (v === curMonth());
+        setAiFreeLimitReached(Boolean(reached && (v === curMonth() || e?.detail?.month === curMonth())));
+      } catch {
+        try {
+          const v = cacheGet<string>(CACHE_KEYS.aiFreeLimitMonth);
+          setAiFreeLimitReached(v === curMonth());
+        } catch {}
+      }
+    };
+    window.addEventListener('exampli:aiFreeLimitChanged', onAiLimit as EventListener);
+    return () => window.removeEventListener('exampli:aiFreeLimitChanged', onAiLimit as EventListener);
+  }, []);
+
+  // Белый bottom nav: только на AI, без подписок, и если бесплатный лимит 5 000/мес уже исчерпан
+  const whiteOnAiNoPlus = isAI && !isPlus && !isAiPlus && aiFreeLimitReached;
   return (
     <nav className={`bottomnav fixed left-0 right-0 z-[45] pb-0 ${whiteOnAiNoPlus ? 'bottomnav-white' : ''}`}>
       <div className="mx-auto max-w-xl">

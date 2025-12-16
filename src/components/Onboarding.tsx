@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { hapticSlideReveal, hapticTiny, hapticSelect } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
+import { warmupOnboardingSvgs } from '../lib/warmup';
 
 type Props = { open: boolean; onDone: () => void };
 
@@ -19,33 +20,8 @@ export default function Onboarding({ open, onDone }: Props) {
   // Прогрев SVG/иконок при старте онбординга (очередь, чтобы не лагало, остаётся в кэше/CDN)
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    const preload = (url: string) => new Promise<void>((res) => {
-      try {
-        const img = new Image();
-        img.onload = () => res(); img.onerror = () => res();
-        (img as any).decoding = 'async';
-        (img as any).fetchPriority = 'low';
-        img.src = url;
-      } catch { res(); }
-    });
-    const run = async () => {
-      let urls: string[] = [];
-      try {
-        const r = await fetch('/api/list_svgs');
-        if (r.ok) {
-          const js = await r.json();
-          if (Array.isArray(js?.svgs)) urls = js.svgs as string[];
-        }
-      } catch {}
-      const uniq = Array.from(new Set(urls));
-      const batch = 10;
-      for (let i = 0; i < uniq.length && !cancelled; i += batch) {
-        await Promise.all(uniq.slice(i, i + batch).map(preload));
-      }
-    };
-    void run();
-    return () => { cancelled = true; };
+    // Важно: не грузим "всё подряд". Во время онбординга — только базовые папки.
+    try { warmupOnboardingSvgs(); } catch {}
   }, [open]);
 
   const next = useCallback(() => {

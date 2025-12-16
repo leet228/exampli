@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cacheGet, CACHE_KEYS } from '../lib/cache';
+import { cacheGet, cacheSet, CACHE_KEYS } from '../lib/cache';
 import { motion } from 'framer-motion';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import remarkGfm from 'remark-gfm';
@@ -38,7 +38,15 @@ export default function AI() {
       return false;
     } catch { return false; }
   });
-  const [limitReached, setLimitReached] = React.useState<boolean>(false);
+  const monthKey = React.useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const [limitReached, setLimitReached] = React.useState<boolean>(() => {
+    try {
+      const v = cacheGet<string>(CACHE_KEYS.aiFreeLimitMonth);
+      return v === new Date().toISOString().slice(0, 7);
+    } catch {
+      return false;
+    }
+  });
 
   // Показываем заглушку только когда бесплатный лимит исчерпан и нет подписок
   const showPaywall = !isPlus && !isAiPlus && limitReached;
@@ -244,6 +252,10 @@ export default function AI() {
               try { hapticSelect(); } catch {}
               if (!isPlus && !isAiPlus) {
                 setLimitReached(true);
+                try {
+                  cacheSet(CACHE_KEYS.aiFreeLimitMonth, monthKey);
+                  window.dispatchEvent(new CustomEvent('exampli:aiFreeLimitChanged', { detail: { month: monthKey, reached: true } } as any));
+                } catch {}
                 setMessages((prev) => [
                   ...prev,
                   {

@@ -9,6 +9,7 @@ import Onboarding from '../components/Onboarding';
 import AddCourseBlocking from '../components/panels/AddCourseBlocking';
 import { setUserSubjects, syncEnergy } from '../lib/userState';
 import SpeedInsights from '../lib/SpeedInsights';
+import { warmupAfterMainSvgs, warmupCourseCriticalSvgs, warmupLoadSvgs } from '../lib/warmup';
 async function pingPresence(route: string, event: string) {
   try {
     const boot: any = (window as any).__exampliBoot;
@@ -56,6 +57,27 @@ export default function AppLayout() {
   const [prewarmACDone, setPrewarmACDone] = useState(false);
   const bootDone = bootReady && uiWarmed;
   const prevVisibleRouteRef = useRef<string | null>(null);
+
+  // Прогрев SVG строго "когда главный экран уже можно показывать":
+  // - во время онбординга НЕ грузим loads и НЕ грузим road_pic всех курсов
+  useEffect(() => {
+    if (!bootDone) return;
+    if (showOnboarding) return;
+    if (openCoursePicker) return;
+    // 10/11: ai + road_pic активного курса (если есть)
+    try {
+      const code = localStorage.getItem('exampli:activeSubjectCode') || '';
+      if (code) warmupCourseCriticalSvgs(code);
+    } catch {}
+    // 12: loads + остальное (мягко в idle)
+    try { warmupLoadSvgs(); } catch {}
+    try {
+      const code = localStorage.getItem('exampli:activeSubjectCode') || null;
+      warmupAfterMainSvgs(code);
+    } catch {
+      try { warmupAfterMainSvgs(null); } catch {}
+    }
+  }, [bootDone, showOnboarding, openCoursePicker]);
 
   // Во время онбординга полностью глушим звуки, чтобы пользователь не слышал SFX поверх модального сценария
   useEffect(() => {
