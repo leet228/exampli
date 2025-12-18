@@ -13,6 +13,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(() => {
   const HMR_HOST = process.env.VITE_HMR_HOST || process.env.HOST || 'localhost';
   const HMR_PROTOCOL = process.env.VITE_HMR_PROTOCOL || 'ws';
+  const DEPLOY_ID =
+    process.env.VITE_DEPLOY_ID ||
+    process.env.DEPLOY_ID ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GITHUB_SHA ||
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    `dev-${Date.now()}`;
   const ALLOWED = [
     'localhost',
     '127.0.0.1',
@@ -93,6 +100,9 @@ export default defineConfig(() => {
 
   return {
     plugins,
+    define: {
+      __DEPLOY_ID__: JSON.stringify(DEPLOY_ID),
+    },
     server: {
       port: 5173,
       strictPort: true,

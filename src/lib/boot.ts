@@ -501,7 +501,7 @@ export async function bootPreload(onProgress?: (p: number) => void, onPhase?: (l
   }
   // Предзагрузку уроков для всех тем переносим в boot2 (фон)
   // Прогрев лого/иконок, важных для первого кадра (fire-and-forget)
-  try { preloadImage('/kursik2.svg'); } catch {}
+  try { preloadImage(`/kursik2.svg?v=${__DEPLOY_ID__}`); } catch {}
   if (activeCode) {
     try { preloadImage(`/subjects/${activeCode}.svg`); } catch {}
   }
