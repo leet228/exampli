@@ -150,7 +150,7 @@ export default function Splash({ onReady }: { onReady: (boot: BootData) => void 
             </div>
           ) : (
             <img
-              src={`/kursik2.svg?v=${__DEPLOY_ID__}`}
+              src="/kursik2.svg"
               alt="Загрузка"
               className="w-full h-full object-contain"
               draggable={false}

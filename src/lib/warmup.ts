@@ -172,7 +172,7 @@ async function getBaseSvgsList(): Promise<string[]> {
     const svgs = await loadSvgManifest();
     const byPrefix = (p: string) => svgs.filter((u) => u.startsWith(p));
     const base: string[] = [
-      `/kursik2.svg?v=${__DEPLOY_ID__}`,
+      '/kursik2.svg',
       ...byPrefix('/stickers/'),
       ...byPrefix('/subjects/'),
       ...byPrefix('/topics/'),
